@@ -1,0 +1,14 @@
+node_modules
+dist
+target
+.DS_Store
+*.log
+.env
+.env.*
+!.env.example
+*.tsbuildinfo
+vite.config.d.ts
+vite.config.js
+src-tauri/gen/
+src-tauri/icons/android/
+src-tauri/icons/ios/
