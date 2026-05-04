@@ -5,9 +5,21 @@ export interface ClipboardItem {
   preview: string | null;
   hash: string;
   size: number;
+  metadata: string | null;
   is_favorited: boolean;
   created_at: number;
   last_used_at: number;
+}
+
+export interface ImageMetadata {
+  width: number;
+  height: number;
+  format: string;
+}
+
+export interface FileMetadata {
+  file_count: number;
+  total_size: number;
 }
 
 export interface AppConfig {

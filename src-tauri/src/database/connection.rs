@@ -9,6 +9,10 @@ pub struct Database {
 impl Database {
     pub fn new(path: &std::path::Path) -> Result<Self, String> {
         let conn = Connection::open(path).map_err(|e| e.to_string())?;
+
+        conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")
+            .map_err(|e| e.to_string())?;
+
         let db = Self {
             conn: Mutex::new(conn),
         };
@@ -28,6 +32,7 @@ impl Database {
                 preview         TEXT,
                 hash            TEXT NOT NULL UNIQUE,
                 size            INTEGER NOT NULL DEFAULT 0,
+                metadata        TEXT,
                 is_favorited    INTEGER NOT NULL DEFAULT 0,
                 created_at      INTEGER NOT NULL,
                 last_used_at    INTEGER NOT NULL
@@ -35,6 +40,17 @@ impl Database {
             [],
         )
         .map_err(|e| e.to_string())?;
+
+        // 迁移：添加 metadata 列（如果不存在）
+        let has_metadata: bool = conn
+            .prepare("SELECT metadata FROM clipboard_items LIMIT 0")
+            .map(|_| true)
+            .unwrap_or(false);
+
+        if !has_metadata {
+            conn.execute("ALTER TABLE clipboard_items ADD COLUMN metadata TEXT", [])
+                .map_err(|e| e.to_string())?;
+        }
 
         // 创建索引
         conn.execute(
@@ -81,7 +97,7 @@ impl Database {
             ("window_width", "400"),
             ("window_height", "600"),
             ("search_debounce_ms", "150"),
-            ("db_version", "1"),
+            ("db_version", "2"),
         ];
 
         for (key, value) in defaults {

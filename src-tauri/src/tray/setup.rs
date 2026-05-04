@@ -44,25 +44,34 @@ pub fn setup_tray(app_handle: &AppHandle) -> Result<TrayIcon, String> {
             }
         })
         .on_tray_icon_event(|tray, event| {
-            // 只处理左键单击（Up 状态），避免双击时的多次触发
             if let tauri::tray::TrayIconEvent::Click {
                 button,
                 button_state,
                 ..
             } = event
             {
-                // 只响应左键松开事件
-                if button == tauri::tray::MouseButton::Left
-                    && button_state == tauri::tray::MouseButtonState::Up
-                {
-                    let app = tray.app_handle();
-                    if let Some(window) = app.get_webview_window("main") {
-                        let is_visible = window.is_visible().unwrap_or(false);
-                        if is_visible {
-                            let _ = window.hide();
-                        } else {
-                            let _ = window.show();
-                            let _ = window.set_focus();
+                if button == tauri::tray::MouseButton::Left {
+                    match button_state {
+                        tauri::tray::MouseButtonState::Down => {
+                            // Set guard on mouse-down BEFORE the OS processes focus changes,
+                            // so the focus-lost handler won't hide the window during toggle.
+                            crate::notify_tray_click();
+
+                            let app = tray.app_handle();
+                            if let Some(window) = app.get_webview_window("main") {
+                                let is_visible = window.is_visible().unwrap_or(false);
+                                if is_visible {
+                                    let _ = window.hide();
+                                } else {
+                                    let _ = window.show();
+                                    let _ = window.set_focus();
+                                }
+                            }
+                        }
+                        tauri::tray::MouseButtonState::Up => {
+                            // Refresh guard on mouse-up so the window stays visible
+                            // while the tray interaction settles.
+                            crate::notify_tray_click();
                         }
                     }
                 }

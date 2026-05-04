@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use klip::commands;
+use std::sync::atomic::Ordering;
 use tauri::Manager;
 
 fn main() {
@@ -11,6 +12,9 @@ fn main() {
 
     tracing::info!("Starting Klip...");
 
+    let tray_click_guard = klip::get_tray_click_guard();
+    let guard_ms = klip::tray_click_guard_ms();
+
     let result = tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
@@ -18,7 +22,7 @@ fn main() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             Some(vec!["--flag1", "--flag2"]),
         ))
-        .setup(|app| {
+        .setup(move |app| {
             tracing::info!("Running setup...");
 
             // 初始化数据库
@@ -41,11 +45,22 @@ fn main() {
             klip::tray::setup_tray(app.handle())?;
             tracing::info!("Tray setup complete");
 
-            // 设置窗口失焦自动隐藏
+            // 设置窗口失焦自动隐藏（带托盘点击保护）
             if let Some(window) = app.get_webview_window("main") {
                 let app_handle = app.handle().clone();
+                let guard_ts = tray_click_guard.clone();
+                let guard_duration = guard_ms;
                 window.on_window_event(move |event| {
                     if let tauri::WindowEvent::Focused(false) = event {
+                        let elapsed =
+                            klip::now_millis().saturating_sub(guard_ts.load(Ordering::Relaxed));
+                        if elapsed < guard_duration {
+                            tracing::info!(
+                                "Window lost focus within {}ms of tray click, skipping hide",
+                                elapsed
+                            );
+                            return;
+                        }
                         tracing::info!("Window lost focus, hiding...");
                         if let Some(win) = app_handle.get_webview_window("main") {
                             let _ = win.hide();
@@ -69,6 +84,7 @@ fn main() {
             commands::delete_clipboard_item,
             commands::clear_clipboard_history,
             commands::copy_to_clipboard,
+            commands::paste_from_clipboard,
             commands::get_config,
             commands::get_all_config,
             commands::set_config,

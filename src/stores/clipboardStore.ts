@@ -54,7 +54,7 @@ export const useClipboardStore = create<ClipboardStore>((set) => ({
 
   copyItem: async (id: number) => {
     try {
-      await clipboardApi.copy(id);
+      await clipboardApi.paste(id);
     } catch (error) {
       set({ error: String(error) });
     }

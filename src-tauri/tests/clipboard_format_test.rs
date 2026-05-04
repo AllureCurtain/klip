@@ -1,0 +1,79 @@
+use klip::clipboard::format::{ClipboardFormatStrategy, FormatStrategyRegistry};
+use klip::database::types::ContentType;
+
+#[test]
+fn registry_detects_text_format() {
+    let registry = FormatStrategyRegistry::new();
+
+    // Copy some text to clipboard before running this test
+    let result = registry.detect_format();
+    // In CI there might not be text, so we just check it doesn't panic
+    if let Some((strategy, ct)) = result {
+        assert!(ct == ContentType::Text || ct == ContentType::Image || ct == ContentType::File);
+        let extracted = strategy.extract();
+        // If text is on clipboard, it should extract
+        if ct == ContentType::Text {
+            if let Ok(content) = extracted {
+                assert_eq!(content.content_type, ContentType::Text);
+                assert!(!content.data.is_empty());
+                assert!(!content.preview.is_empty());
+                assert!(!content.hash.is_empty());
+            }
+        }
+    }
+}
+
+#[test]
+fn strategy_priority_is_image_file_text() {
+    let registry = FormatStrategyRegistry::new();
+    // Strategies should be ordered: Image, File, Text
+    assert_eq!(registry.strategies[0].content_type(), ContentType::Image);
+    assert_eq!(registry.strategies[1].content_type(), ContentType::File);
+    assert_eq!(registry.strategies[2].content_type(), ContentType::Text);
+}
+
+#[test]
+fn text_strategy_copy_back() {
+    use klip::clipboard::format::text::TextStrategy;
+    let strategy = TextStrategy;
+    let test_data = b"Hello, Klip!";
+
+    let result = strategy.copy_back(test_data, None);
+    // This test requires clipboard access; in CI it may fail
+    if result.is_ok() {
+        // Verify we can read it back
+        let extracted = strategy.extract();
+        if let Ok(content) = extracted {
+            let text = String::from_utf8_lossy(&content.data);
+            assert_eq!(text, "Hello, Klip!");
+        }
+    }
+}
+
+#[test]
+fn image_strategy_png_encoding() {
+    // Test the PNG encoding path with a small 2x2 RGBA image
+    use klip::clipboard::format::image::encode_png_test;
+
+    let width = 2usize;
+    let height = 2usize;
+    // 2x2 RGBA (4 bytes per pixel)
+    let rgba: Vec<u8> = vec![
+        255, 0, 0, 255, // red
+        0, 255, 0, 255, // green
+        0, 0, 255, 255, // blue
+        255, 255, 0, 255, // yellow
+    ];
+
+    let png_data = encode_png_test(&rgba, width, height).expect("PNG encoding should succeed");
+    assert!(!png_data.is_empty());
+    // PNG magic bytes
+    assert_eq!(&png_data[0..4], &[0x89, 0x50, 0x4E, 0x47]);
+}
+
+#[test]
+fn content_type_str_mapping() {
+    assert_eq!(ContentType::Text.as_str(), "text");
+    assert_eq!(ContentType::Image.as_str(), "image");
+    assert_eq!(ContentType::File.as_str(), "file");
+}

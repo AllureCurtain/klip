@@ -55,17 +55,20 @@ pub fn register_hotkeys(app_handle: &AppHandle) -> Result<(), String> {
         let shortcut = Shortcut::new(Some(Modifiers::CONTROL), code);
         let app_handle_clone = app_handle.clone();
 
-        app_handle
-            .global_shortcut()
-            .on_shortcut(shortcut, move |_app, _shortcut, event| {
-                if event.state == ShortcutState::Pressed {
-                    quick_paste(&app_handle_clone, i);
-                }
-            })
-            .map_err(|e| format!("Failed to register quick paste {}: {}", i, e))?;
-    }
+        let result =
+            app_handle
+                .global_shortcut()
+                .on_shortcut(shortcut, move |_app, _shortcut, event| {
+                    if event.state == ShortcutState::Pressed {
+                        quick_paste(&app_handle_clone, i);
+                    }
+                });
 
-    tracing::info!("Quick paste shortcuts registered: Ctrl+1-9");
+        match result {
+            Ok(()) => tracing::info!("Quick paste shortcut Ctrl+{} registered", i),
+            Err(e) => tracing::warn!("Skipping quick paste Ctrl+{}: {}", i, e),
+        }
+    }
     Ok(())
 }
 
@@ -77,7 +80,13 @@ fn quick_paste(app_handle: &AppHandle, index: i64) {
     // offset = index - 1, limit = 1
     if let Ok(items) = crate::database::clipboard::get_list(&db, 1, index - 1) {
         if let Some(item) = items.into_iter().next() {
-            if crate::clipboard::copy_to_clipboard(&item.content).is_ok() {
+            if crate::clipboard::copy_to_clipboard(
+                &item.content,
+                &item.content_type,
+                item.metadata.as_deref(),
+            )
+            .is_ok()
+            {
                 tracing::info!("Quick paste: copied item {} (position {})", item.id, index);
 
                 // 隐藏窗口

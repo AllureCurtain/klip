@@ -17,6 +17,8 @@ export const clipboardApi = {
 
   copy: (id: number) => invoke('copy_to_clipboard', { id }),
 
+  paste: (id: number) => invoke('paste_from_clipboard', { id }),
+
   clear: () => invoke('clear_clipboard_history'),
 };
 

@@ -41,7 +41,52 @@ pub fn clear_clipboard_history(db: State<'_, database::Database>) -> Result<(), 
 pub fn copy_to_clipboard(db: State<'_, database::Database>, id: i64) -> Result<(), String> {
     let item = database::clipboard::get_by_id(&db, id)?.ok_or("Item not found")?;
 
-    crate::clipboard::copy_to_clipboard(&item.content)
+    crate::clipboard::copy_to_clipboard(&item.content, &item.content_type, item.metadata.as_deref())
+}
+
+#[tauri::command]
+pub fn paste_from_clipboard(
+    app: tauri::AppHandle,
+    db: State<'_, database::Database>,
+    id: i64,
+) -> Result<(), String> {
+    let item = database::clipboard::get_by_id(&db, id)?.ok_or("Item not found")?;
+
+    crate::clipboard::copy_to_clipboard(
+        &item.content,
+        &item.content_type,
+        item.metadata.as_deref(),
+    )?;
+
+    // Hide the Klip window
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.hide();
+    }
+
+    // Simulate Ctrl+V paste after a short delay
+    #[cfg(target_os = "windows")]
+    {
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        if let Ok(mut enigo) = enigo::Enigo::new(&enigo::Settings::default()) {
+            use enigo::Keyboard;
+            let _ = enigo.key(enigo::Key::Control, enigo::Direction::Press);
+            let _ = enigo.key(enigo::Key::Unicode('v'), enigo::Direction::Click);
+            let _ = enigo.key(enigo::Key::Control, enigo::Direction::Release);
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        if let Ok(mut enigo) = enigo::Enigo::new(&enigo::Settings::default()) {
+            use enigo::Keyboard;
+            let _ = enigo.key(enigo::Key::Meta, enigo::Direction::Press);
+            let _ = enigo.key(enigo::Key::Unicode('v'), enigo::Direction::Click);
+            let _ = enigo.key(enigo::Key::Meta, enigo::Direction::Release);
+        }
+    }
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -100,8 +145,6 @@ pub fn hide_window(app: tauri::AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 pub fn set_auto_start(enabled: bool) -> Result<(), String> {
-    // 使用 tauri-plugin-autostart
-    // 这个功能需要在 setup 中配置
     tracing::info!("Auto start set to: {}", enabled);
     Ok(())
 }

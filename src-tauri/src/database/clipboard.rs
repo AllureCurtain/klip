@@ -1,14 +1,18 @@
-use crate::database::types::ClipboardItem;
-use crate::Database;
 use rusqlite::OptionalExtension;
-use std::time::SystemTime;
+
+use base64::Engine;
+
+use crate::database::types::ContentType;
+use crate::Database;
+
+use super::types::ClipboardItem;
 
 pub fn get_list(db: &Database, limit: i64, offset: i64) -> Result<Vec<ClipboardItem>, String> {
     let conn = db.get_connection()?;
 
     let mut stmt = conn
         .prepare(
-            "SELECT id, content_type, content, preview, hash, size, is_favorited, created_at, last_used_at
+            "SELECT id, content_type, content, preview, hash, size, metadata, is_favorited, created_at, last_used_at
              FROM clipboard_items
              ORDER BY created_at DESC
              LIMIT ?1 OFFSET ?2",
@@ -16,19 +20,7 @@ pub fn get_list(db: &Database, limit: i64, offset: i64) -> Result<Vec<ClipboardI
         .map_err(|e| e.to_string())?;
 
     let items = stmt
-        .query_map([limit, offset], |row| {
-            Ok(ClipboardItem {
-                id: row.get(0)?,
-                content_type: row.get(1)?,
-                content: row.get(2)?,
-                preview: row.get(3)?,
-                hash: row.get(4)?,
-                size: row.get(5)?,
-                is_favorited: row.get::<_, i64>(6)? != 0,
-                created_at: row.get(7)?,
-                last_used_at: row.get(8)?,
-            })
-        })
+        .query_map([limit, offset], |row| Ok(row_to_clipboard_item(row)))
         .map_err(|e| e.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
@@ -41,7 +33,7 @@ pub fn search(db: &Database, query: &str, limit: i64) -> Result<Vec<ClipboardIte
 
     let mut stmt = conn
         .prepare(
-            "SELECT id, content_type, content, preview, hash, size, is_favorited, created_at, last_used_at
+            "SELECT id, content_type, content, preview, hash, size, metadata, is_favorited, created_at, last_used_at
              FROM clipboard_items
              WHERE preview LIKE ?1
              ORDER BY created_at DESC
@@ -53,17 +45,7 @@ pub fn search(db: &Database, query: &str, limit: i64) -> Result<Vec<ClipboardIte
     let limit_str = limit.to_string();
     let items = stmt
         .query_map([&search_pattern, &limit_str], |row| {
-            Ok(ClipboardItem {
-                id: row.get(0)?,
-                content_type: row.get(1)?,
-                content: row.get(2)?,
-                preview: row.get(3)?,
-                hash: row.get(4)?,
-                size: row.get(5)?,
-                is_favorited: row.get::<_, i64>(6)? != 0,
-                created_at: row.get(7)?,
-                last_used_at: row.get(8)?,
-            })
+            Ok(row_to_clipboard_item(row))
         })
         .map_err(|e| e.to_string())?
         .collect::<Result<Vec<_>, _>>()
@@ -77,26 +59,14 @@ pub fn get_by_id(db: &Database, id: i64) -> Result<Option<ClipboardItem>, String
 
     let mut stmt = conn
         .prepare(
-            "SELECT id, content_type, content, preview, hash, size, is_favorited, created_at, last_used_at
+            "SELECT id, content_type, content, preview, hash, size, metadata, is_favorited, created_at, last_used_at
              FROM clipboard_items
              WHERE id = ?1",
         )
         .map_err(|e| e.to_string())?;
 
     let result = stmt
-        .query_row([id], |row| {
-            Ok(ClipboardItem {
-                id: row.get(0)?,
-                content_type: row.get(1)?,
-                content: row.get(2)?,
-                preview: row.get(3)?,
-                hash: row.get(4)?,
-                size: row.get(5)?,
-                is_favorited: row.get::<_, i64>(6)? != 0,
-                created_at: row.get(7)?,
-                last_used_at: row.get(8)?,
-            })
-        })
+        .query_row([id], |row| Ok(row_to_clipboard_item(row)))
         .optional()
         .map_err(|e| e.to_string())?;
 
@@ -108,49 +78,46 @@ pub fn insert(
     item: &crate::database::types::NewClipboardItem,
 ) -> Result<ClipboardItem, String> {
     let conn = db.get_connection()?;
-    let now = SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_millis() as i64;
 
+    let content_str = match item.content_type {
+        ContentType::Text => String::from_utf8_lossy(&item.data).to_string(),
+        ContentType::Image => format!(
+            "data:image/png;base64,{}",
+            base64::engine::general_purpose::STANDARD.encode(&item.data)
+        ),
+        ContentType::File => String::from_utf8_lossy(&item.data).to_string(),
+    };
+
     conn.execute(
-        "INSERT INTO clipboard_items (content_type, content, preview, hash, size, created_at, last_used_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+        "INSERT INTO clipboard_items (content_type, content, preview, hash, size, metadata, created_at, last_used_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
          ON CONFLICT(hash) DO UPDATE SET last_used_at = excluded.last_used_at",
-        [
-            &item.content_type,
-            &item.content,
-            &item.preview.clone().unwrap_or_default(),
-            &item.hash,
-            &item.size.to_string(),
-            &now.to_string(),
-            &now.to_string(),
+        rusqlite::params![
+            item.content_type.as_str(),
+            content_str,
+            item.preview,
+            item.hash,
+            item.size,
+            item.metadata,
+            now,
+            now,
         ],
     ).map_err(|e| e.to_string())?;
 
-    // 使用同一个连接查询插入的记录
     let mut stmt = conn
         .prepare(
-            "SELECT id, content_type, content, preview, hash, size, is_favorited, created_at, last_used_at
+            "SELECT id, content_type, content, preview, hash, size, metadata, is_favorited, created_at, last_used_at
              FROM clipboard_items
              WHERE hash = ?1",
         )
         .map_err(|e| e.to_string())?;
 
     let result = stmt
-        .query_row([&item.hash], |row| {
-            Ok(ClipboardItem {
-                id: row.get(0)?,
-                content_type: row.get(1)?,
-                content: row.get(2)?,
-                preview: row.get(3)?,
-                hash: row.get(4)?,
-                size: row.get(5)?,
-                is_favorited: row.get::<_, i64>(6)? != 0,
-                created_at: row.get(7)?,
-                last_used_at: row.get(8)?,
-            })
-        })
+        .query_row([&item.hash], |row| Ok(row_to_clipboard_item(row)))
         .map_err(|e| e.to_string())?;
 
     Ok(result)
@@ -180,4 +147,25 @@ pub fn cleanup_old_records(db: &Database, max_count: i64) -> Result<(), String> 
     )
     .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+fn row_to_clipboard_item(row: &rusqlite::Row<'_>) -> ClipboardItem {
+    let content_type_str: String = row.get(1).unwrap_or_default();
+    let content_type = match content_type_str.as_str() {
+        "image" => ContentType::Image,
+        "file" => ContentType::File,
+        _ => ContentType::Text,
+    };
+    ClipboardItem {
+        id: row.get(0).unwrap_or(0),
+        content_type,
+        content: row.get(2).unwrap_or_default(),
+        preview: row.get(3).unwrap_or(None),
+        hash: row.get(4).unwrap_or_default(),
+        size: row.get(5).unwrap_or(0),
+        metadata: row.get(6).unwrap_or(None),
+        is_favorited: row.get::<_, i64>(7).unwrap_or(0) != 0,
+        created_at: row.get(8).unwrap_or(0),
+        last_used_at: row.get(9).unwrap_or(0),
+    }
 }

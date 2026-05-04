@@ -46,7 +46,7 @@ export function ClipboardItem({ item, index }: ClipboardItemProps) {
             <img
               src={item.content}
               alt="剪贴板图片"
-              className="h-10 w-10 object-cover rounded"
+              className="h-10 w-10 object-cover rounded border border-gray-200 dark:border-gray-700"
             />
             <span className="text-sm text-gray-500">{item.preview}</span>
           </div>
