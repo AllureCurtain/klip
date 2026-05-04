@@ -17,9 +17,19 @@ export interface ImageMetadata {
   format: string;
 }
 
+export interface FileItemSummary {
+  name: string;
+  is_dir: boolean;
+  size: number;
+}
+
 export interface FileMetadata {
   file_count: number;
+  /** Number of folders in the selection. Older items may not have this. */
+  dir_count?: number;
   total_size: number;
+  /** Up to 50 entries; truncated for very large selections. */
+  items?: FileItemSummary[];
 }
 
 export interface AppConfig {
