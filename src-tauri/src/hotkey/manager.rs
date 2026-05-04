@@ -41,7 +41,9 @@ pub fn register_hotkeys(app_handle: &AppHandle) -> Result<(), String> {
 
     tracing::info!("Toggle shortcut registered: Ctrl+Alt+K");
 
-    // 快速粘贴快捷键 (Ctrl+1-9)
+    // 快速粘贴快捷键 (Ctrl+Alt+1~9)
+    // 历史上用过 Ctrl+1~9 但和 IDE/浏览器/IM 全局冲突严重，绝大多数机器
+    // 上 9 个一个都注册不上，改用与主热键 Ctrl+Alt+K 同族的修饰组合。
     for i in 1..=9 {
         let code = match i {
             1 => Code::Digit1,
@@ -55,7 +57,7 @@ pub fn register_hotkeys(app_handle: &AppHandle) -> Result<(), String> {
             9 => Code::Digit9,
             _ => unreachable!(),
         };
-        let shortcut = Shortcut::new(Some(Modifiers::CONTROL), code);
+        let shortcut = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), code);
         let app_handle_clone = app_handle.clone();
 
         let result =
@@ -68,8 +70,8 @@ pub fn register_hotkeys(app_handle: &AppHandle) -> Result<(), String> {
                 });
 
         match result {
-            Ok(()) => tracing::info!("Quick paste shortcut Ctrl+{} registered", i),
-            Err(e) => tracing::warn!("Skipping quick paste Ctrl+{}: {}", i, e),
+            Ok(()) => tracing::info!("Quick paste shortcut Ctrl+Alt+{} registered", i),
+            Err(e) => tracing::warn!("Skipping quick paste Ctrl+Alt+{}: {}", i, e),
         }
     }
     Ok(())
@@ -91,6 +93,9 @@ fn quick_paste(app_handle: &AppHandle, index: i64) {
             .is_ok()
             {
                 tracing::info!("Quick paste: copied item {} (position {})", item.id, index);
+
+                // Bump last_used_at so the item floats to the top.
+                let _ = crate::database::clipboard::touch_last_used(&db, item.id);
 
                 // 隐藏窗口
                 if let Some(window) = app_handle.get_webview_window("main") {

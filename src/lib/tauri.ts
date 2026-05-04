@@ -43,6 +43,8 @@ export const systemApi = {
   setAutoStart: (enabled: boolean) =>
     invoke('set_auto_start', { enabled }),
 
+  isAutoStartEnabled: () => invoke<boolean>('is_auto_start_enabled'),
+
   getInfo: () => invoke<SystemInfo>('get_system_info'),
 };
 

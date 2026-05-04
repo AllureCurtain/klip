@@ -10,11 +10,13 @@ use super::types::ClipboardItem;
 pub fn get_list(db: &Database, limit: i64, offset: i64) -> Result<Vec<ClipboardItem>, String> {
     let conn = db.get_connection()?;
 
+    // Sort by last_used_at first so re-pasted items float back to the top,
+    // then by created_at as a tie-breaker for never-pasted entries.
     let mut stmt = conn
         .prepare(
             "SELECT id, content_type, content, preview, hash, size, metadata, is_favorited, created_at, last_used_at
              FROM clipboard_items
-             ORDER BY created_at DESC
+             ORDER BY last_used_at DESC, created_at DESC
              LIMIT ?1 OFFSET ?2",
         )
         .map_err(|e| e.to_string())?;
@@ -31,12 +33,16 @@ pub fn get_list(db: &Database, limit: i64, offset: i64) -> Result<Vec<ClipboardI
 pub fn search(db: &Database, query: &str, limit: i64) -> Result<Vec<ClipboardItem>, String> {
     let conn = db.get_connection()?;
 
+    // Match against preview AND content so long text whose preview is
+    // truncated to the first 200 chars is still searchable. We exclude
+    // image content from the content search since it's base64 noise.
     let mut stmt = conn
         .prepare(
             "SELECT id, content_type, content, preview, hash, size, metadata, is_favorited, created_at, last_used_at
              FROM clipboard_items
              WHERE preview LIKE ?1
-             ORDER BY created_at DESC
+                OR (content_type != 'image' AND content LIKE ?1)
+             ORDER BY last_used_at DESC, created_at DESC
              LIMIT ?2",
         )
         .map_err(|e| e.to_string())?;
@@ -144,6 +150,24 @@ pub fn cleanup_old_records(db: &Database, max_count: i64) -> Result<(), String> 
             SELECT id FROM clipboard_items ORDER BY created_at DESC LIMIT ?1
         )",
         [max_count],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Mark an item as just-used by bumping `last_used_at` to now.
+/// Called after a successful paste so the item floats to the top of the
+/// list view on the next render.
+pub fn touch_last_used(db: &Database, id: i64) -> Result<(), String> {
+    let conn = db.get_connection()?;
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as i64;
+
+    conn.execute(
+        "UPDATE clipboard_items SET last_used_at = ?1 WHERE id = ?2",
+        rusqlite::params![now, id],
     )
     .map_err(|e| e.to_string())?;
     Ok(())

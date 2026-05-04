@@ -6,8 +6,11 @@ import { ClipboardList } from './components/clipboard/ClipboardList';
 import { EmptyState } from './components/layout/EmptyState';
 import type { ClipboardItem } from './types';
 
+const SEARCH_DEBOUNCE_MS = 150;
+
 function App() {
-  const { items, loading, error, fetchItems, addItems } = useClipboardStore();
+  const { items, loading, error, fetchItems, searchItems, addItems } =
+    useClipboardStore();
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
@@ -26,11 +29,22 @@ function App() {
     };
   }, [fetchItems, addItems]);
 
-  const filteredItems = searchQuery
-    ? items.filter((item) =>
-        (item.preview ?? item.content)?.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : items;
+  // 搜索：带防抖，走后端 SQL LIKE（覆盖 preview + content），
+  // 而不是客户端 filter（之前只能查到列表里已加载的 100 条 preview）。
+  useEffect(() => {
+    const trimmed = searchQuery.trim();
+    const handle = window.setTimeout(() => {
+      if (trimmed === '') {
+        fetchItems().catch((e) => console.error('Failed to fetch items:', e));
+      } else {
+        searchItems(trimmed).catch((e) =>
+          console.error('Failed to search items:', e)
+        );
+      }
+    }, SEARCH_DEBOUNCE_MS);
+
+    return () => window.clearTimeout(handle);
+  }, [searchQuery, fetchItems, searchItems]);
 
   return (
     <div className="flex flex-col h-screen bg-white dark:bg-gray-900">
@@ -44,10 +58,10 @@ function App() {
           <div className="flex items-center justify-center h-full">
             <div className="text-red-500">错误: {error}</div>
           </div>
-        ) : filteredItems.length === 0 ? (
+        ) : items.length === 0 ? (
           <EmptyState />
         ) : (
-          <ClipboardList items={filteredItems} />
+          <ClipboardList items={items} />
         )}
       </main>
     </div>

@@ -1,5 +1,6 @@
 use crate::database::{self, ClipboardItem, SystemInfo};
 use tauri::{Manager, State};
+use tauri_plugin_autostart::ManagerExt;
 
 #[tauri::command]
 pub fn get_clipboard_list(
@@ -41,7 +42,9 @@ pub fn clear_clipboard_history(db: State<'_, database::Database>) -> Result<(), 
 pub fn copy_to_clipboard(db: State<'_, database::Database>, id: i64) -> Result<(), String> {
     let item = database::clipboard::get_by_id(&db, id)?.ok_or("Item not found")?;
 
-    crate::clipboard::copy_to_clipboard(&item.content, &item.content_type, item.metadata.as_deref())
+    crate::clipboard::copy_to_clipboard(&item.content, &item.content_type, item.metadata.as_deref())?;
+    let _ = database::clipboard::touch_last_used(&db, id);
+    Ok(())
 }
 
 #[tauri::command]
@@ -57,6 +60,9 @@ pub fn paste_from_clipboard(
         &item.content_type,
         item.metadata.as_deref(),
     )?;
+
+    // Bump last_used_at so this item floats to the top on next list refresh.
+    let _ = database::clipboard::touch_last_used(&db, id);
 
     // Hide the Klip window
     if let Some(window) = app.get_webview_window("main") {
@@ -153,9 +159,28 @@ pub fn hide_window(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn set_auto_start(enabled: bool) -> Result<(), String> {
+pub fn set_auto_start(
+    app: tauri::AppHandle,
+    db: State<'_, database::Database>,
+    enabled: bool,
+) -> Result<(), String> {
+    let manager = app.autolaunch();
+    if enabled {
+        manager.enable().map_err(|e| e.to_string())?;
+    } else {
+        manager.disable().map_err(|e| e.to_string())?;
+    }
+
+    // Persist user choice so we can re-sync on next launch.
+    database::config::set(&db, "auto_start", if enabled { "true" } else { "false" })?;
+
     tracing::info!("Auto start set to: {}", enabled);
     Ok(())
+}
+
+#[tauri::command]
+pub fn is_auto_start_enabled(app: tauri::AppHandle) -> Result<bool, String> {
+    app.autolaunch().is_enabled().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
