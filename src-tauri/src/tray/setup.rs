@@ -28,6 +28,9 @@ pub fn setup_tray(app_handle: &AppHandle) -> Result<TrayIcon, String> {
                 "show" => {
                     tracing::info!("Show menu item clicked");
                     if let Some(window) = app.get_webview_window("main") {
+                        // Capture the foreground window BEFORE we steal focus,
+                        // so paste can restore it later.
+                        crate::capture_previous_foreground();
                         if let Err(e) = window.show() {
                             tracing::error!("Failed to show window: {}", e);
                         }
@@ -63,6 +66,9 @@ pub fn setup_tray(app_handle: &AppHandle) -> Result<TrayIcon, String> {
                                 if is_visible {
                                     let _ = window.hide();
                                 } else {
+                                    // Capture the foreground window before Klip
+                                    // becomes foreground itself.
+                                    crate::capture_previous_foreground();
                                     let _ = window.show();
                                     let _ = window.set_focus();
                                 }

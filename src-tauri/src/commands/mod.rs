@@ -63,10 +63,16 @@ pub fn paste_from_clipboard(
         let _ = window.hide();
     }
 
-    // Simulate Ctrl+V paste after a short delay
+    // Restore focus to the window that was foreground BEFORE Klip opened.
+    // Without this, Ctrl+V is sent to whatever window the OS picked after
+    // hide() — often the desktop on Win11 — and file paste silently fails.
     #[cfg(target_os = "windows")]
     {
-        std::thread::sleep(std::time::Duration::from_millis(50));
+        // Tiny pause for hide() to start propagating, then restore foreground.
+        std::thread::sleep(std::time::Duration::from_millis(30));
+        let _ = crate::restore_previous_foreground();
+        // Give the target window time to accept focus before sending Ctrl+V.
+        std::thread::sleep(std::time::Duration::from_millis(120));
         if let Ok(mut enigo) = enigo::Enigo::new(&enigo::Settings::default()) {
             use enigo::Keyboard;
             let _ = enigo.key(enigo::Key::Control, enigo::Direction::Press);
@@ -119,6 +125,8 @@ pub fn toggle_window(app: tauri::AppHandle) -> Result<(), String> {
         if window.is_visible().unwrap_or(false) {
             window.hide().map_err(|e| e.to_string())?;
         } else {
+            // Capture the foreground window BEFORE we steal focus.
+            crate::capture_previous_foreground();
             window.show().map_err(|e| e.to_string())?;
             window.set_focus().map_err(|e| e.to_string())?;
         }
@@ -129,6 +137,7 @@ pub fn toggle_window(app: tauri::AppHandle) -> Result<(), String> {
 #[tauri::command]
 pub fn show_window(app: tauri::AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("main") {
+        crate::capture_previous_foreground();
         window.show().map_err(|e| e.to_string())?;
         window.set_focus().map_err(|e| e.to_string())?;
     }

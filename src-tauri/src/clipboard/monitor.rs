@@ -169,11 +169,24 @@ fn raw_set_image_with_marker(png_data: &[u8], _metadata: Option<&str>) -> Result
 
 #[cfg(target_os = "windows")]
 fn raw_set_file_list_with_marker(paths: &[&str]) -> Result<(), String> {
+    // CFSTR_PREFERREDDROPEFFECT — required so Explorer treats CF_HDROP as a
+    // copy operation. Without it, "Paste" in Explorer is disabled / ignored.
+    const DROPEFFECT_COPY: u32 = 5;
+
     let ignore_format = clipboard_win::raw::register_format(KLIP_IGNORE_FORMAT);
+    let dropeffect_format = clipboard_win::raw::register_format("Preferred DropEffect");
+
     let _guard = ClipboardGuard::open(10)?;
 
     clipboard_win::raw::empty().map_err(|e| e.to_string())?;
     clipboard_win::raw::set_file_list(paths).map_err(|e| e.to_string())?;
+
+    if let Some(id) = dropeffect_format {
+        clipboard_win::raw::set_without_clear(id.get(), &DROPEFFECT_COPY.to_le_bytes())
+            .map_err(|e| e.to_string())?;
+    } else {
+        tracing::warn!("Failed to register Preferred DropEffect format");
+    }
 
     if let Some(id) = ignore_format {
         clipboard_win::raw::set_without_clear(id.get(), b"Klip").map_err(|e| e.to_string())?;

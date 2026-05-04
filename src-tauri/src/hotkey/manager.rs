@@ -25,6 +25,9 @@ pub fn register_hotkeys(app_handle: &AppHandle) -> Result<(), String> {
                         let _ = window.hide();
                         tracing::info!("Window hidden");
                     } else {
+                        // Capture the foreground window BEFORE Klip becomes
+                        // foreground so paste can restore focus to it.
+                        crate::capture_previous_foreground();
                         let _ = window.show();
                         let _ = window.set_focus();
                         tracing::info!("Window shown and focused");
@@ -97,7 +100,11 @@ fn quick_paste(app_handle: &AppHandle, index: i64) {
                 // 模拟 Ctrl+V 粘贴
                 #[cfg(target_os = "windows")]
                 {
-                    std::thread::sleep(std::time::Duration::from_millis(50));
+                    // 让 hide() 先开始传播，再把焦点恢复到 Klip 打开前的目标窗口，
+                    // 否则 Ctrl+V 会发到桌面或错误的前台窗口（特别是 Win11）。
+                    std::thread::sleep(std::time::Duration::from_millis(30));
+                    let _ = crate::restore_previous_foreground();
+                    std::thread::sleep(std::time::Duration::from_millis(120));
                     if let Ok(mut enigo) = Enigo::new(&Settings::default()) {
                         use enigo::Keyboard;
                         let _ = enigo.key(enigo::Key::Control, enigo::Direction::Press);

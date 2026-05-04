@@ -28,7 +28,11 @@ image = "0.25"
 fast_image_resize = "3"
 base64 = "0.22"
 enigo = "0.3"
-windows = { version = "0.59", features = ["Win32_System_DataExchange"] }
+windows = { version = "0.59", features = [
+    "Win32_System_DataExchange",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_Foundation",
+] }
 
 [profile.release]
 panic = "abort"
