@@ -20,7 +20,14 @@ impl Database {
         Ok(db)
     }
 
-    fn init_schema(&self) -> Result<(), String> {
+    #[cfg(test)]
+    pub fn from_conn(conn: Connection) -> Self {
+        Self {
+            conn: Mutex::new(conn),
+        }
+    }
+
+    pub fn init_schema(&self) -> Result<(), String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
 
         // 创建剪贴板历史表

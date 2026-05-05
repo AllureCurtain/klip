@@ -1,7 +1,7 @@
 use tauri::{AppHandle, Manager};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
-#[cfg(target_os = "windows")]
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 use enigo::{Enigo, Settings};
 
 pub fn register_hotkeys(app_handle: &AppHandle) -> Result<(), String> {
@@ -128,6 +128,18 @@ fn quick_paste(app_handle: &AppHandle, index: i64) {
                         let _ = enigo.key(enigo::Key::Unicode('v'), enigo::Direction::Click);
                         let _ = enigo.key(enigo::Key::Meta, enigo::Direction::Release);
                         tracing::info!("Quick paste: simulated Cmd+V");
+                    }
+                }
+
+                #[cfg(target_os = "linux")]
+                {
+                    std::thread::sleep(std::time::Duration::from_millis(50));
+                    if let Ok(mut enigo) = Enigo::new(&Settings::default()) {
+                        use enigo::Keyboard;
+                        let _ = enigo.key(enigo::Key::Control, enigo::Direction::Press);
+                        let _ = enigo.key(enigo::Key::Unicode('v'), enigo::Direction::Click);
+                        let _ = enigo.key(enigo::Key::Control, enigo::Direction::Release);
+                        tracing::info!("Quick paste: simulated Ctrl+V");
                     }
                 }
             } else {

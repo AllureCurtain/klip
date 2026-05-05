@@ -7,6 +7,159 @@ use crate::Database;
 
 use super::types::ClipboardItem;
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rusqlite::Connection;
+    use sha2::Digest;
+
+    fn test_db() -> Database {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;").unwrap();
+        let db = Database::from_conn(conn);
+        db.init_schema().unwrap();
+        db
+    }
+
+    fn insert_text(db: &Database, content: &str) -> ClipboardItem {
+        let hash = format!("{:x}", sha2::Sha256::digest(content.as_bytes()));
+        let item = crate::database::types::NewClipboardItem {
+            content_type: ContentType::Text,
+            data: content.as_bytes().to_vec(),
+            preview: Some(content.chars().take(100).collect()),
+            hash,
+            size: content.len() as i64,
+            metadata: None,
+        };
+        insert(db, &item).unwrap()
+    }
+
+    fn insert_text_at_time(db: &Database, content: &str, created_at: i64) -> ClipboardItem {
+        let hash = format!("{:x}", sha2::Sha256::digest(content.as_bytes()));
+        let conn = db.get_connection().unwrap();
+        conn.execute(
+            "INSERT INTO clipboard_items (content_type, content, preview, hash, size, created_at, last_used_at)
+             VALUES ('text', ?1, ?2, ?3, ?4, ?5, ?5)
+             ON CONFLICT(hash) DO UPDATE SET last_used_at = excluded.last_used_at",
+            rusqlite::params![content, content, hash, content.len() as i64, created_at],
+        ).unwrap();
+
+        let mut stmt = conn.prepare(
+            "SELECT id, content_type, content, preview, hash, size, metadata, is_favorited, created_at, last_used_at
+             FROM clipboard_items WHERE hash = ?1",
+        ).unwrap();
+        stmt.query_row([&hash], |row| Ok(row_to_clipboard_item(row))).unwrap()
+    }
+
+    #[test]
+    fn toggle_favorite_flips_flag() {
+        let db = test_db();
+        let item = insert_text(&db, "hello");
+
+        assert!(!item.is_favorited);
+
+        let updated = toggle_favorite(&db, item.id).unwrap();
+        assert!(updated.is_favorited);
+
+        let toggled_back = toggle_favorite(&db, item.id).unwrap();
+        assert!(!toggled_back.is_favorited);
+    }
+
+    #[test]
+    fn cleanup_preserves_favorited_items() {
+        let db = test_db();
+        let base_ts = 1000i64;
+
+        // Insert 5 items with strictly increasing timestamps
+        let items: Vec<_> = (0..5).map(|i| {
+            insert_text_at_time(&db, &format!("item-{}", i), base_ts + i as i64 * 100)
+        }).collect();
+        toggle_favorite(&db, items[2].id).unwrap();
+
+        // Cleanup keeping only 2 non-favorited newest —
+        // the favorited item should survive regardless of its age
+        cleanup_old_records(&db, 2).unwrap();
+
+        let remaining = get_list(&db, 100, 0).unwrap();
+        let remaining_ids: Vec<i64> = remaining.iter().map(|i| i.id).collect();
+
+        assert!(remaining_ids.contains(&items[2].id), "favorited item should survive cleanup");
+        assert!(remaining_ids.contains(&items[4].id), "newest non-fav should survive");
+        assert!(remaining_ids.contains(&items[3].id), "2nd newest non-fav should survive");
+        assert!(!remaining_ids.contains(&items[0].id), "oldest should be deleted");
+        assert!(!remaining_ids.contains(&items[1].id), "2nd oldest should be deleted");
+    }
+
+    #[test]
+    fn search_with_content_type_filter() {
+        let db = test_db();
+
+        insert_text(&db, "hello text");
+
+        // Insert an image item directly via SQL
+        {
+            let conn = db.get_connection().unwrap();
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as i64;
+            conn.execute(
+                "INSERT INTO clipboard_items (content_type, content, preview, hash, size, created_at, last_used_at)
+                 VALUES ('image', 'data:image/png;base64,abc', '图片 1x1', 'img-hash-1', 100, ?1, ?1)",
+                [now],
+            ).unwrap();
+        }
+
+        // Search without filter — should return both
+        let all = search(&db, "", None, 100).unwrap();
+        assert_eq!(all.len(), 2);
+
+        // Filter for text only
+        let text_only = search(&db, "", Some("text"), 100).unwrap();
+        assert_eq!(text_only.len(), 1);
+        assert_eq!(text_only[0].content_type, ContentType::Text);
+
+        // Filter for image only
+        let image_only = search(&db, "", Some("image"), 100).unwrap();
+        assert_eq!(image_only.len(), 1);
+        assert_eq!(image_only[0].content_type, ContentType::Image);
+
+        // Filter for file — should return nothing
+        let file_only = search(&db, "", Some("file"), 100).unwrap();
+        assert!(file_only.is_empty());
+    }
+
+    #[test]
+    fn search_with_query_and_content_type() {
+        let db = test_db();
+
+        insert_text(&db, "hello world");
+        insert_text(&db, "hello rust");
+
+        // Insert image
+        {
+            let conn = db.get_connection().unwrap();
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as i64;
+            conn.execute(
+                "INSERT INTO clipboard_items (content_type, content, preview, hash, size, created_at, last_used_at)
+                 VALUES ('image', 'data:image/png;base64,abc', 'hello image', 'img-hash-2', 100, ?1, ?1)",
+                [now],
+            ).unwrap();
+        }
+
+        // Search "hello" with text filter — 2 text items match
+        let results = search(&db, "hello", Some("text"), 100).unwrap();
+        assert_eq!(results.len(), 2);
+
+        // Search "hello" with image filter — 1 image with "hello" in preview matches
+        let img_results = search(&db, "hello", Some("image"), 100).unwrap();
+        assert_eq!(img_results.len(), 1);
+    }
+}
+
 pub fn get_list(db: &Database, limit: i64, offset: i64) -> Result<Vec<ClipboardItem>, String> {
     let conn = db.get_connection()?;
 
@@ -30,32 +183,47 @@ pub fn get_list(db: &Database, limit: i64, offset: i64) -> Result<Vec<ClipboardI
     Ok(items)
 }
 
-pub fn search(db: &Database, query: &str, limit: i64) -> Result<Vec<ClipboardItem>, String> {
+pub fn search(db: &Database, query: &str, content_type: Option<&str>, limit: i64) -> Result<Vec<ClipboardItem>, String> {
     let conn = db.get_connection()?;
 
-    // Match against preview AND content so long text whose preview is
-    // truncated to the first 200 chars is still searchable. We exclude
-    // image content from the content search since it's base64 noise.
-    let mut stmt = conn
-        .prepare(
+    let sql = match content_type {
+        Some(_) =>
+            "SELECT id, content_type, content, preview, hash, size, metadata, is_favorited, created_at, last_used_at
+             FROM clipboard_items
+             WHERE (preview LIKE ?1 OR (content_type != 'image' AND content LIKE ?1))
+               AND content_type = ?3
+             ORDER BY last_used_at DESC, created_at DESC
+             LIMIT ?2",
+        None =>
             "SELECT id, content_type, content, preview, hash, size, metadata, is_favorited, created_at, last_used_at
              FROM clipboard_items
              WHERE preview LIKE ?1
                 OR (content_type != 'image' AND content LIKE ?1)
              ORDER BY last_used_at DESC, created_at DESC
              LIMIT ?2",
-        )
-        .map_err(|e| e.to_string())?;
+    };
+
+    let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
 
     let search_pattern = format!("%{}%", query);
     let limit_str = limit.to_string();
-    let items = stmt
-        .query_map([&search_pattern, &limit_str], |row| {
-            Ok(row_to_clipboard_item(row))
-        })
-        .map_err(|e| e.to_string())?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())?;
+
+    let items = match content_type {
+        Some(ct) => stmt
+            .query_map(rusqlite::params![&search_pattern, &limit_str, ct], |row| {
+                Ok(row_to_clipboard_item(row))
+            })
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?,
+        None => stmt
+            .query_map([&search_pattern, &limit_str], |row| {
+                Ok(row_to_clipboard_item(row))
+            })
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?,
+    };
 
     Ok(items)
 }
@@ -146,9 +314,14 @@ pub fn clear(db: &Database) -> Result<(), String> {
 pub fn cleanup_old_records(db: &Database, max_count: i64) -> Result<(), String> {
     let conn = db.get_connection()?;
     conn.execute(
-        "DELETE FROM clipboard_items WHERE id NOT IN (
-            SELECT id FROM clipboard_items ORDER BY created_at DESC LIMIT ?1
-        )",
+        "DELETE FROM clipboard_items
+         WHERE is_favorited = 0
+           AND id NOT IN (
+               SELECT id FROM clipboard_items
+               WHERE is_favorited = 0
+               ORDER BY created_at DESC
+               LIMIT ?1
+           )",
         [max_count],
     )
     .map_err(|e| e.to_string())?;
@@ -171,6 +344,26 @@ pub fn touch_last_used(db: &Database, id: i64) -> Result<(), String> {
     )
     .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+/// Toggle the `is_favorited` flag on a clipboard item and return the updated item.
+pub fn toggle_favorite(db: &Database, id: i64) -> Result<ClipboardItem, String> {
+    let conn = db.get_connection()?;
+    conn.execute(
+        "UPDATE clipboard_items SET is_favorited = CASE WHEN is_favorited = 0 THEN 1 ELSE 0 END WHERE id = ?1",
+        [id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, content_type, content, preview, hash, size, metadata, is_favorited, created_at, last_used_at
+             FROM clipboard_items WHERE id = ?1",
+        )
+        .map_err(|e| e.to_string())?;
+
+    stmt.query_row([id], |row| Ok(row_to_clipboard_item(row)))
+        .map_err(|e| e.to_string())
 }
 
 fn row_to_clipboard_item(row: &rusqlite::Row<'_>) -> ClipboardItem {

@@ -1,5 +1,5 @@
 use crate::database::{self, ClipboardItem, SystemInfo};
-use tauri::{Manager, State};
+use tauri::{Emitter, Manager, State};
 use tauri_plugin_autostart::ManagerExt;
 
 #[tauri::command]
@@ -15,9 +15,10 @@ pub fn get_clipboard_list(
 pub fn search_clipboard(
     db: State<'_, database::Database>,
     query: String,
+    content_type: Option<String>,
     limit: Option<i64>,
 ) -> Result<Vec<ClipboardItem>, String> {
-    database::clipboard::search(&db, &query, limit.unwrap_or(100))
+    database::clipboard::search(&db, &query, content_type.as_deref(), limit.unwrap_or(100))
 }
 
 #[tauri::command]
@@ -34,8 +35,18 @@ pub fn delete_clipboard_item(db: State<'_, database::Database>, id: i64) -> Resu
 }
 
 #[tauri::command]
-pub fn clear_clipboard_history(db: State<'_, database::Database>) -> Result<(), String> {
-    database::clipboard::clear(&db)
+pub fn toggle_favorite(db: State<'_, database::Database>, id: i64) -> Result<ClipboardItem, String> {
+    database::clipboard::toggle_favorite(&db, id)
+}
+
+#[tauri::command]
+pub fn clear_clipboard_history(
+    app: tauri::AppHandle,
+    db: State<'_, database::Database>,
+) -> Result<(), String> {
+    database::clipboard::clear(&db)?;
+    let _ = app.emit("clipboard-cleared", ());
+    Ok(())
 }
 
 #[tauri::command]
@@ -98,6 +109,17 @@ pub fn paste_from_clipboard(
         }
     }
 
+    #[cfg(target_os = "linux")]
+    {
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        if let Ok(mut enigo) = enigo::Enigo::new(&enigo::Settings::default()) {
+            use enigo::Keyboard;
+            let _ = enigo.key(enigo::Key::Control, enigo::Direction::Press);
+            let _ = enigo.key(enigo::Key::Unicode('v'), enigo::Direction::Click);
+            let _ = enigo.key(enigo::Key::Control, enigo::Direction::Release);
+        }
+    }
+
     Ok(())
 }
 
@@ -118,11 +140,14 @@ pub fn get_all_config(
 
 #[tauri::command]
 pub fn set_config(
+    app: tauri::AppHandle,
     db: State<'_, database::Database>,
     key: String,
     value: String,
 ) -> Result<(), String> {
-    database::config::set(&db, &key, &value)
+    database::config::set(&db, &key, &value)?;
+    let _ = app.emit("config-changed", serde_json::json!({ "key": key, "value": value }));
+    Ok(())
 }
 
 #[tauri::command]

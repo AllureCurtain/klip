@@ -7,8 +7,8 @@ export const clipboardApi = {
   getList: (limit = 100, offset = 0) =>
     invoke<ClipboardItem[]>('get_clipboard_list', { limit, offset }),
 
-  search: (query: string, limit = 100) =>
-    invoke<ClipboardItem[]>('search_clipboard', { query, limit }),
+  search: (query: string, contentType?: string, limit = 100) =>
+    invoke<ClipboardItem[]>('search_clipboard', { query, contentType, limit }),
 
   getById: (id: number) =>
     invoke<ClipboardItem | null>('get_clipboard_by_id', { id }),
@@ -18,6 +18,9 @@ export const clipboardApi = {
   copy: (id: number) => invoke('copy_to_clipboard', { id }),
 
   paste: (id: number) => invoke('paste_from_clipboard', { id }),
+
+  toggleFavorite: (id: number) =>
+    invoke<ClipboardItem>('toggle_favorite', { id }),
 
   clear: () => invoke('clear_clipboard_history'),
 };

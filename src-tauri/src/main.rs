@@ -93,6 +93,7 @@ fn main() {
             commands::search_clipboard,
             commands::get_clipboard_by_id,
             commands::delete_clipboard_item,
+            commands::toggle_favorite,
             commands::clear_clipboard_history,
             commands::copy_to_clipboard,
             commands::paste_from_clipboard,

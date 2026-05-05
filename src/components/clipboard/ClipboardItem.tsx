@@ -1,4 +1,4 @@
-import { FileText, Image, File, Folder, Files, Trash2 } from 'lucide-react';
+import { FileText, Image, File, Folder, Files, Trash2, Star } from 'lucide-react';
 import { Button } from '@/components/ui';
 import { useClipboardStore } from '@/stores';
 import { formatTime, formatSize, truncate, cn } from '@/lib/utils';
@@ -73,7 +73,7 @@ function classifyFile(item: ClipboardItemType): FileShape {
 }
 
 export function ClipboardItem({ item, index }: ClipboardItemProps) {
-  const { deleteItem, copyItem } = useClipboardStore();
+  const { deleteItem, copyItem, toggleFavorite } = useClipboardStore();
 
   const handleCopy = () => {
     copyItem(item.id);
@@ -82,6 +82,11 @@ export function ClipboardItem({ item, index }: ClipboardItemProps) {
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
     deleteItem(item.id);
+  };
+
+  const handleToggleFavorite = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    toggleFavorite(item.id);
   };
 
   const fileShape = item.content_type === 'file' ? classifyFile(item) : null;
@@ -160,6 +165,26 @@ export function ClipboardItem({ item, index }: ClipboardItemProps) {
         </div>
         {renderPreview()}
       </div>
+      <Button
+        variant="ghost"
+        size="icon"
+        className={cn(
+          'h-8 w-8 transition-opacity',
+          item.is_favorited
+            ? 'opacity-100'
+            : 'opacity-0 group-hover:opacity-100'
+        )}
+        onClick={handleToggleFavorite}
+      >
+        <Star
+          className={cn(
+            'h-4 w-4',
+            item.is_favorited
+              ? 'fill-yellow-500 text-yellow-500'
+              : 'text-gray-400 hover:text-yellow-500'
+          )}
+        />
+      </Button>
       <Button
         variant="ghost"
         size="icon"
