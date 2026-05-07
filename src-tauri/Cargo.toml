@@ -5,6 +5,10 @@ description = "A cross-platform clipboard manager"
 authors = ["Klip Team"]
 edition = "2021"
 
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
