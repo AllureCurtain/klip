@@ -2,6 +2,10 @@ import { create } from 'zustand';
 import type { ClipboardItem } from '@/types';
 import { clipboardApi } from '@/lib/tauri';
 
+function getErrorMessage(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
+
 interface ClipboardStore {
   items: ClipboardItem[];
   loading: boolean;
@@ -30,7 +34,7 @@ export const useClipboardStore = create<ClipboardStore>((set) => ({
         : await clipboardApi.getList();
       set({ items, loading: false });
     } catch (error) {
-      set({ error: String(error), loading: false });
+      set({ error: getErrorMessage(error), loading: false });
     }
   },
 
@@ -40,7 +44,7 @@ export const useClipboardStore = create<ClipboardStore>((set) => ({
       const items = await clipboardApi.search(query, contentType);
       set({ items, loading: false });
     } catch (error) {
-      set({ error: String(error), loading: false });
+      set({ error: getErrorMessage(error), loading: false });
     }
   },
 
@@ -51,7 +55,7 @@ export const useClipboardStore = create<ClipboardStore>((set) => ({
         items: state.items.filter((item) => item.id !== id),
       }));
     } catch (error) {
-      set({ error: String(error) });
+      set({ error: getErrorMessage(error) });
     }
   },
 
@@ -59,7 +63,7 @@ export const useClipboardStore = create<ClipboardStore>((set) => ({
     try {
       await clipboardApi.paste(id);
     } catch (error) {
-      set({ error: String(error) });
+      set({ error: getErrorMessage(error) });
     }
   },
 
@@ -68,7 +72,7 @@ export const useClipboardStore = create<ClipboardStore>((set) => ({
       await clipboardApi.clear();
       set({ items: [] });
     } catch (error) {
-      set({ error: String(error) });
+      set({ error: getErrorMessage(error) });
     }
   },
 
@@ -81,7 +85,7 @@ export const useClipboardStore = create<ClipboardStore>((set) => ({
         ),
       }));
     } catch (error) {
-      set({ error: String(error) });
+      set({ error: getErrorMessage(error) });
     }
   },
 

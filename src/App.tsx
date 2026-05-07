@@ -16,17 +16,14 @@ function App() {
   const [contentType, setContentType] = useState<string | null>(null);
 
   useEffect(() => {
-    // 加载剪贴板历史
     fetchItems().catch((e) => {
       console.error('Failed to fetch items:', e);
     });
 
-    // 监听剪贴板更新事件
     const unlistenPromise = listen<ClipboardItem>('clipboard-updated', (event) => {
       addItems([event.payload]);
     });
 
-    // 监听剪贴板清空事件
     const unlistenClearedPromise = onClipboardCleared(() => {
       setItems([]);
     });
@@ -37,8 +34,6 @@ function App() {
     };
   }, [fetchItems, addItems, setItems]);
 
-  // 搜索：带防抖，走后端 SQL LIKE（覆盖 preview + content），
-  // 而不是客户端 filter（之前只能查到列表里已加载的 100 条 preview）。
   useEffect(() => {
     const trimmed = searchQuery.trim();
     const handle = window.setTimeout(() => {
@@ -55,16 +50,16 @@ function App() {
   }, [searchQuery, contentType, fetchItems, searchItems]);
 
   return (
-    <div className="flex flex-col h-screen bg-white dark:bg-gray-900">
+    <div className="flex flex-col h-screen bg-background text-foreground">
       <Header searchQuery={searchQuery} onSearchChange={setSearchQuery} contentType={contentType} onContentTypeChange={setContentType} />
       <main className="flex-1 overflow-hidden">
         {loading ? (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-gray-500">加载中...</div>
+          <div className="flex items-center justify-center h-full text-muted-foreground">
+            加载中...
           </div>
         ) : error ? (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-red-500">错误: {error}</div>
+          <div className="flex items-center justify-center h-full text-destructive">
+            错误: {error}
           </div>
         ) : items.length === 0 ? (
           <EmptyState />

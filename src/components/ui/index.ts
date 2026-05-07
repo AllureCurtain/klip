@@ -1,3 +1,3 @@
-export { Button } from './button';
+export { Button, buttonVariants } from './button';
 export { Input } from './input';
-export { ScrollArea } from './scroll-area';
+export { ScrollArea, ScrollBar } from './scroll-area';

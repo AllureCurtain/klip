@@ -1,20 +1,49 @@
 import * as React from 'react';
+import * as ScrollAreaPrimitive from '@radix-ui/react-scroll-area';
 import { cn } from '@/lib/utils';
 
-interface ScrollAreaProps extends React.HTMLAttributes<HTMLDivElement> {}
-
-export const ScrollArea = React.forwardRef<HTMLDivElement, ScrollAreaProps>(
-  ({ className, children, ...props }, ref) => {
-    return (
-      <div
-        ref={ref}
-        className={cn('relative overflow-auto', className)}
-        {...props}
-      >
+function ScrollArea({
+  className,
+  children,
+  ...props
+}: React.ComponentProps<typeof ScrollAreaPrimitive.Root>) {
+  return (
+    <ScrollAreaPrimitive.Root
+      data-slot="scroll-area"
+      className={cn('relative', className)}
+      {...props}
+    >
+      <ScrollAreaPrimitive.Viewport className="focus-visible:outline-none h-full w-full [&>div]:h-full">
         {children}
-      </div>
-    );
-  }
-);
+      </ScrollAreaPrimitive.Viewport>
+      <ScrollBar />
+      <ScrollAreaPrimitive.Corner />
+    </ScrollAreaPrimitive.Root>
+  );
+}
 
-ScrollArea.displayName = 'ScrollArea';
+function ScrollBar({
+  className,
+  orientation = 'vertical',
+  ...props
+}: React.ComponentProps<typeof ScrollAreaPrimitive.ScrollAreaScrollbar>) {
+  return (
+    <ScrollAreaPrimitive.ScrollAreaScrollbar
+      data-slot="scroll-area-scrollbar"
+      orientation={orientation}
+      className={cn(
+        'flex touch-none p-px transition-colors',
+        orientation === 'vertical' &&
+          'h-full w-2.5 border-l border-l-transparent',
+        orientation === 'horizontal' &&
+          'h-2.5 flex-col border-t border-t-transparent',
+        className
+      )}
+      {...props}
+    >
+      <ScrollAreaPrimitive.ScrollAreaThumb className="relative flex-1 rounded-full bg-border" />
+    </ScrollAreaPrimitive.ScrollAreaScrollbar>
+  );
+}
+
+export { ScrollArea, ScrollBar };

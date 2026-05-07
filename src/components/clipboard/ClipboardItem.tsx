@@ -1,4 +1,4 @@
-import { FileText, Image, File, Folder, Files, Trash2, Star } from 'lucide-react';
+import { FileText, Image, File, Folder, Files, Trash2, Star, Check } from 'lucide-react';
 import { Button } from '@/components/ui';
 import { useClipboardStore } from '@/stores';
 import { formatTime, formatSize, truncate, cn } from '@/lib/utils';
@@ -6,17 +6,15 @@ import type {
   ClipboardItem as ClipboardItemType,
   FileMetadata,
 } from '@/types';
+import { useState, useCallback, useEffect, useRef } from 'react';
 
 interface ClipboardItemProps {
   item: ClipboardItemType;
   index: number;
+  isSelected: boolean;
+  onSelect?: () => void;
 }
 
-/**
- * Parse the JSON metadata blob attached to a `file` clipboard item.
- * Returns null for non-file items, missing metadata, or malformed JSON
- * so the caller can fall back to plain preview rendering.
- */
 function parseFileMetadata(item: ClipboardItemType): FileMetadata | null {
   if (item.content_type !== 'file' || !item.metadata) return null;
   try {
@@ -26,13 +24,6 @@ function parseFileMetadata(item: ClipboardItemType): FileMetadata | null {
   }
 }
 
-/**
- * Decide which composite to render for a `file` clipboard item:
- *  - `single-file`   → file icon + filename + size
- *  - `single-folder` → folder icon + folder name
- *  - `multi`         → stacked-files icon + counts breakdown
- *  - `unknown`       → fallback for items missing the new metadata schema
- */
 type FileShape =
   | { kind: 'single-file'; name: string; size: number }
   | { kind: 'single-folder'; name: string }
@@ -72,12 +63,21 @@ function classifyFile(item: ClipboardItemType): FileShape {
   };
 }
 
-export function ClipboardItem({ item, index }: ClipboardItemProps) {
+export function ClipboardItem({ item, index, isSelected, onSelect }: ClipboardItemProps) {
   const { deleteItem, copyItem, toggleFavorite } = useClipboardStore();
+  const [copied, setCopied] = useState(false);
+  const itemRef = useRef<HTMLDivElement>(null);
 
-  const handleCopy = () => {
+  const handleCopy = useCallback(() => {
     copyItem(item.id);
-  };
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }, [copyItem, item.id]);
+
+  const handleClick = useCallback(() => {
+    onSelect?.();
+    handleCopy();
+  }, [onSelect, handleCopy]);
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -89,27 +89,35 @@ export function ClipboardItem({ item, index }: ClipboardItemProps) {
     toggleFavorite(item.id);
   };
 
+  useEffect(() => {
+    if (isSelected && itemRef.current) {
+      itemRef.current.scrollIntoView({ block: 'nearest' });
+    }
+  }, [isSelected]);
+
   const fileShape = item.content_type === 'file' ? classifyFile(item) : null;
 
   const renderIcon = () => {
     switch (item.content_type) {
       case 'text':
-        return <FileText className="h-4 w-4 text-gray-500" />;
+        return <FileText className="h-4 w-4 text-muted-foreground" />;
       case 'image':
-        return <Image className="h-4 w-4 text-blue-500" />;
+        return <Image className="h-4 w-4 text-chart-2" />;
       case 'file': {
-        if (!fileShape) return <File className="h-4 w-4 text-orange-500" />;
+        if (!fileShape) return <File className="h-4 w-4 text-chart-4" />;
         switch (fileShape.kind) {
           case 'single-folder':
             return <Folder className="h-4 w-4 text-amber-500" />;
           case 'single-file':
-            return <File className="h-4 w-4 text-orange-500" />;
+            return <File className="h-4 w-4 text-chart-4" />;
           case 'multi':
-            return <Files className="h-4 w-4 text-orange-500" />;
+            return <Files className="h-4 w-4 text-chart-4" />;
           case 'unknown':
-            return <File className="h-4 w-4 text-orange-500" />;
+            return <File className="h-4 w-4 text-chart-4" />;
         }
       }
+      default:
+        return null;
     }
   };
 
@@ -117,7 +125,7 @@ export function ClipboardItem({ item, index }: ClipboardItemProps) {
     switch (item.content_type) {
       case 'text':
         return (
-          <span className="text-sm text-gray-700 dark:text-gray-300">
+          <span className="text-sm text-foreground">
             {truncate(item.preview || item.content, 100)}
           </span>
         );
@@ -127,72 +135,91 @@ export function ClipboardItem({ item, index }: ClipboardItemProps) {
             <img
               src={item.content}
               alt="剪贴板图片"
-              className="h-10 w-10 object-cover rounded border border-gray-200 dark:border-gray-700"
+              className="h-10 w-10 object-cover rounded border border-border"
             />
-            <span className="text-sm text-gray-500">{item.preview}</span>
+            <span className="text-sm text-muted-foreground">{item.preview}</span>
           </div>
         );
       case 'file': {
         if (!fileShape) {
           return (
-            <span className="text-sm text-gray-700 dark:text-gray-300">
+            <span className="text-sm text-foreground">
               {item.preview}
             </span>
           );
         }
         return renderFilePreview(fileShape);
       }
+      default:
+        return null;
     }
   };
 
   return (
     <div
-      onClick={handleCopy}
+      ref={itemRef}
+      onClick={handleClick}
       className={cn(
-        'group flex items-start gap-3 p-3 rounded-lg cursor-pointer',
-        'hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors'
+        'group relative flex items-start gap-3 px-3 py-2.5 cursor-pointer transition-colors',
+        isSelected
+          ? 'bg-accent ring-2 ring-ring ring-inset'
+          : 'hover:bg-accent/50',
+        copied && 'bg-primary/10'
       )}
     >
-      <div className="flex items-center justify-center w-6 h-6 rounded bg-gray-100 dark:bg-gray-800 text-xs font-medium text-gray-500">
+      <div className="flex items-center justify-center w-5 h-5 rounded text-[10px] font-medium text-muted-foreground bg-muted shrink-0 mt-0.5">
         {index}
       </div>
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-1">
+        <div className="flex items-center gap-2 mb-0.5">
           {renderIcon()}
-          <span className="text-xs text-gray-400">
+          <span className="text-xs text-muted-foreground">
             {formatTime(item.created_at)}
           </span>
         </div>
         {renderPreview()}
       </div>
-      <Button
-        variant="ghost"
-        size="icon"
-        className={cn(
-          'h-8 w-8 transition-opacity',
-          item.is_favorited
-            ? 'opacity-100'
-            : 'opacity-0 group-hover:opacity-100'
-        )}
-        onClick={handleToggleFavorite}
-      >
-        <Star
+      <div className="flex items-center gap-0.5 shrink-0">
+        <Button
+          variant="ghost"
+          size="icon"
           className={cn(
-            'h-4 w-4',
+            'size-7 transition-opacity',
             item.is_favorited
-              ? 'fill-yellow-500 text-yellow-500'
-              : 'text-gray-400 hover:text-yellow-500'
+              ? 'opacity-100'
+              : 'opacity-0 group-hover:opacity-100'
           )}
-        />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        className="opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8"
-        onClick={handleDelete}
-      >
-        <Trash2 className="h-4 w-4 text-gray-400 hover:text-red-500" />
-      </Button>
+          onClick={handleToggleFavorite}
+        >
+          <Star
+            className={cn(
+              'h-3.5 w-3.5',
+              item.is_favorited
+                ? 'fill-amber-500 text-amber-500'
+                : 'text-muted-foreground hover:text-amber-500'
+            )}
+          />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="opacity-0 group-hover:opacity-100 transition-opacity size-7"
+          onClick={handleDelete}
+        >
+          <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+        </Button>
+        <span className="opacity-0 group-hover:opacity-100 transition-opacity text-[10px] text-muted-foreground ml-0.5 tabular-nums">
+          ⌥{index}
+        </span>
+      </div>
+      {copied && (
+        <div className="absolute inset-0 flex items-center justify-center bg-primary/10 rounded pointer-events-none">
+          <span className="flex items-center gap-1 text-xs font-medium text-primary bg-primary-foreground px-2 py-1 rounded shadow-sm">
+            <Check className="h-3 w-3" />
+            已复制
+          </span>
+        </div>
+      )}
     </div>
   );
 }
@@ -202,7 +229,7 @@ function renderFilePreview(shape: FileShape) {
     case 'single-folder':
       return (
         <div className="flex items-baseline gap-2 min-w-0">
-          <span className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">
+          <span className="text-sm font-medium text-foreground truncate">
             {shape.name}
           </span>
           <span className="text-xs text-amber-600 dark:text-amber-400 shrink-0">
@@ -213,11 +240,11 @@ function renderFilePreview(shape: FileShape) {
     case 'single-file':
       return (
         <div className="flex items-baseline gap-2 min-w-0">
-          <span className="text-sm text-gray-800 dark:text-gray-200 truncate">
+          <span className="text-sm font-medium text-foreground truncate">
             {shape.name}
           </span>
           {shape.size > 0 && (
-            <span className="text-xs text-gray-400 shrink-0">
+            <span className="text-xs text-muted-foreground shrink-0">
               {formatSize(shape.size)}
             </span>
           )}
@@ -234,17 +261,17 @@ function renderFilePreview(shape: FileShape) {
       return (
         <div className="min-w-0">
           <div className="flex items-baseline gap-2">
-            <span className="text-sm font-medium text-gray-800 dark:text-gray-200">
+            <span className="text-sm font-medium text-foreground">
               {summary}
             </span>
             {shape.totalSize > 0 && (
-              <span className="text-xs text-gray-400">
+              <span className="text-xs text-muted-foreground">
                 {formatSize(shape.totalSize)}
               </span>
             )}
           </div>
           {sampleLine && (
-            <div className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">
+            <div className="text-xs text-muted-foreground truncate mt-0.5">
               {sampleLine}
               {moreCount > 0 ? ` 等 ${moreCount} 项` : ''}
             </div>
@@ -254,7 +281,7 @@ function renderFilePreview(shape: FileShape) {
     }
     case 'unknown':
       return (
-        <span className="text-sm text-gray-700 dark:text-gray-300">
+        <span className="text-sm text-foreground">
           {shape.preview}
         </span>
       );

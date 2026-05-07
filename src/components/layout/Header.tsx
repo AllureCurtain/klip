@@ -1,5 +1,7 @@
-import { Search, Settings, FileText, Image, FolderOpen } from 'lucide-react';
+import { Search, Settings, FileText, Image, FolderOpen, Sun, Moon } from 'lucide-react';
 import { Input, Button } from '@/components/ui';
+import { useThemeStore } from '@/stores/themeStore';
+import { cn } from '@/lib/utils';
 
 interface HeaderProps {
   searchQuery: string;
@@ -16,20 +18,33 @@ const CONTENT_TYPE_TABS: { label: string; value: string | null; icon: React.Reac
 ];
 
 export function Header({ searchQuery, onSearchChange, contentType, onContentTypeChange }: HeaderProps) {
+  const { resolvedTheme, setTheme } = useThemeStore();
+
+  const toggleTheme = () => {
+    setTheme(resolvedTheme === 'dark' ? 'light' : 'dark');
+  };
+
   return (
-    <header className="flex flex-col gap-2 px-4 py-3 border-b border-gray-200 dark:border-gray-800">
+    <header className="flex flex-col gap-2 px-3 py-2 border-b border-border">
       <div className="flex items-center gap-2">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             type="text"
             placeholder="搜索剪贴板历史..."
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            className="pl-9"
+            className="h-8 pl-8 text-sm"
           />
         </div>
-        <Button variant="ghost" size="icon">
+        <Button variant="ghost" size="icon" className="size-8" onClick={toggleTheme}>
+          {resolvedTheme === 'dark' ? (
+            <Sun className="h-4 w-4" />
+          ) : (
+            <Moon className="h-4 w-4" />
+          )}
+        </Button>
+        <Button variant="ghost" size="icon" className="size-8">
           <Settings className="h-4 w-4" />
         </Button>
       </div>
@@ -37,9 +52,12 @@ export function Header({ searchQuery, onSearchChange, contentType, onContentType
         {CONTENT_TYPE_TABS.map((tab) => (
           <Button
             key={tab.label}
-            variant={contentType === tab.value ? 'default' : 'ghost'}
+            variant="ghost"
             size="sm"
-            className="h-6 px-2 text-xs gap-1"
+            className={cn(
+              'h-7 px-2.5 text-xs gap-1 rounded-full transition-colors',
+              contentType === tab.value && 'bg-accent text-accent-foreground'
+            )}
             onClick={() => onContentTypeChange(tab.value)}
           >
             {tab.icon}

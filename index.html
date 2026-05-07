@@ -7,6 +7,14 @@
     <title>Klip</title>
   </head>
   <body>
+    <script>
+      (function() {
+        var stored = localStorage.getItem('klip-theme');
+        var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        var isDark = stored === 'dark' || (!stored && prefersDark);
+        if (isDark) document.documentElement.classList.add('dark');
+      })();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
