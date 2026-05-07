@@ -15,7 +15,8 @@ mod tests {
 
     fn test_db() -> Database {
         let conn = Connection::open_in_memory().unwrap();
-        conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;").unwrap();
+        conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")
+            .unwrap();
         let db = Database::from_conn(conn);
         db.init_schema().unwrap();
         db
@@ -48,7 +49,8 @@ mod tests {
             "SELECT id, content_type, content, preview, hash, size, metadata, is_favorited, created_at, last_used_at
              FROM clipboard_items WHERE hash = ?1",
         ).unwrap();
-        stmt.query_row([&hash], |row| Ok(row_to_clipboard_item(row))).unwrap()
+        stmt.query_row([&hash], |row| Ok(row_to_clipboard_item(row)))
+            .unwrap()
     }
 
     #[test]
@@ -71,9 +73,9 @@ mod tests {
         let base_ts = 1000i64;
 
         // Insert 5 items with strictly increasing timestamps
-        let items: Vec<_> = (0..5).map(|i| {
-            insert_text_at_time(&db, &format!("item-{}", i), base_ts + i as i64 * 100)
-        }).collect();
+        let items: Vec<_> = (0..5)
+            .map(|i| insert_text_at_time(&db, &format!("item-{}", i), base_ts + i as i64 * 100))
+            .collect();
         toggle_favorite(&db, items[2].id).unwrap();
 
         // Cleanup keeping only 2 non-favorited newest —
@@ -83,11 +85,26 @@ mod tests {
         let remaining = get_list(&db, 100, 0).unwrap();
         let remaining_ids: Vec<i64> = remaining.iter().map(|i| i.id).collect();
 
-        assert!(remaining_ids.contains(&items[2].id), "favorited item should survive cleanup");
-        assert!(remaining_ids.contains(&items[4].id), "newest non-fav should survive");
-        assert!(remaining_ids.contains(&items[3].id), "2nd newest non-fav should survive");
-        assert!(!remaining_ids.contains(&items[0].id), "oldest should be deleted");
-        assert!(!remaining_ids.contains(&items[1].id), "2nd oldest should be deleted");
+        assert!(
+            remaining_ids.contains(&items[2].id),
+            "favorited item should survive cleanup"
+        );
+        assert!(
+            remaining_ids.contains(&items[4].id),
+            "newest non-fav should survive"
+        );
+        assert!(
+            remaining_ids.contains(&items[3].id),
+            "2nd newest non-fav should survive"
+        );
+        assert!(
+            !remaining_ids.contains(&items[0].id),
+            "oldest should be deleted"
+        );
+        assert!(
+            !remaining_ids.contains(&items[1].id),
+            "2nd oldest should be deleted"
+        );
     }
 
     #[test]
@@ -158,6 +175,23 @@ mod tests {
         let img_results = search(&db, "hello", Some("image"), 100).unwrap();
         assert_eq!(img_results.len(), 1);
     }
+
+    #[test]
+    fn get_list_orders_by_last_used_then_created_at() {
+        let db = test_db();
+        let older = insert_text_at_time(&db, "older", 1_000);
+        let newer = insert_text_at_time(&db, "newer", 2_000);
+
+        let baseline = get_list(&db, 10, 0).unwrap();
+        assert_eq!(baseline[0].id, newer.id);
+        assert_eq!(baseline[1].id, older.id);
+
+        touch_last_used(&db, older.id).unwrap();
+
+        let reordered = get_list(&db, 10, 0).unwrap();
+        assert_eq!(reordered[0].id, older.id);
+        assert_eq!(reordered[1].id, newer.id);
+    }
 }
 
 pub fn get_list(db: &Database, limit: i64, offset: i64) -> Result<Vec<ClipboardItem>, String> {
@@ -183,7 +217,12 @@ pub fn get_list(db: &Database, limit: i64, offset: i64) -> Result<Vec<ClipboardI
     Ok(items)
 }
 
-pub fn search(db: &Database, query: &str, content_type: Option<&str>, limit: i64) -> Result<Vec<ClipboardItem>, String> {
+pub fn search(
+    db: &Database,
+    query: &str,
+    content_type: Option<&str>,
+    limit: i64,
+) -> Result<Vec<ClipboardItem>, String> {
     let conn = db.get_connection()?;
 
     let sql = match content_type {

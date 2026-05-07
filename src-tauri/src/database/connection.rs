@@ -63,7 +63,21 @@ impl Database {
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_clipboard_created_at ON clipboard_items(created_at DESC)",
             [],
-        ).map_err(|e| e.to_string())?;
+        )
+        .map_err(|e| e.to_string())?;
+
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_clipboard_last_used_created_at
+             ON clipboard_items(last_used_at DESC, created_at DESC)",
+            [],
+        )
+        .map_err(|e| e.to_string())?;
+
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_clipboard_content_type ON clipboard_items(content_type)",
+            [],
+        )
+        .map_err(|e| e.to_string())?;
 
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_clipboard_hash ON clipboard_items(hash)",
@@ -139,4 +153,28 @@ pub fn init(app_handle: tauri::AppHandle) -> Result<(), String> {
     let db = Database::new(&db_path)?;
     app_handle.manage(db);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Database;
+
+    #[test]
+    fn default_hotkey_config_matches_runtime_contract() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")
+            .unwrap();
+        let db = Database::from_conn(conn);
+        db.init_schema().unwrap();
+
+        let toggle = crate::database::config::get(&db, "hotkey_toggle_window")
+            .unwrap()
+            .unwrap();
+        let prefix = crate::database::config::get(&db, "hotkey_quick_paste_prefix")
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(toggle, "Ctrl+Alt+K");
+        assert_eq!(prefix, "Ctrl+Alt");
+    }
 }

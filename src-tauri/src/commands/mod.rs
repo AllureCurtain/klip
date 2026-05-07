@@ -35,7 +35,10 @@ pub fn delete_clipboard_item(db: State<'_, database::Database>, id: i64) -> Resu
 }
 
 #[tauri::command]
-pub fn toggle_favorite(db: State<'_, database::Database>, id: i64) -> Result<ClipboardItem, String> {
+pub fn toggle_favorite(
+    db: State<'_, database::Database>,
+    id: i64,
+) -> Result<ClipboardItem, String> {
     database::clipboard::toggle_favorite(&db, id)
 }
 
@@ -53,7 +56,11 @@ pub fn clear_clipboard_history(
 pub fn copy_to_clipboard(db: State<'_, database::Database>, id: i64) -> Result<(), String> {
     let item = database::clipboard::get_by_id(&db, id)?.ok_or("Item not found")?;
 
-    crate::clipboard::copy_to_clipboard(&item.content, &item.content_type, item.metadata.as_deref())?;
+    crate::clipboard::copy_to_clipboard(
+        &item.content,
+        &item.content_type,
+        item.metadata.as_deref(),
+    )?;
     let _ = database::clipboard::touch_last_used(&db, id);
     Ok(())
 }
@@ -145,8 +152,54 @@ pub fn set_config(
     key: String,
     value: String,
 ) -> Result<(), String> {
+    let previous_value = if key == "hotkey_toggle_window" || key == "hotkey_quick_paste_prefix" {
+        crate::hotkey::manager::validate_config_value(&key, &value)?;
+        database::config::get(&db, &key)?
+    } else {
+        None
+    };
+
+    // Only a subset of app_config keys currently has runtime side effects.
     database::config::set(&db, &key, &value)?;
-    let _ = app.emit("config-changed", serde_json::json!({ "key": key, "value": value }));
+
+    if key == "hotkey_toggle_window" || key == "hotkey_quick_paste_prefix" {
+        if let Err(err) = crate::hotkey::manager::reload_hotkeys(&app) {
+            match previous_value {
+                Some(previous) => {
+                    let _ = database::config::set(&db, &key, &previous);
+                }
+                None => {
+                    let fallback = match key.as_str() {
+                        "hotkey_toggle_window" => crate::hotkey::manager::DEFAULT_TOGGLE_HOTKEY,
+                        "hotkey_quick_paste_prefix" => {
+                            crate::hotkey::manager::DEFAULT_QUICK_PASTE_PREFIX
+                        }
+                        _ => unreachable!(),
+                    };
+                    let _ = database::config::set(&db, &key, fallback);
+                }
+            }
+
+            if let Some(previous) = database::config::get(&db, "hotkey_toggle_window")? {
+                let quick_paste_prefix = database::config::get(&db, "hotkey_quick_paste_prefix")?
+                    .unwrap_or_else(|| {
+                        crate::hotkey::manager::DEFAULT_QUICK_PASTE_PREFIX.to_string()
+                    });
+                let _ = crate::hotkey::manager::reload_hotkeys_from_values(
+                    &app,
+                    &previous,
+                    &quick_paste_prefix,
+                );
+            }
+
+            return Err(format!("Failed to reload hotkeys: {}", err));
+        }
+    }
+
+    let _ = app.emit(
+        "config-changed",
+        serde_json::json!({ "key": key, "value": value }),
+    );
     Ok(())
 }
 

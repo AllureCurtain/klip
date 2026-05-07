@@ -22,7 +22,7 @@ fn main() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
-            Some(vec!["--flag1", "--flag2"]),
+            None,
         ))
         .setup(move |app| {
             // 初始化日志：stderr + 按天滚动落盘到 app_log_dir/klip.log
@@ -141,11 +141,7 @@ fn sync_autostart_with_config(app: &tauri::AppHandle) {
     };
 
     match result {
-        Ok(()) => tracing::info!(
-            "Autostart synced: {} -> {}",
-            actually_enabled,
-            want_enabled
-        ),
+        Ok(()) => tracing::info!("Autostart synced: {} -> {}", actually_enabled, want_enabled),
         Err(e) => tracing::warn!("Failed to sync autostart: {}", e),
     }
 }
@@ -177,11 +173,7 @@ fn init_tracing(app: &tauri::AppHandle) -> WorkerGuard {
     let registry = tracing_subscriber::registry()
         .with(env_filter)
         .with(fmt::Layer::new().with_writer(std::io::stderr))
-        .with(
-            fmt::Layer::new()
-                .with_writer(non_blocking)
-                .with_ansi(false),
-        );
+        .with(fmt::Layer::new().with_writer(non_blocking).with_ansi(false));
 
     if registry.try_init().is_err() {
         eprintln!("tracing subscriber already set, skipping re-init");

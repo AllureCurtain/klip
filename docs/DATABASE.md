@@ -13,9 +13,9 @@
 
 | 平台 | 路径 |
 |------|------|
-| Windows | `%APPDATA%\klip\klip.db` |
-| macOS | `~/Library/Application Support/klip/klip.db` |
-| Linux | `~/.local/share/klip/klip.db` |
+| Windows | `%APPDATA%\com.klip.app\klip.db` |
+| macOS | `~/Library/Application Support/com.klip.app/klip.db` |
+| Linux | `~/.local/share/com.klip.app/klip.db` |
 
 ---
 
@@ -40,6 +40,7 @@ CREATE TABLE clipboard_items (
 
 -- 索引
 CREATE INDEX idx_clipboard_created_at ON clipboard_items(created_at DESC);
+CREATE INDEX idx_clipboard_last_used_created_at ON clipboard_items(last_used_at DESC, created_at DESC);
 CREATE INDEX idx_clipboard_hash ON clipboard_items(hash);
 CREATE INDEX idx_clipboard_preview ON clipboard_items(preview);
 CREATE INDEX idx_clipboard_content_type ON clipboard_items(content_type);
@@ -91,8 +92,8 @@ CREATE TABLE app_config (
 -- 默认配置数据
 INSERT INTO app_config (key, value, updated_at) VALUES
     ('max_history_count', '100', strftime('%s', 'now') * 1000),
-    ('hotkey_toggle_window', 'CommandOrControl+Shift+V', strftime('%s', 'now') * 1000),
-    ('hotkey_quick_paste_prefix', 'CommandOrControl+Shift', strftime('%s', 'now') * 1000),
+    ('hotkey_toggle_window', 'Ctrl+Alt+K', strftime('%s', 'now') * 1000),
+    ('hotkey_quick_paste_prefix', 'Ctrl+Alt', strftime('%s', 'now') * 1000),
     ('auto_start', 'true', strftime('%s', 'now') * 1000),
     ('close_to_tray', 'true', strftime('%s', 'now') * 1000),
     ('show_in_tray', 'true', strftime('%s', 'now') * 1000),
@@ -106,8 +107,8 @@ INSERT INTO app_config (key, value, updated_at) VALUES
 | 键 | 类型 | 默认值 | 说明 |
 |----|------|--------|------|
 | max_history_count | number | 100 | 最大历史记录数 |
-| hotkey_toggle_window | string | CommandOrControl+Shift+V | 窗口切换快捷键 |
-| hotkey_quick_paste_prefix | string | CommandOrControl+Shift | 快速粘贴前缀 |
+| hotkey_toggle_window | string | Ctrl+Alt+K | 窗口切换快捷键；当前运行时支持 `Ctrl+Alt+<A-Z>` |
+| hotkey_quick_paste_prefix | string | Ctrl+Alt | 快速粘贴前缀；当前运行时固定派生为 `Ctrl+Alt+1..9` |
 | auto_start | boolean | true | 开机自启动 |
 | close_to_tray | boolean | true | 关闭时最小化到托盘 |
 | show_in_tray | boolean | true | 显示托盘图标 |
@@ -150,19 +151,19 @@ pub struct ConfigEntry {
 ```sql
 -- 获取最近的剪贴板记录
 SELECT * FROM clipboard_items
-ORDER BY created_at DESC
+ORDER BY last_used_at DESC, created_at DESC
 LIMIT ? OFFSET ?;
 
 -- 搜索剪贴板记录
 SELECT * FROM clipboard_items
 WHERE preview LIKE ?
-ORDER BY created_at DESC
+ORDER BY last_used_at DESC, created_at DESC
 LIMIT ?;
 
 -- 按类型筛选
 SELECT * FROM clipboard_items
 WHERE content_type = ?
-ORDER BY created_at DESC
+ORDER BY last_used_at DESC, created_at DESC
 LIMIT ?;
 
 -- 插入新记录 (带去重)
@@ -191,7 +192,7 @@ VALUES (?, ?, ?);
 
 ---
 
-## 4. 数据迁移策略
+## 4. 数据迁移策略（后续阶段）
 
 ### 4.1 版本管理
 
@@ -203,6 +204,8 @@ VALUES ('db_version', '1', strftime('%s', 'now') * 1000);
 ```
 
 ### 4.2 迁移流程
+
+当前版本仅保留 `db_version` 配置项与基础建表/兼容逻辑，完整迁移框架仍是后续阶段能力。下面示例仅表示后续实现方向。
 
 ```rust
 fn run_migrations(db: &Connection) -> Result<()> {
@@ -255,9 +258,11 @@ fn cleanup_old_records(db: &Connection, max_count: i64) -> Result<()> {
 
 ---
 
-## 6. 备份与恢复
+## 6. 备份与恢复（后续阶段）
 
 ### 6.1 备份
+
+当前版本尚未提供正式的备份/恢复命令，以下内容表示规划方向，不代表现有实现。
 
 ```rust
 fn backup_database(db_path: &Path, backup_path: &Path) -> Result<()> {
@@ -290,6 +295,7 @@ fn restore_database(backup_path: &Path, db_path: &Path) -> Result<()> {
 | 索引 | 用途 |
 |------|------|
 | idx_clipboard_created_at | 按时间排序查询 |
+| idx_clipboard_last_used_created_at | 列表/搜索的最近使用排序 |
 | idx_clipboard_hash | 去重检查 |
 | idx_clipboard_preview | 搜索优化 |
 | idx_clipboard_content_type | 类型筛选 |
@@ -302,23 +308,23 @@ fn restore_database(backup_path: &Path, db_path: &Path) -> Result<()> {
 
 ### 7.3 连接管理
 
+当前后端使用单个 SQLite 连接，并通过 Rust `Mutex<Connection>` 在进程内串行化数据库访问，不存在连接池。
+
 ```rust
-// 使用单例模式管理数据库连接
-lazy_static! {
-    static ref DB: Mutex<Connection> = {
-        let path = get_db_path();
-        let conn = Connection::open(path).unwrap();
-        init_schema(&conn).unwrap();
-        Mutex::new(conn)
-    };
+pub struct Database {
+    conn: Mutex<Connection>,
 }
+
+// App setup 时初始化并通过 Tauri state 共享
 ```
 
 ---
 
 ## 8. 错误处理
 
-### 8.1 数据库损坏
+### 8.1 数据库损坏（后续阶段）
+
+当前版本尚未实现自动损坏检测与重建流程，以下内容为规划方向。
 
 ```rust
 fn handle_corrupted_database(db_path: &Path) -> Result<()> {

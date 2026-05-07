@@ -3,9 +3,9 @@
 > A modern, lightweight clipboard manager built with Tauri + React + Rust.
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)]()
+[![Platform](https://img.shields.io/badge/platform-Windows%20first-blue.svg)]()
 
-**Klip** 是一个跨平台剪贴板管理器，帮助你高效管理剪贴板历史记录。
+**Klip** 是一个当前以 Windows 为主要交付目标的剪贴板管理器，帮助你高效管理剪贴板历史记录。macOS / Linux 支持作为后续阶段完善。
 
 ## 特性
 
@@ -24,10 +24,10 @@
 下载 `.msi` 或 `.exe` 安装包
 
 ### macOS
-下载 `.dmg` 镜像文件
+后续阶段提供
 
 ### Linux
-下载 `.AppImage` 或使用包管理器安装
+后续阶段提供
 
 ## 快速开始
 
@@ -36,12 +36,15 @@
 3. 按 `Ctrl+Alt+K` 唤起窗口
 4. 使用 `Ctrl+Alt+1` ~ `Ctrl+Alt+9` 快速粘贴前 9 条记录
 
-## 配置
+## 配置与数据
 
-配置文件位置：
-- Windows: `%APPDATA%\klip\config.json`
-- macOS: `~/Library/Application Support/klip/config.json`
-- Linux: `~/.config/klip/config.json`
+当前版本将历史记录和应用配置统一存储在本地 SQLite 数据库 `klip.db` 中，配置项位于 `app_config` 表。
+
+- Windows: `%APPDATA%\com.klip.app\klip.db`
+- macOS: `~/Library/Application Support/com.klip.app/klip.db`（后续阶段）
+- Linux: `~/.local/share/com.klip.app/klip.db`（后续阶段）
+
+其中默认热键为 `Ctrl+Alt+K` 和 `Ctrl+Alt+1~9`。修改 `hotkey_toggle_window`、`hotkey_quick_paste_prefix` 后，后端会立即重载热键；开机自启动通过 `set_auto_start` 与系统状态同步。
 
 ## 技术栈
 

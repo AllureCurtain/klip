@@ -171,6 +171,13 @@ Record<string, string>
 void
 ```
 
+**当前运行时约定**:
+
+- `hotkey_toggle_window` 和 `hotkey_quick_paste_prefix` 会在写入后立即触发后端热键重载
+- 当前支持的窗口热键配置范围为 `Ctrl+Alt+<A-Z>`
+- 当前支持的快速粘贴前缀为 `Ctrl+Alt`，实际生效组合为 `Ctrl+Alt+1` 到 `Ctrl+Alt+9`
+- 其他配置键当前主要负责持久化，不保证立即产生运行时副作用
+
 ---
 
 ### 1.3 系统操作
@@ -228,6 +235,19 @@ void
 **返回**:
 ```typescript
 void
+```
+
+---
+
+#### `is_auto_start_enabled`
+
+读取当前系统层面的开机自启动状态。
+
+**参数**: 无
+
+**返回**:
+```typescript
+boolean
 ```
 
 ---
@@ -311,9 +331,10 @@ interface ClipboardItem {
   id: number;
   content_type: 'text' | 'image' | 'file';
   content: string;
-  preview: string;
+  preview: string | null;
   hash: string;
   size: number;
+  metadata: string | null;
   is_favorited: boolean;
   created_at: number;   // 毫秒时间戳
   last_used_at: number; // 毫秒时间戳
@@ -413,6 +434,9 @@ export const systemApi = {
   setAutoStart: (enabled: boolean) =>
     invoke('set_auto_start', { enabled }),
 
+  isAutoStartEnabled: () =>
+    invoke<boolean>('is_auto_start_enabled'),
+
   getInfo: () =>
     invoke<SystemInfo>('get_system_info'),
 };
@@ -420,6 +444,9 @@ export const systemApi = {
 // 事件监听
 export const onClipboardUpdated = (callback: (item: ClipboardItem) => void) =>
   listen('clipboard-updated', (event) => callback(event.payload as ClipboardItem));
+
+export const onClipboardCleared = (callback: () => void) =>
+  listen('clipboard-cleared', () => callback());
 
 export const onConfigChanged = (callback: (key: string, value: string) => void) =>
   listen('config-changed', (event) => {

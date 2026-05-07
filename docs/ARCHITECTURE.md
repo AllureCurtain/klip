@@ -54,7 +54,7 @@
 │                      Backend (Rust)                          │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐          │
 │  │  Clipboard  │  │  Database   │  │   Config    │          │
-│  │  Monitor    │  │  (SQLite)   │  │  Manager    │          │
+│  │  Monitor    │  │  (SQLite)   │  │  Commands   │          │
 │  └─────────────┘  └─────────────┘  └─────────────┘          │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐          │
 │  │   Hotkey    │  │   System    │  │   Commands  │          │
@@ -70,7 +70,7 @@
      │
      ▼
 ┌─────────────────┐
-│ Clipboard Monitor│  ← 轮询监听 (100ms)
+│ Clipboard Monitor│  ← Windows 事件驱动 / 其他平台轮询兜底
 └────────┬────────┘
          │ 内容变化
          ▼
@@ -144,23 +144,19 @@ src/
 ```
 src-tauri/src/
 ├── commands/            # IPC 命令
-│   ├── mod.rs
-│   ├── clipboard.rs     # 剪贴板命令
-│   ├── config.rs        # 配置命令
-│   └── system.rs        # 系统命令
+│   └── mod.rs
 │
 ├── clipboard/           # 剪贴板监听
 │   ├── mod.rs
 │   ├── monitor.rs       # 监听器
-│   ├── types.rs         # 类型定义
-│   └── parser.rs        # 内容解析
+│   └── format/          # 格式识别与提取
 │
 ├── database/            # 数据库操作
 │   ├── mod.rs
-│   ├── connection.rs    # 连接管理
-│   ├── schema.rs        # 表结构
+│   ├── connection.rs    # 连接与建表
 │   ├── clipboard.rs     # 剪贴板 CRUD
-│   └── config.rs        # 配置 CRUD
+│   ├── config.rs        # 配置 CRUD
+│   └── types.rs         # 数据类型
 │
 ├── hotkey/              # 快捷键管理
 │   ├── mod.rs
@@ -172,7 +168,7 @@ src-tauri/src/
 │
 ├── config/              # 应用配置
 │   ├── mod.rs
-│   └── types.rs
+│   └── settings.rs
 │
 └── utils/               # 工具函数
     └── mod.rs
@@ -185,28 +181,18 @@ src-tauri/src/
 ### 4.1 剪贴板监听流程
 
 ```rust
-// 伪代码
-struct ClipboardMonitor {
-    last_hash: Option<String>,
-    interval: Duration,  // 100ms
+// 简化示意
+#[cfg(target_os = "windows")]
+fn start_monitor(app_handle: AppHandle) {
+    clipboard_master::Master::new(WindowsClipboardHandler { app_handle }).run();
 }
 
-impl ClipboardMonitor {
-    fn start(&self, app_handle: AppHandle) {
-        spawn_thread(|| loop {
-            let content = arboard::get_clipboard();
-
-            if content.hash() != self.last_hash {
-                self.last_hash = content.hash();
-
-                let parsed = ContentParser::parse(content);
-                database::insert(parsed);
-
-                app_handle.emit("clipboard-updated", parsed);
-            }
-
-            sleep(100ms);
-        });
+#[cfg(not(target_os = "windows"))]
+fn start_monitor(app_handle: AppHandle) {
+    loop {
+        let text = arboard::Clipboard::new()?.get_text()?;
+        save_if_changed(app_handle, text);
+        sleep(500ms);
     }
 }
 ```
@@ -214,27 +200,13 @@ impl ClipboardMonitor {
 ### 4.2 快捷键处理流程
 
 ```rust
-// 伪代码
+// 简化示意
 fn register_hotkeys(app: &AppHandle) {
-    // 窗口切换
-    global_shortcut::register("CommandOrControl+Shift+V", || {
-        let window = app.get_window("main");
-        if window.is_visible() {
-            window.hide();
-        } else {
-            window.show();
-            window.focus();
-        }
-    });
+    let toggle = load_config("hotkey_toggle_window");       // default: Ctrl+Alt+K
+    let prefix = load_config("hotkey_quick_paste_prefix");  // default: Ctrl+Alt
 
-    // 快速粘贴 (1-9)
-    for i in 1..=9 {
-        global_shortcut::register(format!("CommandOrControl+Shift+{}", i), || {
-            let item = database::get_by_index(i);
-            arboard::set_clipboard(item.content);
-            window.hide();
-        });
-    }
+    register_toggle(toggle);
+    register_quick_paste(prefix); // Ctrl+Alt+1..9
 }
 ```
 
@@ -296,6 +268,7 @@ interface ClipboardItem {
 interface AppConfig {
   maxHistoryCount: number;      // 最大历史数
   hotkeyToggleWindow: string;   // 窗口快捷键
+  hotkeyQuickPastePrefix: string; // 快速粘贴前缀
   autoStart: boolean;           // 开机自启
   closeToTray: boolean;         // 关闭到托盘
 }
@@ -315,18 +288,33 @@ interface AppConfig {
 | `search_clipboard` | query, limit | ClipboardItem[] | 搜索 |
 | `delete_clipboard_item` | id | void | 删除 |
 | `copy_to_clipboard` | id | void | 复制 |
+| `paste_from_clipboard` | id | void | 复制后粘贴 |
+| `toggle_favorite` | id | ClipboardItem | 切换收藏 |
 | `clear_clipboard_history` | - | void | 清空 |
 | `get_config` | key | string | 获取配置 |
+| `get_all_config` | - | Record<string, string> | 获取全部配置 |
 | `set_config` | key, value | void | 设置配置 |
 | `toggle_window` | - | void | 切换窗口 |
+| `show_window` | - | void | 显示窗口 |
+| `hide_window` | - | void | 隐藏窗口 |
 | `set_auto_start` | enabled | void | 设置自启 |
+| `is_auto_start_enabled` | - | boolean | 查询自启状态 |
+| `get_system_info` | - | SystemInfo | 获取系统信息 |
 
 ### 6.2 事件列表
 
 | 事件 | 数据 | 说明 |
 |------|------|------|
 | `clipboard-updated` | ClipboardItem | 剪贴板更新 |
+| `clipboard-cleared` | void | 剪贴板历史清空 |
 | `config-changed` | { key, value } | 配置变更 |
+
+### 6.3 运行时配置约定
+
+- 当前后端实际消费的配置键为 `hotkey_toggle_window`、`hotkey_quick_paste_prefix`
+- `set_config` 修改这两个键后，后端会立即注销旧热键并重新注册
+- `auto_start` 通过专用 IPC 命令与系统自启动状态同步
+- 其他配置键当前主要承担持久化职责，不保证在运行中立即产生副作用
 
 ---
 
@@ -340,7 +328,7 @@ interface AppConfig {
 | 内存占用 | ~50MB | ~150MB |
 | 启动速度 | 快 | 较慢 |
 | 安全性 | 高 | 中 |
-| 跨平台 | 是 | 是 |
+| 框架跨平台能力 | 是 | 是 |
 
 **结论**: Tauri 更轻量、更安全、性能更好。
 
@@ -383,8 +371,8 @@ interface AppConfig {
 
 | 策略 | 说明 |
 |------|------|
-| 数据库索引 | created_at, hash 字段索引 |
-| 连接池 | 单例连接，避免重复创建 |
+| 数据库索引 | `created_at`、`last_used_at + created_at`、`content_type`、`hash` |
+| 数据库访问模型 | 单个 SQLite 连接 + `Mutex<Connection>` 串行化访问 |
 | 异步处理 | 剪贴板监听独立线程 |
 | 批量操作 | 批量删除优化 |
 
