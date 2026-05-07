@@ -2,6 +2,9 @@ use rusqlite::Connection;
 use std::sync::Mutex;
 use tauri::Manager;
 
+const DEFAULT_TOGGLE_HOTKEY: &str = "Ctrl+Alt+K";
+const DEFAULT_QUICK_PASTE_PREFIX: &str = "Ctrl+Alt";
+
 pub struct Database {
     conn: Mutex<Connection>,
 }
@@ -110,8 +113,8 @@ impl Database {
 
         let defaults = [
             ("max_history_count", "100"),
-            ("hotkey_toggle_window", "Ctrl+Alt+K"),
-            ("hotkey_quick_paste_prefix", "Ctrl+Alt"),
+            ("hotkey_toggle_window", DEFAULT_TOGGLE_HOTKEY),
+            ("hotkey_quick_paste_prefix", DEFAULT_QUICK_PASTE_PREFIX),
             ("auto_start", "true"),
             ("close_to_tray", "true"),
             ("show_in_tray", "true"),
@@ -128,6 +131,8 @@ impl Database {
             )
             .map_err(|e| e.to_string())?;
         }
+
+        normalize_legacy_hotkey_config(&conn, now)?;
 
         Ok(())
     }
@@ -155,6 +160,28 @@ pub fn init(app_handle: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+fn normalize_legacy_hotkey_config(conn: &Connection, now: i64) -> Result<(), String> {
+    conn.execute(
+        "UPDATE app_config
+         SET value = ?1, updated_at = ?2
+         WHERE key = 'hotkey_toggle_window'
+           AND value = 'CommandOrControl+Shift+V'",
+        [DEFAULT_TOGGLE_HOTKEY, &now.to_string()],
+    )
+    .map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "UPDATE app_config
+         SET value = ?1, updated_at = ?2
+         WHERE key = 'hotkey_quick_paste_prefix'
+           AND value = 'CommandOrControl+Shift'",
+        [DEFAULT_QUICK_PASTE_PREFIX, &now.to_string()],
+    )
+    .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::Database;
@@ -164,6 +191,37 @@ mod tests {
         let conn = rusqlite::Connection::open_in_memory().unwrap();
         conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")
             .unwrap();
+        let db = Database::from_conn(conn);
+        db.init_schema().unwrap();
+
+        let toggle = crate::database::config::get(&db, "hotkey_toggle_window")
+            .unwrap()
+            .unwrap();
+        let prefix = crate::database::config::get(&db, "hotkey_quick_paste_prefix")
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(toggle, "Ctrl+Alt+K");
+        assert_eq!(prefix, "Ctrl+Alt");
+    }
+
+    #[test]
+    fn legacy_hotkey_config_is_normalized_to_runtime_defaults() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "PRAGMA journal_mode=WAL;
+             PRAGMA foreign_keys=ON;
+             CREATE TABLE app_config (
+                 key TEXT PRIMARY KEY,
+                 value TEXT NOT NULL,
+                 updated_at INTEGER NOT NULL
+             );
+             INSERT INTO app_config (key, value, updated_at) VALUES
+                 ('hotkey_toggle_window', 'CommandOrControl+Shift+V', 1),
+                 ('hotkey_quick_paste_prefix', 'CommandOrControl+Shift', 1);",
+        )
+        .unwrap();
+
         let db = Database::from_conn(conn);
         db.init_schema().unwrap();
 
