@@ -1,12 +1,14 @@
-import { FileText, Image, File, Folder, Files, Trash2, Star, Check } from 'lucide-react';
+import { FileText, Image, File, Folder, Files, Trash2, Star, Check, Maximize2 } from 'lucide-react';
 import { Button } from '@/components/ui';
 import { useClipboardStore } from '@/stores';
 import { formatTime, formatSize, truncate, cn } from '@/lib/utils';
 import type {
   ClipboardItem as ClipboardItemType,
   FileMetadata,
+  ImageMetadata,
 } from '@/types';
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { ImagePreview } from './ImagePreview';
 
 interface ClipboardItemProps {
   item: ClipboardItemType;
@@ -19,6 +21,15 @@ function parseFileMetadata(item: ClipboardItemType): FileMetadata | null {
   if (item.content_type !== 'file' || !item.metadata) return null;
   try {
     return JSON.parse(item.metadata) as FileMetadata;
+  } catch {
+    return null;
+  }
+}
+
+function parseImageMetadata(item: ClipboardItemType): ImageMetadata | null {
+  if (item.content_type !== 'image' || !item.metadata) return null;
+  try {
+    return JSON.parse(item.metadata) as ImageMetadata;
   } catch {
     return null;
   }
@@ -66,6 +77,7 @@ function classifyFile(item: ClipboardItemType): FileShape {
 export function ClipboardItem({ item, index, isSelected, onSelect }: ClipboardItemProps) {
   const { deleteItem, copyItem, toggleFavorite } = useClipboardStore();
   const [copied, setCopied] = useState(false);
+  const [imagePreviewOpen, setImagePreviewOpen] = useState(false);
   const itemRef = useRef<HTMLDivElement>(null);
 
   const handleCopy = useCallback(() => {
@@ -89,6 +101,11 @@ export function ClipboardItem({ item, index, isSelected, onSelect }: ClipboardIt
     toggleFavorite(item.id);
   };
 
+  const handleImageClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setImagePreviewOpen(true);
+  };
+
   useEffect(() => {
     if (isSelected && itemRef.current) {
       itemRef.current.scrollIntoView({ block: 'nearest' });
@@ -96,6 +113,7 @@ export function ClipboardItem({ item, index, isSelected, onSelect }: ClipboardIt
   }, [isSelected]);
 
   const fileShape = item.content_type === 'file' ? classifyFile(item) : null;
+  const imageMeta = item.content_type === 'image' ? parseImageMetadata(item) : null;
 
   const renderIcon = () => {
     switch (item.content_type) {
@@ -132,12 +150,27 @@ export function ClipboardItem({ item, index, isSelected, onSelect }: ClipboardIt
       case 'image':
         return (
           <div className="flex items-center gap-2">
-            <img
-              src={item.content}
-              alt="剪贴板图片"
-              className="h-10 w-10 object-cover rounded border border-border"
-            />
-            <span className="text-sm text-muted-foreground">{item.preview}</span>
+            <div
+              className="relative group/img cursor-pointer"
+              onClick={handleImageClick}
+            >
+              <img
+                src={item.content}
+                alt="剪贴板图片"
+                className="h-10 w-10 object-cover rounded border border-border transition-all group-hover/img:border-primary/50"
+              />
+              <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover/img:opacity-100 transition-opacity rounded">
+                <Maximize2 className="h-4 w-4 text-white" />
+              </div>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-sm text-muted-foreground">{item.preview}</span>
+              {imageMeta && (
+                <span className="text-xs text-muted-foreground/60">
+                  {imageMeta.width}x{imageMeta.height} · {imageMeta.format}
+                </span>
+              )}
+            </div>
           </div>
         );
       case 'file': {
@@ -156,71 +189,87 @@ export function ClipboardItem({ item, index, isSelected, onSelect }: ClipboardIt
   };
 
   return (
-    <div
-      ref={itemRef}
-      onClick={handleClick}
-      className={cn(
-        'group relative flex items-start gap-3 px-3 py-2.5 cursor-pointer transition-colors',
-        isSelected
-          ? 'bg-accent ring-2 ring-ring ring-inset'
-          : 'hover:bg-accent/50',
-        copied && 'bg-primary/10'
-      )}
-    >
-      <div className="flex items-center justify-center w-5 h-5 rounded text-[10px] font-medium text-muted-foreground bg-muted shrink-0 mt-0.5">
-        {index}
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-0.5">
-          {renderIcon()}
-          <span className="text-xs text-muted-foreground">
-            {formatTime(item.created_at)}
-          </span>
+    <>
+      <div
+        ref={itemRef}
+        onClick={handleClick}
+        className={cn(
+          'group relative flex items-start gap-3 px-3 py-2.5 cursor-pointer transition-colors',
+          isSelected
+            ? 'bg-accent ring-2 ring-ring ring-inset'
+            : 'hover:bg-accent/50',
+          copied && 'bg-primary/10'
+        )}
+      >
+        <div className="flex items-center justify-center w-5 h-5 rounded text-[10px] font-medium text-muted-foreground bg-muted shrink-0 mt-0.5">
+          {index}
         </div>
-        {renderPreview()}
-      </div>
-      <div className="flex items-center gap-0.5 shrink-0">
-        <Button
-          variant="ghost"
-          size="icon"
-          className={cn(
-            'size-7 transition-opacity',
-            item.is_favorited
-              ? 'opacity-100'
-              : 'opacity-0 group-hover:opacity-100'
-          )}
-          onClick={handleToggleFavorite}
-        >
-          <Star
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-0.5">
+            {renderIcon()}
+            <span className="text-xs text-muted-foreground">
+              {formatTime(item.created_at)}
+            </span>
+          </div>
+          {renderPreview()}
+        </div>
+        <div className="flex items-center gap-0.5 shrink-0">
+          <Button
+            variant="ghost"
+            size="icon"
             className={cn(
-              'h-3.5 w-3.5',
+              'size-7 transition-opacity',
               item.is_favorited
-                ? 'fill-amber-500 text-amber-500'
-                : 'text-muted-foreground hover:text-amber-500'
+                ? 'opacity-100'
+                : 'opacity-0 group-hover:opacity-100'
             )}
-          />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="opacity-0 group-hover:opacity-100 transition-opacity size-7"
-          onClick={handleDelete}
-        >
-          <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
-        </Button>
-        <span className="opacity-0 group-hover:opacity-100 transition-opacity text-[10px] text-muted-foreground ml-0.5 tabular-nums">
-          ⌥{index}
-        </span>
-      </div>
-      {copied && (
-        <div className="absolute inset-0 flex items-center justify-center bg-primary/10 rounded pointer-events-none">
-          <span className="flex items-center gap-1 text-xs font-medium text-primary bg-primary-foreground px-2 py-1 rounded shadow-sm">
-            <Check className="h-3 w-3" />
-            已复制
+            onClick={handleToggleFavorite}
+          >
+            <Star
+              className={cn(
+                'h-3.5 w-3.5',
+                item.is_favorited
+                  ? 'fill-amber-500 text-amber-500'
+                  : 'text-muted-foreground hover:text-amber-500'
+              )}
+            />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="opacity-0 group-hover:opacity-100 transition-opacity size-7"
+            onClick={handleDelete}
+          >
+            <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+          </Button>
+          <span className="opacity-0 group-hover:opacity-100 transition-opacity text-[10px] text-muted-foreground ml-0.5 tabular-nums">
+            {index}
           </span>
         </div>
+        {copied && (
+          <div className="absolute inset-0 flex items-center justify-center bg-primary/10 rounded pointer-events-none">
+            <span className="flex items-center gap-1 text-xs font-medium text-primary bg-primary-foreground px-2 py-1 rounded shadow-sm">
+              <Check className="h-3 w-3" />
+              已复制
+            </span>
+          </div>
+        )}
+      </div>
+
+      {item.content_type === 'image' && (
+        <ImagePreview
+          src={item.content}
+          alt="剪贴板图片预览"
+          metadata={imageMeta ? {
+            width: imageMeta.width,
+            height: imageMeta.height,
+            format: imageMeta.format,
+          } : undefined}
+          open={imagePreviewOpen}
+          onOpenChange={setImagePreviewOpen}
+        />
       )}
-    </div>
+    </>
   );
 }
 

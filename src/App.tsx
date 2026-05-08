@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { useClipboardStore } from './stores/clipboardStore';
 import { Header } from './components/layout/Header';
@@ -14,6 +14,7 @@ function App() {
     useClipboardStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [contentType, setContentType] = useState<string | null>(null);
+  const [showFavorites, setShowFavorites] = useState(false);
   const [searchDebounceMs, setSearchDebounceMs] = useState(DEFAULT_SEARCH_DEBOUNCE_MS);
 
   useEffect(() => {
@@ -60,9 +61,22 @@ function App() {
     return () => window.clearTimeout(handle);
   }, [searchQuery, contentType, fetchItems, searchItems, searchDebounceMs]);
 
+  // Filter items by favorites when showFavorites is true
+  const filteredItems = useMemo(() => {
+    if (!showFavorites) return items;
+    return items.filter((item) => item.is_favorited);
+  }, [items, showFavorites]);
+
   return (
     <div className="flex flex-col h-screen bg-background text-foreground">
-      <Header searchQuery={searchQuery} onSearchChange={setSearchQuery} contentType={contentType} onContentTypeChange={setContentType} />
+      <Header
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        contentType={contentType}
+        onContentTypeChange={setContentType}
+        showFavorites={showFavorites}
+        onShowFavoritesChange={setShowFavorites}
+      />
       <main className="flex-1 overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center h-full text-muted-foreground">
@@ -72,10 +86,10 @@ function App() {
           <div className="flex items-center justify-center h-full text-destructive">
             错误: {error}
           </div>
-        ) : items.length === 0 ? (
-          <EmptyState />
+        ) : filteredItems.length === 0 ? (
+          <EmptyState showFavorites={showFavorites} />
         ) : (
-          <ClipboardList items={items} />
+          <ClipboardList items={filteredItems} />
         )}
       </main>
     </div>
