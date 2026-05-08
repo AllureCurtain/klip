@@ -208,7 +208,7 @@ fn read_image_with_retry() -> Option<(Vec<u8>, usize, usize)> {
                 Err(e) => {
                     attempts += 1;
                     if attempts >= 10 {
-                        tracing::warn!(
+                        tracing::debug!(
                             "read_image_with_retry: get_image failed after {} attempts: {}",
                             attempts,
                             e
@@ -221,7 +221,7 @@ fn read_image_with_retry() -> Option<(Vec<u8>, usize, usize)> {
             Err(e) => {
                 attempts += 1;
                 if attempts >= 10 {
-                    tracing::warn!(
+                    tracing::debug!(
                         "read_image_with_retry: Clipboard::new failed after {} attempts: {}",
                         attempts,
                         e

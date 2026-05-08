@@ -243,22 +243,35 @@ pub fn set_auto_start(
     enabled: bool,
 ) -> Result<(), String> {
     let manager = app.autolaunch();
+
     if enabled {
-        manager.enable().map_err(|e| e.to_string())?;
-    } else {
-        manager.disable().map_err(|e| e.to_string())?;
+        if let Err(e) = manager.disable() {
+            tracing::warn!(
+                "Failed to clear stale OS autostart entry while rejecting enable request: {}",
+                e
+            );
+        }
+        database::config::set(&db, "auto_start", "false")?;
+        tracing::warn!(
+            "Rejected auto_start=true: autostart is disabled in the current development stage"
+        );
+        return Err("Autostart is disabled in the current development stage.".into());
     }
 
-    // Persist user choice so we can re-sync on next launch.
-    database::config::set(&db, "auto_start", if enabled { "true" } else { "false" })?;
+    manager.disable().map_err(|e| e.to_string())?;
+    database::config::set(&db, "auto_start", "false")?;
 
-    tracing::info!("Auto start set to: {}", enabled);
+    tracing::info!("Auto start disabled");
     Ok(())
 }
 
 #[tauri::command]
 pub fn is_auto_start_enabled(app: tauri::AppHandle) -> Result<bool, String> {
-    app.autolaunch().is_enabled().map_err(|e| e.to_string())
+    let manager = app.autolaunch();
+    if let Ok(true) = manager.is_enabled() {
+        let _ = manager.disable();
+    }
+    Ok(false)
 }
 
 #[tauri::command]

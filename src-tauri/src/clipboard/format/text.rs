@@ -120,7 +120,7 @@ fn read_text_via_raw() -> Option<String> {
                     Err(e) => {
                         attempts += 1;
                         if attempts >= 10 {
-                            tracing::warn!(
+                            tracing::debug!(
                                 "read_text_via_raw: get_string failed after {} attempts: {:?}",
                                 attempts,
                                 e
@@ -134,7 +134,7 @@ fn read_text_via_raw() -> Option<String> {
             Err(e) => {
                 attempts += 1;
                 if attempts >= 10 {
-                    tracing::warn!(
+                    tracing::debug!(
                         "read_text_via_raw: open failed after {} attempts: {:?}",
                         attempts,
                         e

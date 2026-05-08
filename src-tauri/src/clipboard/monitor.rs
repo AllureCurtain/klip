@@ -1,6 +1,8 @@
 use base64::Engine;
 use image::GenericImageView;
 use std::sync::atomic::{AtomicBool, Ordering};
+#[cfg(target_os = "windows")]
+use std::sync::mpsc::{self, Receiver, SyncSender, TryRecvError, TrySendError};
 use std::sync::Arc;
 use std::thread;
 use tauri::{AppHandle, Emitter, Manager};
@@ -17,6 +19,49 @@ use arboard::Clipboard;
 static LAST_HASH: std::sync::OnceLock<std::sync::Mutex<String>> = std::sync::OnceLock::new();
 
 const KLIP_IGNORE_FORMAT: &str = "Clipboard Viewer Ignore";
+#[cfg(target_os = "windows")]
+const CLIPBOARD_SETTLE_DELAY: std::time::Duration = std::time::Duration::from_millis(150);
+
+#[cfg(target_os = "windows")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EnqueueResult {
+    Enqueued,
+    AlreadyPending,
+    Disconnected,
+}
+
+#[cfg(target_os = "windows")]
+#[derive(Clone)]
+struct ClipboardEventQueue {
+    tx: SyncSender<()>,
+}
+
+#[cfg(target_os = "windows")]
+impl ClipboardEventQueue {
+    fn new() -> (Self, Receiver<()>) {
+        let (tx, rx) = mpsc::sync_channel(1);
+        (Self { tx }, rx)
+    }
+
+    fn enqueue(&self) -> EnqueueResult {
+        match self.tx.try_send(()) {
+            Ok(()) => EnqueueResult::Enqueued,
+            Err(TrySendError::Full(())) => EnqueueResult::AlreadyPending,
+            Err(TrySendError::Disconnected(())) => EnqueueResult::Disconnected,
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn drain_pending_events(rx: &Receiver<()>) -> usize {
+    let mut drained = 0;
+    loop {
+        match rx.try_recv() {
+            Ok(()) => drained += 1,
+            Err(TryRecvError::Empty) | Err(TryRecvError::Disconnected) => return drained,
+        }
+    }
+}
 
 // --- RAII ClipboardGuard (Windows only) ---
 
@@ -236,11 +281,47 @@ impl ClipboardMonitor {
     fn start_event_based(self) -> Result<(), String> {
         let running = self.running.clone();
         let app_handle = self.app_handle.clone();
+        let (event_queue, rx) = ClipboardEventQueue::new();
+
+        {
+            let running = running.clone();
+            let app_handle = app_handle.clone();
+            thread::spawn(move || {
+                while running.load(Ordering::Relaxed) {
+                    if rx.recv().is_err() {
+                        break;
+                    }
+
+                    // Wait for a short quiet period so a burst of clipboard
+                    // change events settles before we try to read it.
+                    loop {
+                        thread::sleep(CLIPBOARD_SETTLE_DELAY);
+                        if drain_pending_events(&rx) == 0 {
+                            break;
+                        }
+                    }
+
+                    if is_self_copy_marker_present() {
+                        tracing::info!("Self-copy marker detected, skipping");
+                        continue;
+                    }
+
+                    tracing::info!("Clipboard change detected, extracting content...");
+
+                    let extracted = extract_clipboard_content_with_retry();
+                    if let Some(extracted) = extracted {
+                        if let Some(item) = process_extracted_content(extracted) {
+                            save_clipboard_item(&app_handle, &item);
+                        }
+                    }
+                }
+            });
+        }
 
         thread::spawn(move || {
             let handler = WindowsClipboardHandler {
-                app_handle: app_handle.clone(),
                 running,
+                event_queue,
             };
 
             let mut master = match Master::new(handler) {
@@ -295,8 +376,8 @@ impl ClipboardMonitor {
 
 #[cfg(target_os = "windows")]
 struct WindowsClipboardHandler {
-    app_handle: AppHandle,
     running: Arc<AtomicBool>,
+    event_queue: ClipboardEventQueue,
 }
 
 #[cfg(target_os = "windows")]
@@ -345,27 +426,16 @@ impl ClipboardHandler for WindowsClipboardHandler {
             return CallbackResult::Stop;
         }
 
-        let app_handle = self.app_handle.clone();
-        thread::spawn(move || {
-            // Brief delay for the process that modified the clipboard to
-            // release it. clipboard-master does NOT hold the clipboard open,
-            // but the originating app may still have it locked briefly.
-            thread::sleep(std::time::Duration::from_millis(100));
-
-            if is_self_copy_marker_present() {
-                tracing::info!("Self-copy marker detected, skipping");
-                return;
+        match self.event_queue.enqueue() {
+            EnqueueResult::Enqueued => {}
+            EnqueueResult::AlreadyPending => {
+                tracing::debug!("Clipboard event coalesced while worker is still processing");
             }
-
-            tracing::info!("Clipboard change detected, extracting content...");
-
-            let extracted = extract_clipboard_content_with_retry();
-            if let Some(extracted) = extracted {
-                if let Some(item) = process_extracted_content(extracted) {
-                    save_clipboard_item(&app_handle, &item);
-                }
+            EnqueueResult::Disconnected => {
+                tracing::warn!("Clipboard worker channel disconnected; stopping monitor");
+                return CallbackResult::Stop;
             }
-        });
+        }
 
         CallbackResult::Next
     }
@@ -484,4 +554,43 @@ pub fn copy_to_clipboard(
 pub fn start_monitor(app_handle: AppHandle) -> Result<(), String> {
     let monitor = ClipboardMonitor::new(app_handle);
     monitor.start()
+}
+
+#[cfg(all(test, target_os = "windows"))]
+mod tests {
+    use super::{drain_pending_events, ClipboardEventQueue, EnqueueResult};
+
+    #[test]
+    fn clipboard_event_queue_coalesces_while_worker_is_busy() {
+        let (queue, rx) = ClipboardEventQueue::new();
+
+        assert_eq!(queue.enqueue(), EnqueueResult::Enqueued);
+        assert_eq!(queue.enqueue(), EnqueueResult::AlreadyPending);
+
+        rx.recv().unwrap();
+
+        assert_eq!(queue.enqueue(), EnqueueResult::Enqueued);
+    }
+
+    #[test]
+    fn clipboard_event_queue_reports_disconnected_worker() {
+        let (queue, rx) = ClipboardEventQueue::new();
+        drop(rx);
+
+        assert_eq!(queue.enqueue(), EnqueueResult::Disconnected);
+    }
+
+    #[test]
+    fn drain_pending_events_detects_burst_after_worker_starts_processing() {
+        let (queue, rx) = ClipboardEventQueue::new();
+
+        assert_eq!(queue.enqueue(), EnqueueResult::Enqueued);
+        rx.recv().unwrap();
+
+        assert_eq!(queue.enqueue(), EnqueueResult::Enqueued);
+        assert_eq!(queue.enqueue(), EnqueueResult::AlreadyPending);
+
+        assert_eq!(drain_pending_events(&rx), 1);
+        assert_eq!(drain_pending_events(&rx), 0);
+    }
 }

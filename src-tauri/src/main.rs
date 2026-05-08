@@ -52,9 +52,9 @@ fn main() {
             klip::tray::setup_tray(app.handle())?;
             tracing::info!("Tray setup complete");
 
-            // 同步 autostart 状态：app_config.auto_start 是 source of truth，
-            // 启动时把 OS 实际状态对齐到用户配置。
-            sync_autostart_with_config(app.handle());
+            // 当前开发阶段明确禁用系统开机自启；如果机器上残留了旧的
+            // 注册表项或历史配置，这里会在启动时一并清理掉。
+            disable_autostart_for_current_stage(app.handle());
 
             // 设置窗口失焦自动隐藏（带托盘点击保护）
             if let Some(window) = app.get_webview_window("main") {
@@ -115,34 +115,36 @@ fn main() {
     }
 }
 
-/// Reconcile the OS-level autostart setting with the user preference stored in
-/// `app_config.auto_start`. The app_config row wins so a fresh install on a new
-/// machine inherits the user's last choice instead of the OS default.
-fn sync_autostart_with_config(app: &tauri::AppHandle) {
+/// The current development stage does not support OS-level autostart. Clear any
+/// stale registry/launch entries as well as persisted `auto_start=true` state
+/// so local source builds never register themselves to run on boot.
+fn disable_autostart_for_current_stage(app: &tauri::AppHandle) {
     use tauri::Manager;
     use tauri_plugin_autostart::ManagerExt;
 
     let db = app.state::<klip::database::Database>();
-    let want_enabled = match klip::database::config::get(&db, "auto_start") {
-        Ok(Some(v)) => v == "true",
-        _ => return, // No preference saved yet — leave OS state alone.
-    };
-
-    let manager = app.autolaunch();
-    let actually_enabled = manager.is_enabled().unwrap_or(false);
-    if want_enabled == actually_enabled {
-        return;
+    match klip::database::config::get(&db, "auto_start") {
+        Ok(Some(v)) if v == "true" => {
+            if let Err(e) = klip::database::config::set(&db, "auto_start", "false") {
+                tracing::warn!("Failed to reset auto_start config to false: {}", e);
+            } else {
+                tracing::info!("Cleared persisted auto_start=true for current development stage");
+            }
+        }
+        Ok(_) => {}
+        Err(e) => tracing::warn!("Failed to read auto_start config: {}", e),
     }
 
-    let result = if want_enabled {
-        manager.enable()
-    } else {
-        manager.disable()
-    };
-
-    match result {
-        Ok(()) => tracing::info!("Autostart synced: {} -> {}", actually_enabled, want_enabled),
-        Err(e) => tracing::warn!("Failed to sync autostart: {}", e),
+    let manager = app.autolaunch();
+    match manager.is_enabled() {
+        Ok(true) => match manager.disable() {
+            Ok(()) => {
+                tracing::info!("Disabled stale OS autostart entry for current development stage")
+            }
+            Err(e) => tracing::warn!("Failed to disable stale OS autostart entry: {}", e),
+        },
+        Ok(false) => {}
+        Err(e) => tracing::warn!("Failed to query OS autostart state: {}", e),
     }
 }
 

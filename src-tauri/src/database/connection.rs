@@ -4,6 +4,7 @@ use tauri::Manager;
 
 const DEFAULT_TOGGLE_HOTKEY: &str = "Ctrl+Alt+K";
 const DEFAULT_QUICK_PASTE_PREFIX: &str = "Ctrl+Alt";
+const DEFAULT_AUTO_START: &str = "false";
 
 pub struct Database {
     conn: Mutex<Connection>,
@@ -115,7 +116,7 @@ impl Database {
             ("max_history_count", "100"),
             ("hotkey_toggle_window", DEFAULT_TOGGLE_HOTKEY),
             ("hotkey_quick_paste_prefix", DEFAULT_QUICK_PASTE_PREFIX),
-            ("auto_start", "true"),
+            ("auto_start", DEFAULT_AUTO_START),
             ("close_to_tray", "true"),
             ("show_in_tray", "true"),
             ("window_width", "400"),
@@ -133,6 +134,7 @@ impl Database {
         }
 
         normalize_legacy_hotkey_config(&conn, now)?;
+        normalize_legacy_autostart_config(&conn, now)?;
 
         Ok(())
     }
@@ -176,6 +178,19 @@ fn normalize_legacy_hotkey_config(conn: &Connection, now: i64) -> Result<(), Str
          WHERE key = 'hotkey_quick_paste_prefix'
            AND value = 'CommandOrControl+Shift'",
         [DEFAULT_QUICK_PASTE_PREFIX, &now.to_string()],
+    )
+    .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+fn normalize_legacy_autostart_config(conn: &Connection, now: i64) -> Result<(), String> {
+    conn.execute(
+        "UPDATE app_config
+         SET value = ?1, updated_at = ?2
+         WHERE key = 'auto_start'
+           AND value = 'true'",
+        [DEFAULT_AUTO_START, &now.to_string()],
     )
     .map_err(|e| e.to_string())?;
 
@@ -234,5 +249,46 @@ mod tests {
 
         assert_eq!(toggle, "Ctrl+Alt+K");
         assert_eq!(prefix, "Ctrl+Alt");
+    }
+
+    #[test]
+    fn default_autostart_config_is_disabled() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")
+            .unwrap();
+        let db = Database::from_conn(conn);
+        db.init_schema().unwrap();
+
+        let auto_start = crate::database::config::get(&db, "auto_start")
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(auto_start, "false");
+    }
+
+    #[test]
+    fn legacy_autostart_enabled_value_is_normalized_to_disabled() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "PRAGMA journal_mode=WAL;
+             PRAGMA foreign_keys=ON;
+             CREATE TABLE app_config (
+                 key TEXT PRIMARY KEY,
+                 value TEXT NOT NULL,
+                 updated_at INTEGER NOT NULL
+             );
+             INSERT INTO app_config (key, value, updated_at) VALUES
+                 ('auto_start', 'true', 1);",
+        )
+        .unwrap();
+
+        let db = Database::from_conn(conn);
+        db.init_schema().unwrap();
+
+        let auto_start = crate::database::config::get(&db, "auto_start")
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(auto_start, "false");
     }
 }
