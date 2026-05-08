@@ -223,6 +223,8 @@ pub fn search(
     content_type: Option<&str>,
     limit: i64,
 ) -> Result<Vec<ClipboardItem>, String> {
+    let start = std::time::Instant::now();
+
     let conn = db.get_connection()?;
 
     let sql = match content_type {
@@ -263,6 +265,16 @@ pub fn search(
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| e.to_string())?,
     };
+
+    let elapsed = start.elapsed();
+    if elapsed.as_millis() > 50 {
+        tracing::warn!(
+            "Slow search (query='{}', type={:?}): {}ms",
+            query,
+            content_type,
+            elapsed.as_millis()
+        );
+    }
 
     Ok(items)
 }

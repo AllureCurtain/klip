@@ -1,5 +1,5 @@
 use tauri::{
-    menu::{Menu, MenuItem},
+    menu::{Menu, MenuItem, CheckMenuItem},
     tray::{TrayIcon, TrayIconBuilder},
     AppHandle, Manager,
 };
@@ -7,14 +7,41 @@ use tauri::{
 pub fn setup_tray(app_handle: &AppHandle) -> Result<TrayIcon, String> {
     tracing::info!("Setting up tray icon...");
 
+    // Get current auto_start state from config
+    let db = app_handle.state::<crate::database::Database>();
+    let auto_start_enabled = crate::database::config::get(&db, "auto_start")
+        .ok()
+        .flatten()
+        .map(|v| v == "true")
+        .unwrap_or(false);
+
     let show_item = MenuItem::with_id(app_handle, "show", "显示窗口", true, None::<&str>)
         .map_err(|e| format!("Failed to create show item: {}", e))?;
+
+    let autostart_item = CheckMenuItem::with_id(
+        app_handle,
+        "autostart",
+        "开机自启",
+        true,
+        auto_start_enabled,
+        None::<&str>,
+    )
+    .map_err(|e| format!("Failed to create autostart item: {}", e))?;
+
+    let settings_item = MenuItem::with_id(app_handle, "settings", "设置", true, None::<&str>)
+        .map_err(|e| format!("Failed to create settings item: {}", e))?;
+
+    let about_item = MenuItem::with_id(app_handle, "about", "关于", true, None::<&str>)
+        .map_err(|e| format!("Failed to create about item: {}", e))?;
 
     let quit_item = MenuItem::with_id(app_handle, "quit", "退出", true, None::<&str>)
         .map_err(|e| format!("Failed to create quit item: {}", e))?;
 
-    let menu = Menu::with_items(app_handle, &[&show_item, &quit_item])
-        .map_err(|e| format!("Failed to create menu: {}", e))?;
+    let menu = Menu::with_items(
+        app_handle,
+        &[&show_item, &autostart_item, &settings_item, &about_item, &quit_item],
+    )
+    .map_err(|e| format!("Failed to create menu: {}", e))?;
 
     tracing::info!("Menu created");
 
@@ -38,6 +65,30 @@ pub fn setup_tray(app_handle: &AppHandle) -> Result<TrayIcon, String> {
                             tracing::error!("Failed to focus window: {}", e);
                         }
                     }
+                }
+                "autostart" => {
+                    tracing::info!("Autostart menu item clicked");
+                    let db = app.state::<crate::database::Database>();
+                    let current = crate::database::config::get(&db, "auto_start")
+                        .ok()
+                        .flatten()
+                        .map(|v| v == "true")
+                        .unwrap_or(false);
+                    if let Err(e) = crate::commands::set_auto_start(
+                        app.clone(),
+                        db,
+                        !current,
+                    ) {
+                        tracing::error!("Failed to toggle autostart: {}", e);
+                    }
+                }
+                "settings" => {
+                    tracing::info!("Settings menu item clicked");
+                    // TODO: Open settings UI
+                }
+                "about" => {
+                    tracing::info!("About menu item clicked");
+                    // TODO: Show about dialog
                 }
                 "quit" => {
                     tracing::info!("Quit menu item clicked");

@@ -308,11 +308,19 @@ impl ClipboardMonitor {
 
                     tracing::info!("Clipboard change detected, extracting content...");
 
+                    let start = std::time::Instant::now();
                     let extracted = extract_clipboard_content_with_retry();
                     if let Some(extracted) = extracted {
                         if let Some(item) = process_extracted_content(extracted) {
                             save_clipboard_item(&app_handle, &item);
                         }
+                    }
+                    let elapsed = start.elapsed();
+                    if elapsed.as_millis() > 100 {
+                        tracing::warn!(
+                            "Slow clipboard processing: {}ms",
+                            elapsed.as_millis()
+                        );
                     }
                 }
             });

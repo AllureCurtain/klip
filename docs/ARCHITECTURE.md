@@ -297,8 +297,8 @@ interface AppConfig {
 | `toggle_window` | - | void | 切换窗口 |
 | `show_window` | - | void | 显示窗口 |
 | `hide_window` | - | void | 隐藏窗口 |
-| `set_auto_start` | enabled | void | 自启动预留接口；当前开发阶段拒绝开启 |
-| `is_auto_start_enabled` | - | boolean | 查询自启状态；当前开发阶段固定为 false |
+| `set_auto_start` | enabled | void | 设置系统开机自启动并同步持久化配置 |
+| `is_auto_start_enabled` | - | boolean | 查询当前系统层面的自启状态 |
 | `get_system_info` | - | SystemInfo | 获取系统信息 |
 
 ### 6.2 事件列表
@@ -311,9 +311,9 @@ interface AppConfig {
 
 ### 6.3 运行时配置约定
 
-- 当前后端实际消费的配置键为 `hotkey_toggle_window`、`hotkey_quick_paste_prefix`
+- 当前后端实际消费的配置键为 `hotkey_toggle_window`、`hotkey_quick_paste_prefix`、`auto_start`
 - `set_config` 修改这两个键后，后端会立即注销旧热键并重新注册
-- `auto_start` 字段当前仍保存在数据库中，但开发阶段会被后端强制保持为 `false`
+- `set_auto_start` 会调用系统自启动管理器，并将 `auto_start` 持久化到数据库
 - 其他配置键当前主要承担持久化职责，不保证在运行中立即产生副作用
 
 ---

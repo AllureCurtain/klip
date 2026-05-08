@@ -4,20 +4,31 @@ import { useClipboardStore } from './stores/clipboardStore';
 import { Header } from './components/layout/Header';
 import { ClipboardList } from './components/clipboard/ClipboardList';
 import { EmptyState } from './components/layout/EmptyState';
-import { onClipboardCleared } from '@/lib/tauri';
+import { onClipboardCleared, configApi } from '@/lib/tauri';
 import type { ClipboardItem } from './types';
 
-const SEARCH_DEBOUNCE_MS = 150;
+const DEFAULT_SEARCH_DEBOUNCE_MS = 150;
 
 function App() {
   const { items, loading, error, fetchItems, searchItems, addItems, setItems } =
     useClipboardStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [contentType, setContentType] = useState<string | null>(null);
+  const [searchDebounceMs, setSearchDebounceMs] = useState(DEFAULT_SEARCH_DEBOUNCE_MS);
 
   useEffect(() => {
     fetchItems().catch((e) => {
       console.error('Failed to fetch items:', e);
+    });
+
+    // 读取搜索防抖配置
+    configApi.get('search_debounce_ms').then((value) => {
+      if (value) {
+        const ms = parseInt(value, 10);
+        if (!isNaN(ms) && ms > 0) {
+          setSearchDebounceMs(ms);
+        }
+      }
     });
 
     const unlistenPromise = listen<ClipboardItem>('clipboard-updated', (event) => {
@@ -44,10 +55,10 @@ function App() {
           console.error('Failed to search items:', e)
         );
       }
-    }, SEARCH_DEBOUNCE_MS);
+    }, searchDebounceMs);
 
     return () => window.clearTimeout(handle);
-  }, [searchQuery, contentType, fetchItems, searchItems]);
+  }, [searchQuery, contentType, fetchItems, searchItems, searchDebounceMs]);
 
   return (
     <div className="flex flex-col h-screen bg-background text-foreground">

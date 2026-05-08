@@ -52,17 +52,55 @@ fn main() {
             klip::tray::setup_tray(app.handle())?;
             tracing::info!("Tray setup complete");
 
-            // 当前开发阶段明确禁用系统开机自启；如果机器上残留了旧的
-            // 注册表项或历史配置，这里会在启动时一并清理掉。
-            disable_autostart_for_current_stage(app.handle());
+            // 恢复开机自启动状态（从数据库配置同步）
+            restore_autostart_state(app.handle());
 
             // 设置窗口失焦自动隐藏（带托盘点击保护）
             if let Some(window) = app.get_webview_window("main") {
+                // 从配置读取窗口尺寸
+                let db = app.state::<klip::database::Database>();
+                let window_width: u32 = klip::database::config::get(&db, "window_width")
+                    .ok()
+                    .flatten()
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or(400);
+                let window_height: u32 = klip::database::config::get(&db, "window_height")
+                    .ok()
+                    .flatten()
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or(600);
+
+                if let Err(e) = window.set_size(tauri::Size::Physical(tauri::PhysicalSize {
+                    width: window_width,
+                    height: window_height,
+                })) {
+                    tracing::warn!("Failed to set window size from config: {}", e);
+                } else {
+                    tracing::info!(
+                        "Window size applied from config: {}x{}",
+                        window_width,
+                        window_height
+                    );
+                }
+
+                // 读取 close_to_tray 配置
+                let close_to_tray = klip::database::config::get(&db, "close_to_tray")
+                    .ok()
+                    .flatten()
+                    .map(|v| v == "true")
+                    .unwrap_or(true);
+
                 let app_handle = app.handle().clone();
                 let guard_ts = tray_click_guard.clone();
                 let guard_duration = guard_ms;
                 window.on_window_event(move |event| {
                     if let tauri::WindowEvent::Focused(false) = event {
+                        // 如果 close_to_tray 为 false，不自动隐藏窗口
+                        if !close_to_tray {
+                            tracing::debug!("close_to_tray is false, skipping auto-hide");
+                            return;
+                        }
+
                         let elapsed =
                             klip::now_millis().saturating_sub(guard_ts.load(Ordering::Relaxed));
                         if elapsed < guard_duration {
@@ -115,35 +153,42 @@ fn main() {
     }
 }
 
-/// The current development stage does not support OS-level autostart. Clear any
-/// stale registry/launch entries as well as persisted `auto_start=true` state
-/// so local source builds never register themselves to run on boot.
-fn disable_autostart_for_current_stage(app: &tauri::AppHandle) {
+/// Sync autostart state with persisted config on startup.
+/// Respects user preference instead of always disabling.
+fn restore_autostart_state(app: &tauri::AppHandle) {
     use tauri::Manager;
     use tauri_plugin_autostart::ManagerExt;
 
     let db = app.state::<klip::database::Database>();
-    match klip::database::config::get(&db, "auto_start") {
-        Ok(Some(v)) if v == "true" => {
-            if let Err(e) = klip::database::config::set(&db, "auto_start", "false") {
-                tracing::warn!("Failed to reset auto_start config to false: {}", e);
-            } else {
-                tracing::info!("Cleared persisted auto_start=true for current development stage");
-            }
-        }
-        Ok(_) => {}
-        Err(e) => tracing::warn!("Failed to read auto_start config: {}", e),
-    }
+    let config_enabled = klip::database::config::get(&db, "auto_start")
+        .ok()
+        .flatten()
+        .map(|v| v == "true")
+        .unwrap_or(false);
 
     let manager = app.autolaunch();
     match manager.is_enabled() {
-        Ok(true) => match manager.disable() {
-            Ok(()) => {
-                tracing::info!("Disabled stale OS autostart entry for current development stage")
+        Ok(os_enabled) => {
+            if config_enabled && !os_enabled {
+                if let Err(e) = manager.enable() {
+                    tracing::warn!("Failed to enable autostart at startup: {}", e);
+                } else {
+                    tracing::info!("Restored autostart state (enabled)");
+                }
+            } else if !config_enabled && os_enabled {
+                if let Err(e) = manager.disable() {
+                    tracing::warn!("Failed to disable autostart at startup: {}", e);
+                } else {
+                    tracing::info!("Restored autostart state (disabled)");
+                }
+            } else {
+                tracing::info!(
+                    "Autostart state already synced (config={}, os={})",
+                    config_enabled,
+                    os_enabled
+                );
             }
-            Err(e) => tracing::warn!("Failed to disable stale OS autostart entry: {}", e),
-        },
-        Ok(false) => {}
+        }
         Err(e) => tracing::warn!("Failed to query OS autostart state: {}", e),
     }
 }

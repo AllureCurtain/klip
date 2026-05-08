@@ -134,7 +134,6 @@ impl Database {
         }
 
         normalize_legacy_hotkey_config(&conn, now)?;
-        normalize_legacy_autostart_config(&conn, now)?;
 
         Ok(())
     }
@@ -178,19 +177,6 @@ fn normalize_legacy_hotkey_config(conn: &Connection, now: i64) -> Result<(), Str
          WHERE key = 'hotkey_quick_paste_prefix'
            AND value = 'CommandOrControl+Shift'",
         [DEFAULT_QUICK_PASTE_PREFIX, &now.to_string()],
-    )
-    .map_err(|e| e.to_string())?;
-
-    Ok(())
-}
-
-fn normalize_legacy_autostart_config(conn: &Connection, now: i64) -> Result<(), String> {
-    conn.execute(
-        "UPDATE app_config
-         SET value = ?1, updated_at = ?2
-         WHERE key = 'auto_start'
-           AND value = 'true'",
-        [DEFAULT_AUTO_START, &now.to_string()],
     )
     .map_err(|e| e.to_string())?;
 
@@ -267,7 +253,7 @@ mod tests {
     }
 
     #[test]
-    fn legacy_autostart_enabled_value_is_normalized_to_disabled() {
+    fn persisted_autostart_enabled_value_survives_schema_init() {
         let conn = rusqlite::Connection::open_in_memory().unwrap();
         conn.execute_batch(
             "PRAGMA journal_mode=WAL;
@@ -289,6 +275,6 @@ mod tests {
             .unwrap()
             .unwrap();
 
-        assert_eq!(auto_start, "false");
+        assert_eq!(auto_start, "true");
     }
 }

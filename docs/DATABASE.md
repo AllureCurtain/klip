@@ -109,7 +109,7 @@ INSERT INTO app_config (key, value, updated_at) VALUES
 | max_history_count | number | 100 | 最大历史记录数 |
 | hotkey_toggle_window | string | Ctrl+Alt+K | 窗口切换快捷键；当前运行时支持 `Ctrl+Alt+<A-Z>` |
 | hotkey_quick_paste_prefix | string | Ctrl+Alt | 快速粘贴前缀；当前运行时固定派生为 `Ctrl+Alt+1..9` |
-| auto_start | boolean | false | 自启动预留配置；当前开发阶段由后端强制保持 false |
+| auto_start | boolean | false | 开机自启动开关；启动时会与系统层面的自启状态同步 |
 | close_to_tray | boolean | true | 关闭时最小化到托盘 |
 | show_in_tray | boolean | true | 显示托盘图标 |
 | window_width | number | 400 | 窗口宽度 |

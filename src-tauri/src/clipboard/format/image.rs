@@ -33,6 +33,12 @@ impl ClipboardFormatStrategy for ImageStrategy {
             })?;
 
             if rgba_data.len() > MAX_IMAGE_SIZE {
+                tracing::warn!(
+                    "Image skipped: {}x{} pixels, {:.2}MB (limit 5MB)",
+                    width,
+                    height,
+                    rgba_data.len() as f64 / 1024.0 / 1024.0
+                );
                 return Err(FormatError::TooLarge(rgba_data.len()));
             }
 
@@ -67,6 +73,12 @@ impl ClipboardFormatStrategy for ImageStrategy {
             let rgba_slice = img_data.bytes.as_ref();
 
             if rgba_slice.len() > MAX_IMAGE_SIZE {
+                tracing::warn!(
+                    "Image skipped: {}x{} pixels, {:.2}MB (limit 5MB)",
+                    width,
+                    height,
+                    rgba_slice.len() as f64 / 1024.0 / 1024.0
+                );
                 return Err(FormatError::TooLarge(rgba_slice.len()));
             }
 

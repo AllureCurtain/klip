@@ -245,33 +245,35 @@ pub fn set_auto_start(
     let manager = app.autolaunch();
 
     if enabled {
-        if let Err(e) = manager.disable() {
-            tracing::warn!(
-                "Failed to clear stale OS autostart entry while rejecting enable request: {}",
-                e
-            );
-        }
+        manager.enable().map_err(|e| {
+            tracing::error!("Failed to enable autostart: {}", e);
+            format!("Failed to enable autostart: {}", e)
+        })?;
+        database::config::set(&db, "auto_start", "true")?;
+        tracing::info!("Auto start enabled");
+    } else {
+        manager.disable().map_err(|e| {
+            tracing::warn!("Failed to disable autostart: {}", e);
+            format!("Failed to disable autostart: {}", e)
+        })?;
         database::config::set(&db, "auto_start", "false")?;
-        tracing::warn!(
-            "Rejected auto_start=true: autostart is disabled in the current development stage"
-        );
-        return Err("Autostart is disabled in the current development stage.".into());
+        tracing::info!("Auto start disabled");
     }
 
-    manager.disable().map_err(|e| e.to_string())?;
-    database::config::set(&db, "auto_start", "false")?;
-
-    tracing::info!("Auto start disabled");
+    let _ = app.emit(
+        "config-changed",
+        serde_json::json!({ "key": "auto_start", "value": enabled.to_string() }),
+    );
     Ok(())
 }
 
 #[tauri::command]
 pub fn is_auto_start_enabled(app: tauri::AppHandle) -> Result<bool, String> {
     let manager = app.autolaunch();
-    if let Ok(true) = manager.is_enabled() {
-        let _ = manager.disable();
-    }
-    Ok(false)
+    manager.is_enabled().map_err(|e| {
+        tracing::warn!("Failed to query autostart state: {}", e);
+        e.to_string()
+    })
 }
 
 #[tauri::command]

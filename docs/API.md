@@ -225,7 +225,7 @@ void
 
 设置开机自启动。
 
-当前开发阶段此命令不会启用系统自启动；传入 `enabled = true` 时会返回错误，并把持久化配置恢复为 `false`。
+此命令会更新系统层面的自启动状态，并把 `auto_start` 持久化到数据库。
 
 **参数**:
 ```typescript
@@ -244,8 +244,6 @@ void
 #### `is_auto_start_enabled`
 
 读取当前系统层面的开机自启动状态。
-
-当前开发阶段固定返回 `false`，并会顺手清理历史残留的系统自启动项。
 
 **参数**: 无
 
@@ -354,7 +352,7 @@ interface AppConfig {
   max_history_count: number;
   hotkey_toggle_window: string;
   hotkey_quick_paste_prefix: string;
-  auto_start: boolean; // 当前开发阶段由后端强制保持 false
+  auto_start: boolean; // 启动时会与系统层面的自启状态同步
   close_to_tray: boolean;
   show_in_tray: boolean;
   window_width: number;
