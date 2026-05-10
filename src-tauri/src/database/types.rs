@@ -61,3 +61,12 @@ pub struct SystemInfo {
     pub version: String,
     pub app_version: String,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiagnosticsInfo {
+    pub platform: String,
+    pub app_version: String,
+    pub data_dir: String,
+    pub db_path: String,
+    pub log_dir: String,
+}

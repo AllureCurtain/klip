@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import type { ClipboardItem, SystemInfo } from '@/types';
+import type { ClipboardItem, DiagnosticsInfo, SystemInfo } from '@/types';
 
 // 剪贴板 API
 export const clipboardApi = {
@@ -49,6 +49,8 @@ export const systemApi = {
   isAutoStartEnabled: () => invoke<boolean>('is_auto_start_enabled'),
 
   getInfo: () => invoke<SystemInfo>('get_system_info'),
+
+  getDiagnostics: () => invoke<DiagnosticsInfo>('get_diagnostics_info'),
 };
 
 // 事件监听

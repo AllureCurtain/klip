@@ -144,6 +144,7 @@ fn main() {
             commands::set_auto_start,
             commands::is_auto_start_enabled,
             commands::get_system_info,
+            commands::get_diagnostics_info,
         ])
         .run(tauri::generate_context!());
 

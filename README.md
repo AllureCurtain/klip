@@ -62,6 +62,19 @@
 - [开发指南](docs/DEVELOPMENT.md)
 - [API 文档](docs/API.md)
 - [数据库设计](docs/DATABASE.md)
+- [发布检查清单](docs/RELEASE_CHECKLIST.md)
+- [版本记录](CHANGELOG.md)
+
+## 发布验证
+
+本地验证当前 Windows-first MVP 候选版本：
+
+```bash
+pnpm release:verify -SkipBundle
+pnpm release:verify
+```
+
+当前安装包尚未代码签名，Windows 可能显示 SmartScreen 或未知发布者提示。
 
 ## 贡献
 

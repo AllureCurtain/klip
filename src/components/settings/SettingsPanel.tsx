@@ -45,12 +45,16 @@ export function SettingsPanel({
   const {
     config,
     systemInfo,
+    diagnosticsInfo,
     loading,
     error,
     hasChanges,
     fetchConfig,
     fetchSystemInfo,
+    fetchDiagnosticsInfo,
     setMaxHistoryCount,
+    setHotkeyToggleWindow,
+    setHotkeyQuickPastePrefix,
     setAutoStart,
     setCloseToTray,
     setWindowWidth,
@@ -65,8 +69,9 @@ export function SettingsPanel({
       setActiveTab(initialTab);
       fetchConfig();
       fetchSystemInfo();
+      fetchDiagnosticsInfo();
     }
-  }, [open, initialTab, fetchConfig, fetchSystemInfo]);
+  }, [open, initialTab, fetchConfig, fetchSystemInfo, fetchDiagnosticsInfo]);
 
   const handleSave = async () => {
     await saveChanges();
@@ -184,13 +189,17 @@ export function SettingsPanel({
               <div className="space-y-4">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <Label>切换窗口</Label>
-                    <Badge variant="secondary" className="font-mono text-xs">
-                      {config.hotkey_toggle_window}
-                    </Badge>
+                    <Label htmlFor="hotkey-toggle-window">切换窗口快捷键</Label>
                   </div>
+                  <Input
+                    id="hotkey-toggle-window"
+                    value={config.hotkey_toggle_window}
+                    onChange={(e) => setHotkeyToggleWindow(e.target.value)}
+                    placeholder="Ctrl+Alt+K"
+                    className="h-8 font-mono"
+                  />
                   <p className="text-xs text-muted-foreground">
-                    显示或隐藏剪贴板窗口
+                    当前支持 Ctrl+Alt+A 到 Ctrl+Alt+Z，保存后无需重启即可重载。
                   </p>
                 </div>
 
@@ -198,13 +207,17 @@ export function SettingsPanel({
 
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <Label>快速粘贴前缀</Label>
-                    <Badge variant="secondary" className="font-mono text-xs">
-                      {config.hotkey_quick_paste_prefix}
-                    </Badge>
+                    <Label htmlFor="hotkey-quick-paste-prefix">快速粘贴前缀</Label>
                   </div>
+                  <Input
+                    id="hotkey-quick-paste-prefix"
+                    value={config.hotkey_quick_paste_prefix}
+                    onChange={(e) => setHotkeyQuickPastePrefix(e.target.value)}
+                    placeholder="Ctrl+Alt"
+                    className="h-8 font-mono"
+                  />
                   <p className="text-xs text-muted-foreground">
-                    按住前缀 + 数字键快速粘贴对应条目
+                    当前版本支持 Ctrl+Alt，按住前缀 + 数字键快速粘贴对应条目。
                   </p>
                   <div className="mt-2 flex flex-wrap gap-1">
                     {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
@@ -279,6 +292,31 @@ export function SettingsPanel({
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">系统版本</span>
                     <span className="font-mono text-xs">{systemInfo.version}</span>
+                  </div>
+                </div>
+              )}
+
+              {diagnosticsInfo && (
+                <div className="space-y-2 rounded-lg border bg-muted/30 p-3 text-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-muted-foreground">数据目录</span>
+                    <span className="truncate font-mono text-xs" title={diagnosticsInfo.data_dir}>
+                      {diagnosticsInfo.data_dir}
+                    </span>
+                  </div>
+                  <Separator />
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-muted-foreground">数据库</span>
+                    <span className="truncate font-mono text-xs" title={diagnosticsInfo.db_path}>
+                      {diagnosticsInfo.db_path}
+                    </span>
+                  </div>
+                  <Separator />
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-muted-foreground">日志目录</span>
+                    <span className="truncate font-mono text-xs" title={diagnosticsInfo.log_dir}>
+                      {diagnosticsInfo.log_dir}
+                    </span>
                   </div>
                 </div>
               )}

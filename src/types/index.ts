@@ -45,9 +45,17 @@ export interface AppConfig {
 }
 
 export interface SystemInfo {
-  platform: 'windows' | 'macos' | 'linux';
+  platform: 'windows' | 'macos' | 'linux' | 'unknown';
   version: string;
   app_version: string;
+}
+
+export interface DiagnosticsInfo {
+  platform: 'windows' | 'macos' | 'linux' | 'unknown';
+  app_version: string;
+  data_dir: string;
+  db_path: string;
+  log_dir: string;
 }
 
 export type ContentType = 'text' | 'image' | 'file';

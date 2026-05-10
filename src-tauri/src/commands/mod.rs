@@ -1,4 +1,4 @@
-use crate::database::{self, ClipboardItem, SystemInfo};
+use crate::database::{self, ClipboardItem, DiagnosticsInfo, SystemInfo};
 use tauri::{Emitter, Manager, State};
 use tauri_plugin_autostart::ManagerExt;
 
@@ -302,7 +302,21 @@ pub fn is_auto_start_enabled(app: tauri::AppHandle) -> Result<bool, String> {
 
 #[tauri::command]
 pub fn get_system_info() -> Result<SystemInfo, String> {
-    let platform = if cfg!(target_os = "windows") {
+    Ok(SystemInfo {
+        platform: platform_name().to_string(),
+        version: env!("CARGO_PKG_VERSION").to_string(),
+        app_version: env!("CARGO_PKG_VERSION").to_string(),
+    })
+}
+
+struct DiagnosticsPaths {
+    data_dir: std::path::PathBuf,
+    db_path: std::path::PathBuf,
+    log_dir: std::path::PathBuf,
+}
+
+fn platform_name() -> &'static str {
+    if cfg!(target_os = "windows") {
         "windows"
     } else if cfg!(target_os = "macos") {
         "macos"
@@ -310,11 +324,52 @@ pub fn get_system_info() -> Result<SystemInfo, String> {
         "linux"
     } else {
         "unknown"
-    };
+    }
+}
 
-    Ok(SystemInfo {
-        platform: platform.to_string(),
-        version: env!("CARGO_PKG_VERSION").to_string(),
+fn build_diagnostics_paths(data_dir: &std::path::Path) -> DiagnosticsPaths {
+    DiagnosticsPaths {
+        data_dir: data_dir.to_path_buf(),
+        db_path: data_dir.join("klip.db"),
+        log_dir: data_dir.join("logs"),
+    }
+}
+
+#[tauri::command]
+pub fn get_diagnostics_info(app: tauri::AppHandle) -> Result<DiagnosticsInfo, String> {
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to resolve app data dir: {}", e))?;
+    let paths = build_diagnostics_paths(&data_dir);
+
+    Ok(DiagnosticsInfo {
+        platform: platform_name().to_string(),
         app_version: env!("CARGO_PKG_VERSION").to_string(),
+        data_dir: paths.data_dir.to_string_lossy().to_string(),
+        db_path: paths.db_path.to_string_lossy().to_string(),
+        log_dir: paths.log_dir.to_string_lossy().to_string(),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn diagnostics_paths_are_derived_from_app_data_dir() {
+        let base = std::path::PathBuf::from(r"C:\Users\tester\AppData\Roaming\com.klip.app");
+        let paths = build_diagnostics_paths(&base);
+
+        assert!(paths.db_path.ends_with(std::path::Path::new("klip.db")));
+        assert!(paths.log_dir.ends_with(std::path::Path::new("logs")));
+    }
+
+    #[test]
+    fn platform_name_is_supported_or_unknown() {
+        assert!(matches!(
+            platform_name(),
+            "windows" | "macos" | "linux" | "unknown"
+        ));
+    }
 }

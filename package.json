@@ -11,7 +11,9 @@
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
     "lint": "eslint .",
-    "test": "vitest"
+    "test": "vitest",
+    "verify": "pnpm lint && pnpm test -- --run && pnpm build",
+    "release:verify": "powershell -ExecutionPolicy Bypass -File scripts/verify-release.ps1"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",

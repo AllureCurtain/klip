@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { configApi, systemApi } from '@/lib/tauri';
-import type { AppConfig, SystemInfo } from '@/types';
+import type { AppConfig, DiagnosticsInfo, SystemInfo } from '@/types';
 
 function parseBoolean(value: string | null, defaultValue: boolean): boolean {
   if (value === null) return defaultValue;
@@ -16,12 +16,14 @@ function parseNumber(value: string | null, defaultValue: number): number {
 interface ConfigState {
   config: AppConfig;
   systemInfo: SystemInfo | null;
+  diagnosticsInfo: DiagnosticsInfo | null;
   loading: boolean;
   error: string | null;
   hasChanges: boolean;
 
   fetchConfig: () => Promise<void>;
   fetchSystemInfo: () => Promise<void>;
+  fetchDiagnosticsInfo: () => Promise<void>;
   setMaxHistoryCount: (value: number) => void;
   setHotkeyToggleWindow: (value: string) => void;
   setHotkeyQuickPastePrefix: (value: string) => void;
@@ -50,6 +52,7 @@ const DEFAULT_CONFIG: AppConfig = {
 export const useConfigStore = create<ConfigState>((set, get) => ({
   config: DEFAULT_CONFIG,
   systemInfo: null,
+  diagnosticsInfo: null,
   loading: false,
   error: null,
   hasChanges: false,
@@ -81,6 +84,15 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
       set({ systemInfo });
     } catch (error) {
       console.error('Failed to fetch system info:', error);
+    }
+  },
+
+  fetchDiagnosticsInfo: async () => {
+    try {
+      const diagnosticsInfo = await systemApi.getDiagnostics();
+      set({ diagnosticsInfo });
+    } catch (error) {
+      console.error('Failed to fetch diagnostics info:', error);
     }
   },
 
