@@ -317,10 +317,7 @@ impl ClipboardMonitor {
                     }
                     let elapsed = start.elapsed();
                     if elapsed.as_millis() > 100 {
-                        tracing::warn!(
-                            "Slow clipboard processing: {}ms",
-                            elapsed.as_millis()
-                        );
+                        tracing::warn!("Slow clipboard processing: {}ms", elapsed.as_millis());
                     }
                 }
             });

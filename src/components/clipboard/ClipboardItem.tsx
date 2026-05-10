@@ -93,6 +93,9 @@ export function ClipboardItem({ item, index, isSelected, onSelect }: ClipboardIt
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!window.confirm('确定要删除这条剪贴板历史吗？')) {
+      return;
+    }
     deleteItem(item.id);
   };
 
@@ -133,6 +136,7 @@ export function ClipboardItem({ item, index, isSelected, onSelect }: ClipboardIt
           case 'unknown':
             return <File className="h-4 w-4 text-chart-4" />;
         }
+        return <File className="h-4 w-4 text-chart-4" />;
       }
       default:
         return null;
@@ -217,6 +221,8 @@ export function ClipboardItem({ item, index, isSelected, onSelect }: ClipboardIt
           <Button
             variant="ghost"
             size="icon"
+            aria-label={item.is_favorited ? '取消收藏' : '收藏'}
+            title={item.is_favorited ? '取消收藏' : '收藏'}
             className={cn(
               'size-7 transition-opacity',
               item.is_favorited
@@ -237,6 +243,8 @@ export function ClipboardItem({ item, index, isSelected, onSelect }: ClipboardIt
           <Button
             variant="ghost"
             size="icon"
+            aria-label="删除"
+            title="删除"
             className="opacity-0 group-hover:opacity-100 transition-opacity size-7"
             onClick={handleDelete}
           >

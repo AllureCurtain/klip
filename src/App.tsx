@@ -4,7 +4,7 @@ import { useClipboardStore } from './stores/clipboardStore';
 import { Header } from './components/layout/Header';
 import { ClipboardList } from './components/clipboard/ClipboardList';
 import { EmptyState } from './components/layout/EmptyState';
-import { onClipboardCleared, configApi } from '@/lib/tauri';
+import { onClipboardCleared, onConfigChanged, configApi } from '@/lib/tauri';
 import type { ClipboardItem } from './types';
 
 const DEFAULT_SEARCH_DEBOUNCE_MS = 150;
@@ -40,9 +40,18 @@ function App() {
       setItems([]);
     });
 
+    const unlistenConfigPromise = onConfigChanged((key, value) => {
+      if (key !== 'search_debounce_ms') return;
+      const ms = parseInt(value, 10);
+      if (!isNaN(ms) && ms > 0) {
+        setSearchDebounceMs(ms);
+      }
+    });
+
     return () => {
       unlistenPromise.then((fn) => fn());
       unlistenClearedPromise.then((fn) => fn());
+      unlistenConfigPromise.then((fn) => fn());
     };
   }, [fetchItems, addItems, setItems]);
 

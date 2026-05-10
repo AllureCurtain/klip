@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -28,12 +28,20 @@ import {
   Loader2,
 } from 'lucide-react';
 
+export type SettingsTab = 'general' | 'shortcuts' | 'behavior' | 'about';
+
 interface SettingsPanelProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  initialTab?: SettingsTab;
 }
 
-export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
+export function SettingsPanel({
+  open,
+  onOpenChange,
+  initialTab = 'general',
+}: SettingsPanelProps) {
+  const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
   const {
     config,
     systemInfo,
@@ -54,10 +62,11 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
 
   useEffect(() => {
     if (open) {
+      setActiveTab(initialTab);
       fetchConfig();
       fetchSystemInfo();
     }
-  }, [open, fetchConfig, fetchSystemInfo]);
+  }, [open, initialTab, fetchConfig, fetchSystemInfo]);
 
   const handleSave = async () => {
     await saveChanges();
@@ -79,7 +88,11 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
           </DialogTitle>
         </DialogHeader>
 
-        <Tabs defaultValue="general" className="w-full">
+        <Tabs
+          value={activeTab}
+          onValueChange={(value) => setActiveTab(value as SettingsTab)}
+          className="w-full"
+        >
           <TabsList variant="line" className="w-full justify-start border-b bg-transparent p-0">
             <TabsTrigger value="general" className="gap-1.5">
               <Sliders className="h-3.5 w-3.5" />

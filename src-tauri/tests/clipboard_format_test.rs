@@ -1,8 +1,19 @@
 use klip::clipboard::format::{ClipboardFormatStrategy, FormatStrategyRegistry};
 use klip::database::types::ContentType;
+use std::sync::{Mutex, MutexGuard, OnceLock};
+
+static CLIPBOARD_TEST_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+
+fn clipboard_test_lock() -> MutexGuard<'static, ()> {
+    CLIPBOARD_TEST_LOCK
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("clipboard test lock should not be poisoned")
+}
 
 #[test]
 fn registry_detects_text_format() {
+    let _guard = clipboard_test_lock();
     let registry = FormatStrategyRegistry::new();
 
     // Copy some text to clipboard before running this test
@@ -34,6 +45,7 @@ fn strategy_priority_is_image_file_text() {
 
 #[test]
 fn text_strategy_copy_back() {
+    let _guard = clipboard_test_lock();
     use klip::clipboard::format::text::TextStrategy;
     let strategy = TextStrategy;
     let test_data = b"Hello, Klip!";

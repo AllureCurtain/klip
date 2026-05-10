@@ -162,6 +162,10 @@ pub fn set_config(
     // Only a subset of app_config keys currently has runtime side effects.
     database::config::set(&db, &key, &value)?;
 
+    if key == "window_width" || key == "window_height" {
+        apply_window_size_from_config(&app, &db)?;
+    }
+
     if key == "hotkey_toggle_window" || key == "hotkey_quick_paste_prefix" {
         if let Err(err) = crate::hotkey::manager::reload_hotkeys(&app) {
             match previous_value {
@@ -200,6 +204,26 @@ pub fn set_config(
         "config-changed",
         serde_json::json!({ "key": key, "value": value }),
     );
+    Ok(())
+}
+
+fn apply_window_size_from_config(
+    app: &tauri::AppHandle,
+    db: &database::Database,
+) -> Result<(), String> {
+    let width: u32 = database::config::get(db, "window_width")?
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(400);
+    let height: u32 = database::config::get(db, "window_height")?
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(600);
+
+    if let Some(window) = app.get_webview_window("main") {
+        window
+            .set_size(tauri::Size::Physical(tauri::PhysicalSize { width, height }))
+            .map_err(|e| e.to_string())?;
+    }
+
     Ok(())
 }
 

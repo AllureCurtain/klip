@@ -15,7 +15,7 @@
 - **模糊搜索** - 快速查找历史内容
 - **系统托盘** - 后台常驻，不占用任务栏
 - **本地存储** - 数据完全本地化，隐私安全
-- **开机自启** - 当前开发阶段禁用，安装包阶段再启用
+- **开机自启** - 可在设置中开启/关闭，安装包阶段重点验证
 - **轻量高效** - 内存占用 < 50MB，启动 < 1s
 
 ## 安装
@@ -44,7 +44,7 @@
 - macOS: `~/Library/Application Support/com.klip.app/klip.db`（后续阶段）
 - Linux: `~/.local/share/com.klip.app/klip.db`（后续阶段）
 
-其中默认热键为 `Ctrl+Alt+K` 和 `Ctrl+Alt+1~9`。修改 `hotkey_toggle_window`、`hotkey_quick_paste_prefix` 后，后端会立即重载热键；`auto_start` 字段当前仅保留配置位，开发阶段会被后端强制保持为 `false`。
+其中默认热键为 `Ctrl+Alt+K` 和 `Ctrl+Alt+1~9`。修改 `hotkey_toggle_window`、`hotkey_quick_paste_prefix` 后，后端会立即重载热键；`auto_start` 会同步系统开机自启动状态并持久化到数据库。
 
 ## 技术栈
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Search,
   Settings,
@@ -22,7 +22,11 @@ import {
 } from '@/components/ui/dialog';
 import { useThemeStore, useClipboardStore } from '@/stores';
 import { cn } from '@/lib/utils';
-import { SettingsPanel } from '@/components/settings/SettingsPanel';
+import {
+  SettingsPanel,
+  type SettingsTab,
+} from '@/components/settings/SettingsPanel';
+import { onOpenAbout, onOpenSettings } from '@/lib/tauri';
 
 interface HeaderProps {
   searchQuery: string;
@@ -55,8 +59,24 @@ export function Header({
   const { resolvedTheme, setTheme } = useThemeStore();
   const { clearItems } = useClipboardStore();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>('general');
   const [clearDialogOpen, setClearDialogOpen] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
+
+  useEffect(() => {
+    const openSettings = (tab: SettingsTab) => {
+      setSettingsTab(tab);
+      setSettingsOpen(true);
+    };
+
+    const unlistenSettings = onOpenSettings(() => openSettings('general'));
+    const unlistenAbout = onOpenAbout(() => openSettings('about'));
+
+    return () => {
+      unlistenSettings.then((fn) => fn());
+      unlistenAbout.then((fn) => fn());
+    };
+  }, []);
 
   const toggleTheme = () => {
     setTheme(resolvedTheme === 'dark' ? 'light' : 'dark');
@@ -81,6 +101,7 @@ export function Header({
             <Input
               type="text"
               placeholder="搜索剪贴板历史..."
+              autoFocus
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
               className="h-8 pl-8 text-sm"
@@ -126,7 +147,10 @@ export function Header({
             variant="ghost"
             size="icon"
             className="size-8"
-            onClick={() => setSettingsOpen(true)}
+            onClick={() => {
+              setSettingsTab('general');
+              setSettingsOpen(true);
+            }}
             title="设置"
           >
             <Settings className="h-4 w-4" />
@@ -162,7 +186,11 @@ export function Header({
         </div>
       </header>
 
-      <SettingsPanel open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <SettingsPanel
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        initialTab={settingsTab}
+      />
 
       <Dialog open={clearDialogOpen} onOpenChange={setClearDialogOpen}>
         <DialogContent className="sm:max-w-sm">

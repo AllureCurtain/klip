@@ -1,7 +1,7 @@
 use tauri::{
-    menu::{Menu, MenuItem, CheckMenuItem},
+    menu::{CheckMenuItem, Menu, MenuItem},
     tray::{TrayIcon, TrayIconBuilder},
-    AppHandle, Manager,
+    AppHandle, Emitter, Manager,
 };
 
 pub fn setup_tray(app_handle: &AppHandle) -> Result<TrayIcon, String> {
@@ -39,7 +39,13 @@ pub fn setup_tray(app_handle: &AppHandle) -> Result<TrayIcon, String> {
 
     let menu = Menu::with_items(
         app_handle,
-        &[&show_item, &autostart_item, &settings_item, &about_item, &quit_item],
+        &[
+            &show_item,
+            &autostart_item,
+            &settings_item,
+            &about_item,
+            &quit_item,
+        ],
     )
     .map_err(|e| format!("Failed to create menu: {}", e))?;
 
@@ -74,21 +80,17 @@ pub fn setup_tray(app_handle: &AppHandle) -> Result<TrayIcon, String> {
                         .flatten()
                         .map(|v| v == "true")
                         .unwrap_or(false);
-                    if let Err(e) = crate::commands::set_auto_start(
-                        app.clone(),
-                        db,
-                        !current,
-                    ) {
+                    if let Err(e) = crate::commands::set_auto_start(app.clone(), db, !current) {
                         tracing::error!("Failed to toggle autostart: {}", e);
                     }
                 }
                 "settings" => {
                     tracing::info!("Settings menu item clicked");
-                    // TODO: Open settings UI
+                    show_window_and_emit(app, "open-settings");
                 }
                 "about" => {
                     tracing::info!("About menu item clicked");
-                    // TODO: Show about dialog
+                    show_window_and_emit(app, "open-about");
                 }
                 "quit" => {
                     tracing::info!("Quit menu item clicked");
@@ -139,4 +141,20 @@ pub fn setup_tray(app_handle: &AppHandle) -> Result<TrayIcon, String> {
 
     tracing::info!("Tray icon created successfully");
     Ok(tray)
+}
+
+fn show_window_and_emit(app: &AppHandle, event: &str) {
+    if let Some(window) = app.get_webview_window("main") {
+        crate::capture_previous_foreground();
+        if let Err(e) = window.show() {
+            tracing::error!("Failed to show window: {}", e);
+        }
+        if let Err(e) = window.set_focus() {
+            tracing::error!("Failed to focus window: {}", e);
+        }
+    }
+
+    if let Err(e) = app.emit(event, ()) {
+        tracing::error!("Failed to emit {}: {}", event, e);
+    }
 }

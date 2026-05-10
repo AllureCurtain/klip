@@ -65,3 +65,9 @@ export const onConfigChanged = (
     const { key, value } = event.payload as { key: string; value: string };
     callback(key, value);
   });
+
+export const onOpenSettings = (callback: () => void) =>
+  listen('open-settings', () => callback());
+
+export const onOpenAbout = (callback: () => void) =>
+  listen('open-about', () => callback());

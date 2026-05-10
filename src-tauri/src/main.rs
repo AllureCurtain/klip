@@ -83,18 +83,18 @@ fn main() {
                     );
                 }
 
-                // 读取 close_to_tray 配置
-                let close_to_tray = klip::database::config::get(&db, "close_to_tray")
-                    .ok()
-                    .flatten()
-                    .map(|v| v == "true")
-                    .unwrap_or(true);
-
                 let app_handle = app.handle().clone();
                 let guard_ts = tray_click_guard.clone();
                 let guard_duration = guard_ms;
                 window.on_window_event(move |event| {
                     if let tauri::WindowEvent::Focused(false) = event {
+                        let db = app_handle.state::<klip::database::Database>();
+                        let close_to_tray = klip::database::config::get(&db, "close_to_tray")
+                            .ok()
+                            .flatten()
+                            .map(|v| v == "true")
+                            .unwrap_or(true);
+
                         // 如果 close_to_tray 为 false，不自动隐藏窗口
                         if !close_to_tray {
                             tracing::debug!("close_to_tray is false, skipping auto-hide");
