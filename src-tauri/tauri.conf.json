@@ -15,8 +15,8 @@
       {
         "title": "Klip",
         "label": "main",
-        "width": 400,
-        "height": 600,
+        "width": 480,
+        "height": 720,
         "minWidth": 300,
         "minHeight": 400,
         "decorations": false,
