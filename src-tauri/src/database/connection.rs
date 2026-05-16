@@ -119,8 +119,8 @@ impl Database {
             ("auto_start", DEFAULT_AUTO_START),
             ("close_to_tray", "true"),
             ("show_in_tray", "true"),
-            ("window_width", "400"),
-            ("window_height", "600"),
+            ("window_width", "480"),
+            ("window_height", "720"),
             ("search_debounce_ms", "150"),
             ("db_version", "2"),
         ];
@@ -134,6 +134,7 @@ impl Database {
         }
 
         normalize_legacy_hotkey_config(&conn, now)?;
+        migrate_window_size_defaults(&conn, now)?;
 
         Ok(())
     }
@@ -158,6 +159,26 @@ pub fn init(app_handle: tauri::AppHandle) -> Result<(), String> {
     let db_path = get_db_path(&app_handle)?;
     let db = Database::new(&db_path)?;
     app_handle.manage(db);
+    Ok(())
+}
+
+fn migrate_window_size_defaults(conn: &Connection, now: i64) -> Result<(), String> {
+    conn.execute(
+        "UPDATE app_config
+         SET value = '480', updated_at = ?1
+         WHERE key = 'window_width' AND value = '400'",
+        [&now.to_string()],
+    )
+    .map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "UPDATE app_config
+         SET value = '720', updated_at = ?1
+         WHERE key = 'window_height' AND value = '600'",
+        [&now.to_string()],
+    )
+    .map_err(|e| e.to_string())?;
+
     Ok(())
 }
 

@@ -44,8 +44,8 @@ const DEFAULT_CONFIG: AppConfig = {
   auto_start: false,
   close_to_tray: true,
   show_in_tray: true,
-  window_width: 400,
-  window_height: 600,
+  window_width: 480,
+  window_height: 720,
   search_debounce_ms: 150,
 };
 
@@ -68,8 +68,8 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
         auto_start: parseBoolean(allConfig['auto_start'], false),
         close_to_tray: parseBoolean(allConfig['close_to_tray'], true),
         show_in_tray: parseBoolean(allConfig['show_in_tray'], true),
-        window_width: parseNumber(allConfig['window_width'], 400),
-        window_height: parseNumber(allConfig['window_height'], 600),
+        window_width: parseNumber(allConfig['window_width'], 480),
+        window_height: parseNumber(allConfig['window_height'], 720),
         search_debounce_ms: parseNumber(allConfig['search_debounce_ms'], 150),
       };
       set({ config, loading: false, hasChanges: false });

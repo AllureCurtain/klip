@@ -28,8 +28,8 @@ vi.mock('@/stores/configStore', () => ({
       auto_start: false,
       close_to_tray: true,
       show_in_tray: true,
-      window_width: 400,
-      window_height: 600,
+      window_width: 480,
+      window_height: 720,
       search_debounce_ms: 150,
     },
     systemInfo: {

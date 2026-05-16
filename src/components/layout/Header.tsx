@@ -9,7 +9,6 @@ import {
   Moon,
   Trash2,
   Star,
-  Keyboard,
 } from 'lucide-react';
 import { Input, Button } from '@/components/ui';
 import {
@@ -22,11 +21,7 @@ import {
 } from '@/components/ui/dialog';
 import { useThemeStore, useClipboardStore } from '@/stores';
 import { cn } from '@/lib/utils';
-import {
-  SettingsPanel,
-  type SettingsTab,
-} from '@/components/settings/SettingsPanel';
-import { onOpenAbout, onOpenSettings } from '@/lib/tauri';
+import { onOpenSettings, onOpenAbout } from '@/lib/tauri';
 
 interface HeaderProps {
   searchQuery: string;
@@ -35,17 +30,18 @@ interface HeaderProps {
   onContentTypeChange: (type: string | null) => void;
   showFavorites: boolean;
   onShowFavoritesChange: (show: boolean) => void;
+  onSettingsOpen: () => void;
 }
 
-const CONTENT_TYPE_TABS: {
-  label: string;
+const CONTENT_FILTERS: {
   value: string | null;
+  label: string;
   icon: React.ReactNode;
 }[] = [
-  { label: '全部', value: null, icon: null },
-  { label: '文本', value: 'text', icon: <FileText className="h-3 w-3" /> },
-  { label: '图片', value: 'image', icon: <Image className="h-3 w-3" /> },
-  { label: '文件', value: 'file', icon: <FolderOpen className="h-3 w-3" /> },
+  { value: null, label: '全部', icon: null },
+  { value: 'text', label: '文本', icon: <FileText className="h-3 w-3" /> },
+  { value: 'image', label: '图片', icon: <Image className="h-3 w-3" /> },
+  { value: 'file', label: '文件', icon: <FolderOpen className="h-3 w-3" /> },
 ];
 
 export function Header({
@@ -55,28 +51,22 @@ export function Header({
   onContentTypeChange,
   showFavorites,
   onShowFavoritesChange,
+  onSettingsOpen,
 }: HeaderProps) {
   const { resolvedTheme, setTheme } = useThemeStore();
   const { clearItems } = useClipboardStore();
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<SettingsTab>('general');
   const [clearDialogOpen, setClearDialogOpen] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
 
   useEffect(() => {
-    const openSettings = (tab: SettingsTab) => {
-      setSettingsTab(tab);
-      setSettingsOpen(true);
-    };
-
-    const unlistenSettings = onOpenSettings(() => openSettings('general'));
-    const unlistenAbout = onOpenAbout(() => openSettings('about'));
+    const unlistenSettings = onOpenSettings(() => onSettingsOpen());
+    const unlistenAbout = onOpenAbout(() => onSettingsOpen());
 
     return () => {
       unlistenSettings.then((fn) => fn());
       unlistenAbout.then((fn) => fn());
     };
-  }, []);
+  }, [onSettingsOpen]);
 
   const toggleTheme = () => {
     setTheme(resolvedTheme === 'dark' ? 'light' : 'dark');
@@ -94,42 +84,45 @@ export function Header({
 
   return (
     <>
-      <header className="flex flex-col gap-2 px-3 py-2 border-b border-border">
-        <div className="flex items-center gap-2">
-          <div className="relative flex-1">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+      <header className="flex flex-col border-b border-border">
+        <div
+          data-tauri-drag-region
+          className="flex items-center gap-1.5 px-2 pt-1.5 pb-1"
+        >
+          <div className="relative flex-1 min-w-0">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
             <Input
               type="text"
               placeholder="搜索剪贴板历史..."
               autoFocus
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
-              className="h-8 pl-8 text-sm"
+              className="h-7 pl-7 pr-2 text-xs"
             />
           </div>
           <Button
             variant="ghost"
             size="icon"
-            className="size-8"
+            className="size-7 shrink-0"
             onClick={toggleTheme}
             title="切换主题"
           >
             {resolvedTheme === 'dark' ? (
-              <Sun className="h-4 w-4" />
+              <Sun className="h-3.5 w-3.5" />
             ) : (
-              <Moon className="h-4 w-4" />
+              <Moon className="h-3.5 w-3.5" />
             )}
           </Button>
           <Button
             variant={showFavorites ? 'secondary' : 'ghost'}
             size="icon"
-            className="size-8"
+            className={cn('size-7 shrink-0')}
             onClick={() => onShowFavoritesChange(!showFavorites)}
             title="仅显示收藏"
           >
             <Star
               className={cn(
-                'h-4 w-4',
+                'h-3.5 w-3.5',
                 showFavorites && 'fill-amber-500 text-amber-500'
               )}
             />
@@ -137,60 +130,41 @@ export function Header({
           <Button
             variant="ghost"
             size="icon"
-            className="size-8"
+            className="size-7 shrink-0"
             onClick={() => setClearDialogOpen(true)}
             title="清空历史"
           >
-            <Trash2 className="h-4 w-4" />
+            <Trash2 className="h-3.5 w-3.5" />
           </Button>
           <Button
             variant="ghost"
             size="icon"
-            className="size-8"
-            onClick={() => {
-              setSettingsTab('general');
-              setSettingsOpen(true);
-            }}
+            className="size-7 shrink-0"
+            onClick={onSettingsOpen}
             title="设置"
           >
-            <Settings className="h-4 w-4" />
+            <Settings className="h-3.5 w-3.5" />
           </Button>
         </div>
-        <div className="flex items-center gap-1">
-          {CONTENT_TYPE_TABS.map((tab) => (
-            <Button
-              key={tab.label}
-              variant="ghost"
-              size="sm"
+
+        <div className="flex items-center gap-0.5 px-2 pb-1.5">
+          {CONTENT_FILTERS.map((filter) => (
+            <button
+              key={filter.value ?? 'all'}
               className={cn(
-                'h-7 px-2.5 text-xs gap-1 rounded-full transition-colors',
-                contentType === tab.value &&
-                  'bg-accent text-accent-foreground'
+                'flex items-center gap-1 h-6 px-2 rounded-md text-[11px] font-medium transition-colors',
+                contentType === filter.value
+                  ? 'bg-accent text-accent-foreground'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
               )}
-              onClick={() => onContentTypeChange(tab.value)}
+              onClick={() => onContentTypeChange(filter.value)}
             >
-              {tab.icon}
-              {tab.label}
-            </Button>
+              {filter.icon}
+              {filter.label}
+            </button>
           ))}
-          <div className="flex-1" />
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 px-2 text-xs gap-1 text-muted-foreground hover:text-foreground"
-            title="显示快捷键"
-          >
-            <Keyboard className="h-3 w-3" />
-            <span className="hidden sm:inline">Ctrl+Alt+K</span>
-          </Button>
         </div>
       </header>
-
-      <SettingsPanel
-        open={settingsOpen}
-        onOpenChange={setSettingsOpen}
-        initialTab={settingsTab}
-      />
 
       <Dialog open={clearDialogOpen} onOpenChange={setClearDialogOpen}>
         <DialogContent className="sm:max-w-sm">

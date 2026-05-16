@@ -145,19 +145,19 @@ export function SettingsPanel({
                   <div className="flex items-center gap-2">
                     <Input
                       type="number"
-                      min={200}
-                      max={800}
+                      min={300}
+                      max={1000}
                       value={config.window_width}
-                      onChange={(e) => setWindowWidth(parseInt(e.target.value, 10) || 400)}
+                      onChange={(e) => setWindowWidth(parseInt(e.target.value, 10) || 480)}
                       className="h-8 w-20"
                     />
                     <span className="text-muted-foreground">x</span>
                     <Input
                       type="number"
-                      min={300}
-                      max={1200}
+                      min={400}
+                      max={1400}
                       value={config.window_height}
-                      onChange={(e) => setWindowHeight(parseInt(e.target.value, 10) || 600)}
+                      onChange={(e) => setWindowHeight(parseInt(e.target.value, 10) || 720)}
                       className="h-8 w-20"
                     />
                     <span className="text-xs text-muted-foreground">像素</span>

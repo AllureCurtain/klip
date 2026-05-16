@@ -1,4 +1,4 @@
-import { FileText, Image, File, Folder, Files, Trash2, Star, Check, Maximize2 } from 'lucide-react';
+import { FileText, Image, File, Folder, Files, Trash2, Star, Check } from 'lucide-react';
 import { Button } from '@/components/ui';
 import { useClipboardStore } from '@/stores';
 import { formatTime, formatSize, truncate, cn } from '@/lib/utils';
@@ -77,13 +77,14 @@ function classifyFile(item: ClipboardItemType): FileShape {
 export function ClipboardItem({ item, index, isSelected, onSelect }: ClipboardItemProps) {
   const { deleteItem, copyItem, toggleFavorite } = useClipboardStore();
   const [copied, setCopied] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [imagePreviewOpen, setImagePreviewOpen] = useState(false);
-  const itemRef = useRef<HTMLDivElement>(null);
+  const confirmTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const handleCopy = useCallback(() => {
     copyItem(item.id);
     setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    setTimeout(() => setCopied(false), 800);
   }, [copyItem, item.id]);
 
   const handleClick = useCallback(() => {
@@ -93,10 +94,14 @@ export function ClipboardItem({ item, index, isSelected, onSelect }: ClipboardIt
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!window.confirm('确定要删除这条剪贴板历史吗？')) {
-      return;
+    if (confirmDelete) {
+      clearTimeout(confirmTimerRef.current);
+      deleteItem(item.id);
+      setConfirmDelete(false);
+    } else {
+      setConfirmDelete(true);
+      confirmTimerRef.current = setTimeout(() => setConfirmDelete(false), 2000);
     }
-    deleteItem(item.id);
   };
 
   const handleToggleFavorite = (e: React.MouseEvent) => {
@@ -109,11 +114,17 @@ export function ClipboardItem({ item, index, isSelected, onSelect }: ClipboardIt
     setImagePreviewOpen(true);
   };
 
+  const itemRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     if (isSelected && itemRef.current) {
       itemRef.current.scrollIntoView({ block: 'nearest' });
     }
   }, [isSelected]);
+
+  useEffect(() => {
+    return () => clearTimeout(confirmTimerRef.current);
+  }, []);
 
   const fileShape = item.content_type === 'file' ? classifyFile(item) : null;
   const imageMeta = item.content_type === 'image' ? parseImageMetadata(item) : null;
@@ -121,22 +132,20 @@ export function ClipboardItem({ item, index, isSelected, onSelect }: ClipboardIt
   const renderIcon = () => {
     switch (item.content_type) {
       case 'text':
-        return <FileText className="h-4 w-4 text-muted-foreground" />;
+        return <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />;
       case 'image':
-        return <Image className="h-4 w-4 text-chart-2" />;
+        return <Image className="h-3.5 w-3.5 text-primary shrink-0" />;
       case 'file': {
-        if (!fileShape) return <File className="h-4 w-4 text-chart-4" />;
+        if (!fileShape) return <File className="h-3.5 w-3.5 text-primary/70 shrink-0" />;
         switch (fileShape.kind) {
           case 'single-folder':
-            return <Folder className="h-4 w-4 text-amber-500" />;
+            return <Folder className="h-3.5 w-3.5 text-amber-500 shrink-0" />;
           case 'single-file':
-            return <File className="h-4 w-4 text-chart-4" />;
           case 'multi':
-            return <Files className="h-4 w-4 text-chart-4" />;
           case 'unknown':
-            return <File className="h-4 w-4 text-chart-4" />;
+            return <Files className="h-3.5 w-3.5 text-primary/70 shrink-0" />;
         }
-        return <File className="h-4 w-4 text-chart-4" />;
+        return <File className="h-3.5 w-3.5 text-primary/70 shrink-0" />;
       }
       default:
         return null;
@@ -147,30 +156,27 @@ export function ClipboardItem({ item, index, isSelected, onSelect }: ClipboardIt
     switch (item.content_type) {
       case 'text':
         return (
-          <span className="text-sm text-foreground">
-            {truncate(item.preview || item.content, 100)}
+          <span className="text-xs text-foreground truncate block">
+            {truncate(item.preview || item.content, 80)}
           </span>
         );
       case 'image':
         return (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 min-w-0">
             <div
-              className="relative group/img cursor-pointer"
+              className="relative group/img cursor-pointer shrink-0"
               onClick={handleImageClick}
             >
               <img
                 src={item.content}
-                alt="剪贴板图片"
-                className="h-10 w-10 object-cover rounded border border-border transition-all group-hover/img:border-primary/50"
+                alt=""
+                className="h-8 w-8 object-cover rounded border border-border transition-colors group-hover/img:border-primary/40"
               />
-              <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover/img:opacity-100 transition-opacity rounded">
-                <Maximize2 className="h-4 w-4 text-white" />
-              </div>
             </div>
-            <div className="flex flex-col">
-              <span className="text-sm text-muted-foreground">{item.preview}</span>
+            <div className="flex flex-col min-w-0">
+              <span className="text-xs text-muted-foreground truncate">{item.preview}</span>
               {imageMeta && (
-                <span className="text-xs text-muted-foreground/60">
+                <span className="text-[10px] text-muted-foreground/60">
                   {imageMeta.width}x{imageMeta.height} · {imageMeta.format}
                 </span>
               )}
@@ -179,11 +185,7 @@ export function ClipboardItem({ item, index, isSelected, onSelect }: ClipboardIt
         );
       case 'file': {
         if (!fileShape) {
-          return (
-            <span className="text-sm text-foreground">
-              {item.preview}
-            </span>
-          );
+          return <span className="text-xs text-foreground">{item.preview}</span>;
         }
         return renderFilePreview(fileShape);
       }
@@ -198,33 +200,44 @@ export function ClipboardItem({ item, index, isSelected, onSelect }: ClipboardIt
         ref={itemRef}
         onClick={handleClick}
         className={cn(
-          'group relative flex items-start gap-3 px-3 py-2.5 cursor-pointer transition-colors',
+          'group relative flex items-center gap-2 px-2.5 h-14 cursor-pointer transition-colors overflow-hidden',
           isSelected
-            ? 'bg-accent ring-2 ring-ring ring-inset'
-            : 'hover:bg-accent/50',
-          copied && 'bg-primary/10'
+            ? 'bg-accent'
+            : 'hover:bg-muted/60',
+          copied && 'bg-primary/5'
         )}
       >
-        <div className="flex items-center justify-center w-5 h-5 rounded text-[10px] font-medium text-muted-foreground bg-muted shrink-0 mt-0.5">
+        {/* Index badge */}
+        <span className="w-5 text-right text-[10px] font-mono tabular-nums text-muted-foreground/60 shrink-0 select-none">
           {index}
-        </div>
+        </span>
+
+        {/* Content */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-0.5">
+          <div className="flex items-center gap-1.5 mb-0.5">
             {renderIcon()}
-            <span className="text-xs text-muted-foreground">
+            <span className="text-[10px] text-muted-foreground/70">
               {formatTime(item.created_at)}
             </span>
+            {copied && (
+              <span className="flex items-center gap-0.5 text-[10px] font-medium text-primary">
+                <Check className="h-2.5 w-2.5" />
+                已复制
+              </span>
+            )}
           </div>
           {renderPreview()}
         </div>
-        <div className="flex items-center gap-0.5 shrink-0">
+
+        {/* Actions */}
+        <div className="flex items-center gap-0 shrink-0">
           <Button
             variant="ghost"
             size="icon"
             aria-label={item.is_favorited ? '取消收藏' : '收藏'}
             title={item.is_favorited ? '取消收藏' : '收藏'}
             className={cn(
-              'size-7 transition-opacity',
+              'size-6 transition-opacity',
               item.is_favorited
                 ? 'opacity-100'
                 : 'opacity-0 group-hover:opacity-100'
@@ -233,7 +246,7 @@ export function ClipboardItem({ item, index, isSelected, onSelect }: ClipboardIt
           >
             <Star
               className={cn(
-                'h-3.5 w-3.5',
+                'h-3 w-3',
                 item.is_favorited
                   ? 'fill-amber-500 text-amber-500'
                   : 'text-muted-foreground hover:text-amber-500'
@@ -244,30 +257,27 @@ export function ClipboardItem({ item, index, isSelected, onSelect }: ClipboardIt
             variant="ghost"
             size="icon"
             aria-label="删除"
-            title="删除"
-            className="opacity-0 group-hover:opacity-100 transition-opacity size-7"
+            title={confirmDelete ? '再次点击确认删除' : '删除'}
+            className={cn(
+              'size-6 transition-opacity',
+              confirmDelete
+                ? 'opacity-100 text-destructive'
+                : 'opacity-0 group-hover:opacity-100'
+            )}
             onClick={handleDelete}
           >
-            <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+            <Trash2 className={cn(
+              'h-3 w-3',
+              confirmDelete ? 'text-destructive' : 'text-muted-foreground hover:text-destructive'
+            )} />
           </Button>
-          <span className="opacity-0 group-hover:opacity-100 transition-opacity text-[10px] text-muted-foreground ml-0.5 tabular-nums">
-            {index}
-          </span>
         </div>
-        {copied && (
-          <div className="absolute inset-0 flex items-center justify-center bg-primary/10 rounded pointer-events-none">
-            <span className="flex items-center gap-1 text-xs font-medium text-primary bg-primary-foreground px-2 py-1 rounded shadow-sm">
-              <Check className="h-3 w-3" />
-              已复制
-            </span>
-          </div>
-        )}
       </div>
 
       {item.content_type === 'image' && (
         <ImagePreview
           src={item.content}
-          alt="剪贴板图片预览"
+          alt=""
           metadata={imageMeta ? {
             width: imageMeta.width,
             height: imageMeta.height,
@@ -286,10 +296,10 @@ function renderFilePreview(shape: FileShape) {
     case 'single-folder':
       return (
         <div className="flex items-baseline gap-2 min-w-0">
-          <span className="text-sm font-medium text-foreground truncate">
+          <span className="text-xs font-medium text-foreground truncate">
             {shape.name}
           </span>
-          <span className="text-xs text-amber-600 dark:text-amber-400 shrink-0">
+          <span className="text-[10px] text-amber-600 dark:text-amber-400 shrink-0">
             文件夹
           </span>
         </div>
@@ -297,11 +307,11 @@ function renderFilePreview(shape: FileShape) {
     case 'single-file':
       return (
         <div className="flex items-baseline gap-2 min-w-0">
-          <span className="text-sm font-medium text-foreground truncate">
+          <span className="text-xs font-medium text-foreground truncate">
             {shape.name}
           </span>
           {shape.size > 0 && (
-            <span className="text-xs text-muted-foreground shrink-0">
+            <span className="text-[10px] text-muted-foreground shrink-0">
               {formatSize(shape.size)}
             </span>
           )}
@@ -318,17 +328,17 @@ function renderFilePreview(shape: FileShape) {
       return (
         <div className="min-w-0">
           <div className="flex items-baseline gap-2">
-            <span className="text-sm font-medium text-foreground">
+            <span className="text-xs font-medium text-foreground">
               {summary}
             </span>
             {shape.totalSize > 0 && (
-              <span className="text-xs text-muted-foreground">
+              <span className="text-[10px] text-muted-foreground">
                 {formatSize(shape.totalSize)}
               </span>
             )}
           </div>
           {sampleLine && (
-            <div className="text-xs text-muted-foreground truncate mt-0.5">
+            <div className="text-[10px] text-muted-foreground/70 truncate mt-0.5">
               {sampleLine}
               {moreCount > 0 ? ` 等 ${moreCount} 项` : ''}
             </div>
@@ -338,7 +348,7 @@ function renderFilePreview(shape: FileShape) {
     }
     case 'unknown':
       return (
-        <span className="text-sm text-foreground">
+        <span className="text-xs text-foreground">
           {shape.preview}
         </span>
       );
