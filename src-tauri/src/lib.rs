@@ -2,9 +2,11 @@ pub mod clipboard;
 pub mod commands;
 pub mod config;
 pub mod database;
+pub mod error;
 pub mod hotkey;
 pub mod tray;
-pub mod utils;
+
+pub use error::AppError;
 
 pub use commands::*;
 pub use database::Database;

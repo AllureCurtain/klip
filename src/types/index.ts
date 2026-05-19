@@ -59,3 +59,34 @@ export interface DiagnosticsInfo {
 }
 
 export type ContentType = 'text' | 'image' | 'file';
+
+export type AppErrorCode =
+  | 'not_found'
+  | 'database'
+  | 'clipboard'
+  | 'hotkey'
+  | 'invalid_input'
+  | 'window'
+  | 'system';
+
+export interface AppError {
+  code: AppErrorCode;
+  message: string;
+}
+
+export function isAppError(value: unknown): value is AppError {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'code' in value &&
+    'message' in value &&
+    typeof (value as AppError).code === 'string' &&
+    typeof (value as AppError).message === 'string'
+  );
+}
+
+export function getErrorMessage(error: unknown): string {
+  if (isAppError(error)) return error.message;
+  if (error instanceof Error) return error.message;
+  return String(error);
+}

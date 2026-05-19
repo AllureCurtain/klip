@@ -4,6 +4,8 @@ use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut,
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 use enigo::{Enigo, Settings};
 
+use crate::AppError;
+
 pub(crate) const DEFAULT_TOGGLE_HOTKEY: &str = "Ctrl+Alt+K";
 pub(crate) const DEFAULT_QUICK_PASTE_PREFIX: &str = "Ctrl+Alt";
 
@@ -52,7 +54,7 @@ mod tests {
     }
 }
 
-pub fn register_hotkeys(app_handle: &AppHandle) -> Result<(), String> {
+pub fn register_hotkeys(app_handle: &AppHandle) -> Result<(), AppError> {
     let (toggle_raw, quick_paste_prefix_raw) = read_hotkey_config(app_handle)?;
     tracing::info!(
         "Registering hotkeys with toggle={} quick_paste_prefix={}",
@@ -63,7 +65,7 @@ pub fn register_hotkeys(app_handle: &AppHandle) -> Result<(), String> {
     register_hotkeys_from_values(app_handle, &toggle_raw, &quick_paste_prefix_raw)
 }
 
-pub fn reload_hotkeys(app_handle: &AppHandle) -> Result<(), String> {
+pub fn reload_hotkeys(app_handle: &AppHandle) -> Result<(), AppError> {
     let (toggle_raw, quick_paste_prefix_raw) = read_hotkey_config(app_handle)?;
     tracing::info!(
         "Reloading hotkeys with toggle={} quick_paste_prefix={}",
@@ -78,18 +80,18 @@ pub(crate) fn reload_hotkeys_from_values(
     app_handle: &AppHandle,
     toggle_raw: &str,
     quick_paste_prefix_raw: &str,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     validate_hotkey_config(toggle_raw, quick_paste_prefix_raw)?;
 
     app_handle
         .global_shortcut()
         .unregister_all()
-        .map_err(|e| format!("Failed to unregister hotkeys: {}", e))?;
+        .map_err(|e| AppError::Hotkey(format!("Failed to unregister hotkeys: {}", e)))?;
 
     register_hotkeys_from_values(app_handle, toggle_raw, quick_paste_prefix_raw)
 }
 
-pub fn validate_config_value(key: &str, value: &str) -> Result<(), String> {
+pub fn validate_config_value(key: &str, value: &str) -> Result<(), AppError> {
     match key {
         "hotkey_toggle_window" => parse_toggle_shortcut(value).map(|_| ()),
         "hotkey_quick_paste_prefix" => parse_quick_paste_prefix(value).map(|_| ()),
@@ -100,11 +102,11 @@ pub fn validate_config_value(key: &str, value: &str) -> Result<(), String> {
 pub(crate) fn validate_hotkey_config(
     toggle_raw: &str,
     quick_paste_prefix_raw: &str,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     parse_hotkey_config(toggle_raw, quick_paste_prefix_raw).map(|_| ())
 }
 
-fn read_hotkey_config(app_handle: &AppHandle) -> Result<(String, String), String> {
+fn read_hotkey_config(app_handle: &AppHandle) -> Result<(String, String), AppError> {
     let db = app_handle.state::<crate::database::Database>();
     let toggle_raw = crate::database::config::get(&db, "hotkey_toggle_window")?
         .unwrap_or_else(|| DEFAULT_TOGGLE_HOTKEY.to_string());
@@ -118,7 +120,7 @@ fn register_hotkeys_from_values(
     app_handle: &AppHandle,
     toggle_raw: &str,
     quick_paste_prefix_raw: &str,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     validate_hotkey_config(toggle_raw, quick_paste_prefix_raw)?;
     let toggle_shortcut = parse_toggle_shortcut(toggle_raw)?;
     let quick_paste_modifiers = parse_quick_paste_prefix(quick_paste_prefix_raw)?;
@@ -132,26 +134,26 @@ fn register_hotkeys_from_values(
 fn parse_hotkey_config(
     toggle_raw: &str,
     quick_paste_prefix_raw: &str,
-) -> Result<(Shortcut, Modifiers), String> {
+) -> Result<(Shortcut, Modifiers), AppError> {
     let toggle_shortcut = parse_toggle_shortcut(toggle_raw)?;
     let quick_paste_modifiers = parse_quick_paste_prefix(quick_paste_prefix_raw)?;
     Ok((toggle_shortcut, quick_paste_modifiers))
 }
 
-fn parse_toggle_shortcut(raw: &str) -> Result<Shortcut, String> {
+fn parse_toggle_shortcut(raw: &str) -> Result<Shortcut, AppError> {
     let trimmed = raw.trim();
     let Some(letter) = trimmed.strip_prefix("Ctrl+Alt+") else {
-        return Err(format!(
+        return Err(AppError::Hotkey(format!(
             "Unsupported hotkey_toggle_window `{}`. Expected Ctrl+Alt+<A-Z>.",
             raw
-        ));
+        )));
     };
 
     if letter.len() != 1 {
-        return Err(format!(
+        return Err(AppError::Hotkey(format!(
             "Unsupported hotkey_toggle_window `{}`. Expected Ctrl+Alt+<A-Z>.",
             raw
-        ));
+        )));
     }
 
     let code = parse_letter_code(letter.chars().next().unwrap())?;
@@ -161,18 +163,18 @@ fn parse_toggle_shortcut(raw: &str) -> Result<Shortcut, String> {
     ))
 }
 
-fn parse_quick_paste_prefix(raw: &str) -> Result<Modifiers, String> {
+fn parse_quick_paste_prefix(raw: &str) -> Result<Modifiers, AppError> {
     if raw.trim() == DEFAULT_QUICK_PASTE_PREFIX {
         Ok(Modifiers::CONTROL | Modifiers::ALT)
     } else {
-        Err(format!(
+        Err(AppError::Hotkey(format!(
             "Unsupported hotkey_quick_paste_prefix `{}`. Expected Ctrl+Alt.",
             raw
-        ))
+        )))
     }
 }
 
-fn parse_letter_code(letter: char) -> Result<Code, String> {
+fn parse_letter_code(letter: char) -> Result<Code, AppError> {
     match letter {
         'A' => Ok(Code::KeyA),
         'B' => Ok(Code::KeyB),
@@ -200,14 +202,14 @@ fn parse_letter_code(letter: char) -> Result<Code, String> {
         'X' => Ok(Code::KeyX),
         'Y' => Ok(Code::KeyY),
         'Z' => Ok(Code::KeyZ),
-        _ => Err(format!(
+        _ => Err(AppError::Hotkey(format!(
             "Unsupported hotkey_toggle_window letter `{}`. Expected A-Z.",
             letter
-        )),
+        ))),
     }
 }
 
-fn register_toggle_hotkey(app_handle: &AppHandle, shortcut: Shortcut) -> Result<(), String> {
+fn register_toggle_hotkey(app_handle: &AppHandle, shortcut: Shortcut) -> Result<(), AppError> {
     let app_handle_clone = app_handle.clone();
     app_handle
         .global_shortcut()
@@ -221,8 +223,6 @@ fn register_toggle_hotkey(app_handle: &AppHandle, shortcut: Shortcut) -> Result<
                         let _ = window.hide();
                         tracing::info!("Window hidden");
                     } else {
-                        // Capture the foreground window BEFORE Klip becomes
-                        // foreground so paste can restore focus to it.
                         crate::capture_previous_foreground();
                         let _ = window.show();
                         let _ = window.set_focus();
@@ -233,15 +233,13 @@ fn register_toggle_hotkey(app_handle: &AppHandle, shortcut: Shortcut) -> Result<
                 }
             }
         })
-        .map_err(|e| format!("Failed to register toggle shortcut: {}", e))
+        .map_err(|e| AppError::Hotkey(format!("Failed to register toggle shortcut: {}", e)))
 }
 
 fn register_quick_paste_hotkeys(
     app_handle: &AppHandle,
     modifiers: Modifiers,
-) -> Result<(), String> {
-    // 历史上用过 Ctrl+1~9 但和 IDE/浏览器/IM 全局冲突严重，绝大多数机器
-    // 上 9 个一个都注册不上，改用与主热键 Ctrl+Alt+K 同族的修饰组合。
+) -> Result<(), AppError> {
     for index in 1_i64..=9_i64 {
         let shortcut = Shortcut::new(Some(modifiers), quick_paste_digit_code(index));
         let app_handle_clone = app_handle.clone();

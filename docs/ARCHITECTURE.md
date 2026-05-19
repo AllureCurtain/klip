@@ -102,76 +102,83 @@
 
 ```
 src/
-├── components/           # UI 组件
+├── App.tsx              # 主应用组件（事件监听、路由、布局）
+├── main.tsx             # 入口
+├── components/
 │   ├── ui/              # Shadcn/ui 基础组件
 │   │   ├── button.tsx
 │   │   ├── input.tsx
 │   │   ├── scroll-area.tsx
-│   │   └── dialog.tsx
+│   │   ├── dialog.tsx
+│   │   ├── switch.tsx
+│   │   ├── label.tsx
+│   │   ├── tabs.tsx
+│   │   ├── separator.tsx
+│   │   └── badge.tsx
 │   ├── layout/          # 布局组件
-│   │   ├── Header.tsx
+│   │   ├── Header.tsx   # 搜索栏 + 内容类型过滤 + 主题切换
 │   │   └── EmptyState.tsx
 │   ├── clipboard/       # 剪贴板相关
-│   │   ├── ClipboardList.tsx
-│   │   ├── ClipboardItem.tsx
-│   │   ├── TextItem.tsx
-│   │   ├── ImageItem.tsx
-│   │   └── FileItem.tsx
+│   │   ├── ClipboardList.tsx   # 虚拟滚动列表（@tanstack/react-virtual）
+│   │   ├── ClipboardItem.tsx   # 统一的列表项（内部按 content_type 分支渲染）
+│   │   └── ImagePreview.tsx    # 图片大图预览弹窗
 │   └── settings/        # 设置相关
-│       └── SettingsDialog.tsx
-│
-├── hooks/               # 自定义 Hooks
-│   ├── useClipboard.ts
-│   ├── useSearch.ts
-│   └── useHotkey.ts
+│       └── SettingsView.tsx    # 全页设置（4 个 Tab：通用/快捷键/行为/关于）
 │
 ├── stores/              # Zustand 状态
-│   ├── clipboardStore.ts
-│   ├── settingsStore.ts
-│   └── uiStore.ts
+│   ├── clipboardStore.ts  # 剪贴板列表、搜索、删除、收藏
+│   ├── configStore.ts     # 应用配置读写
+│   └── themeStore.ts      # 主题（light/dark/system）
 │
 ├── lib/                 # 工具库
-│   ├── tauri.ts         # Tauri API 封装
-│   ├── utils.ts
+│   ├── tauri.ts         # 所有 IPC 调用的唯一入口
+│   ├── utils.ts         # 格式化、cn() 等工具函数
 │   └── constants.ts
 │
-└── types/               # 类型定义
-    └── index.ts
+├── types/               # 类型定义
+│   └── index.ts
+│
+└── styles/
+    └── globals.css      # Tailwind 4 + oklch 主题变量
 ```
 
 ### 3.2 后端模块
 
 ```
 src-tauri/src/
-├── commands/            # IPC 命令
+├── main.rs              # 应用启动、tracing 初始化、窗口焦点处理
+├── lib.rs               # 模块导出、托盘点击守卫、前台窗口捕获/恢复
+│
+├── commands/            # IPC 命令（17 个 #[tauri::command]）
 │   └── mod.rs
 │
-├── clipboard/           # 剪贴板监听
+├── clipboard/           # 剪贴板监听与格式处理
 │   ├── mod.rs
-│   ├── monitor.rs       # 监听器
-│   └── format/          # 格式识别与提取
+│   ├── monitor.rs       # Windows 事件驱动 / 其他平台轮询
+│   └── format/          # 格式策略
+│       ├── mod.rs       # 格式分发表
+│       ├── text.rs      # 文本格式
+│       ├── image.rs     # 图片格式（缩略图生成）
+│       └── file.rs      # 文件格式（路径解析、元数据提取）
 │
 ├── database/            # 数据库操作
 │   ├── mod.rs
-│   ├── connection.rs    # 连接与建表
+│   ├── connection.rs    # 连接管理、建表、迁移
 │   ├── clipboard.rs     # 剪贴板 CRUD
 │   ├── config.rs        # 配置 CRUD
-│   └── types.rs         # 数据类型
+│   └── types.rs         # 数据类型（ClipboardItem, SystemInfo 等）
 │
 ├── hotkey/              # 快捷键管理
 │   ├── mod.rs
-│   └── manager.rs
+│   └── manager.rs       # 注册/注销/重载热键、快速粘贴
 │
 ├── tray/                # 系统托盘
 │   ├── mod.rs
-│   └── setup.rs
+│   └── setup.rs         # 托盘图标、菜单、点击事件
 │
-├── config/              # 应用配置
-│   ├── mod.rs
-│   └── settings.rs
-│
-└── utils/               # 工具函数
-    └── mod.rs
+└── config/              # 静态配置常量
+    ├── mod.rs
+    └── settings.rs
 ```
 
 ---
@@ -216,31 +223,19 @@ fn register_hotkeys(app: &AppHandle) {
 // clipboardStore.ts
 interface ClipboardStore {
   items: ClipboardItem[];
-  selectedItem: ClipboardItem | null;
-  searchQuery: string;
-  isLoading: boolean;
+  loading: boolean;
+  error: string | null;
 
   // Actions
   fetchItems: () => Promise<void>;
-  searchItems: (query: string) => Promise<void>;
+  searchItems: (query: string, contentType?: string) => Promise<void>;
   deleteItem: (id: number) => Promise<void>;
   copyItem: (id: number) => Promise<void>;
+  clearItems: () => Promise<void>;
+  toggleFavorite: (id: number) => Promise<void>;
+  addItems: (items: ClipboardItem[]) => void;
+  setItems: (items: ClipboardItem[]) => void;
 }
-
-// 使用 Zustand
-export const useClipboardStore = create<ClipboardStore>((set, get) => ({
-  items: [],
-  selectedItem: null,
-  searchQuery: '',
-  isLoading: false,
-
-  fetchItems: async () => {
-    const items = await invoke('get_clipboard_list');
-    set({ items });
-  },
-
-  // ...
-}));
 ```
 
 ---
@@ -255,22 +250,28 @@ export const useClipboardStore = create<ClipboardStore>((set, get) => ({
 // 剪贴板项
 interface ClipboardItem {
   id: number;
-  contentType: 'text' | 'image' | 'file';
+  content_type: 'text' | 'image' | 'file';
   content: string;
-  preview: string;
+  preview: string | null;
   hash: string;
   size: number;
-  createdAt: number;
-  lastUsedAt: number;
+  metadata: string | null;   // JSON: ImageMetadata | FileMetadata
+  is_favorited: boolean;
+  created_at: number;
+  last_used_at: number;
 }
 
 // 应用配置
 interface AppConfig {
-  maxHistoryCount: number;      // 最大历史数
-  hotkeyToggleWindow: string;   // 窗口快捷键
-  hotkeyQuickPastePrefix: string; // 快速粘贴前缀
-  autoStart: boolean;           // 预留字段，当前开发阶段强制 false
-  closeToTray: boolean;         // 关闭到托盘
+  max_history_count: number;
+  hotkey_toggle_window: string;
+  hotkey_quick_paste_prefix: string;
+  auto_start: boolean;
+  close_to_tray: boolean;
+  show_in_tray: boolean;
+  window_width: number;
+  window_height: number;
+  search_debounce_ms: number;
 }
 ```
 
@@ -285,21 +286,23 @@ interface AppConfig {
 | 命令 | 参数 | 返回 | 说明 |
 |------|------|------|------|
 | `get_clipboard_list` | limit, offset | ClipboardItem[] | 获取列表 |
-| `search_clipboard` | query, limit | ClipboardItem[] | 搜索 |
+| `search_clipboard` | query, content_type?, limit | ClipboardItem[] | 搜索 |
+| `get_clipboard_by_id` | id | ClipboardItem? | 按 ID 获取 |
 | `delete_clipboard_item` | id | void | 删除 |
-| `copy_to_clipboard` | id | void | 复制 |
-| `paste_from_clipboard` | id | void | 复制后粘贴 |
+| `copy_to_clipboard` | id | void | 复制到系统剪贴板 |
+| `paste_from_clipboard` | id | void | 复制后模拟粘贴 |
 | `toggle_favorite` | id | ClipboardItem | 切换收藏 |
-| `clear_clipboard_history` | - | void | 清空 |
-| `get_config` | key | string | 获取配置 |
+| `clear_clipboard_history` | - | void | 清空历史 |
+| `get_config` | key | string? | 获取配置 |
 | `get_all_config` | - | Record<string, string> | 获取全部配置 |
-| `set_config` | key, value | void | 设置配置 |
-| `toggle_window` | - | void | 切换窗口 |
+| `set_config` | key, value | void | 设置配置（热键变更会立即重载） |
+| `toggle_window` | - | void | 切换窗口显示/隐藏 |
 | `show_window` | - | void | 显示窗口 |
 | `hide_window` | - | void | 隐藏窗口 |
-| `set_auto_start` | enabled | void | 设置系统开机自启动并同步持久化配置 |
-| `is_auto_start_enabled` | - | boolean | 查询当前系统层面的自启状态 |
-| `get_system_info` | - | SystemInfo | 获取系统信息 |
+| `set_auto_start` | enabled | void | 设置系统开机自启动并持久化 |
+| `is_auto_start_enabled` | - | boolean | 查询系统层面的自启状态 |
+| `get_system_info` | - | SystemInfo | 获取系统/版本信息 |
+| `get_diagnostics_info` | - | DiagnosticsInfo | 获取诊断路径信息 |
 
 ### 6.2 事件列表
 

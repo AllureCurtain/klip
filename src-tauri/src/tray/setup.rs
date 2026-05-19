@@ -4,10 +4,11 @@ use tauri::{
     AppHandle, Emitter, Manager,
 };
 
-pub fn setup_tray(app_handle: &AppHandle) -> Result<TrayIcon, String> {
+use crate::AppError;
+
+pub fn setup_tray(app_handle: &AppHandle) -> Result<TrayIcon, AppError> {
     tracing::info!("Setting up tray icon...");
 
-    // Get current auto_start state from config
     let db = app_handle.state::<crate::database::Database>();
     let auto_start_enabled = crate::database::config::get(&db, "auto_start")
         .ok()
@@ -16,7 +17,7 @@ pub fn setup_tray(app_handle: &AppHandle) -> Result<TrayIcon, String> {
         .unwrap_or(false);
 
     let show_item = MenuItem::with_id(app_handle, "show", "显示窗口", true, None::<&str>)
-        .map_err(|e| format!("Failed to create show item: {}", e))?;
+        .map_err(|e| AppError::System(format!("Failed to create show item: {}", e)))?;
 
     let autostart_item = CheckMenuItem::with_id(
         app_handle,
@@ -26,16 +27,16 @@ pub fn setup_tray(app_handle: &AppHandle) -> Result<TrayIcon, String> {
         auto_start_enabled,
         None::<&str>,
     )
-    .map_err(|e| format!("Failed to create autostart item: {}", e))?;
+    .map_err(|e| AppError::System(format!("Failed to create autostart item: {}", e)))?;
 
     let settings_item = MenuItem::with_id(app_handle, "settings", "设置", true, None::<&str>)
-        .map_err(|e| format!("Failed to create settings item: {}", e))?;
+        .map_err(|e| AppError::System(format!("Failed to create settings item: {}", e)))?;
 
     let about_item = MenuItem::with_id(app_handle, "about", "关于", true, None::<&str>)
-        .map_err(|e| format!("Failed to create about item: {}", e))?;
+        .map_err(|e| AppError::System(format!("Failed to create about item: {}", e)))?;
 
     let quit_item = MenuItem::with_id(app_handle, "quit", "退出", true, None::<&str>)
-        .map_err(|e| format!("Failed to create quit item: {}", e))?;
+        .map_err(|e| AppError::System(format!("Failed to create quit item: {}", e)))?;
 
     let menu = Menu::with_items(
         app_handle,
@@ -47,7 +48,7 @@ pub fn setup_tray(app_handle: &AppHandle) -> Result<TrayIcon, String> {
             &quit_item,
         ],
     )
-    .map_err(|e| format!("Failed to create menu: {}", e))?;
+    .map_err(|e| AppError::System(format!("Failed to create menu: {}", e)))?;
 
     tracing::info!("Menu created");
 
@@ -137,7 +138,7 @@ pub fn setup_tray(app_handle: &AppHandle) -> Result<TrayIcon, String> {
             }
         })
         .build(app_handle)
-        .map_err(|e| format!("Failed to build tray: {}", e))?;
+        .map_err(|e| AppError::System(format!("Failed to build tray: {}", e)))?;
 
     tracing::info!("Tray icon created successfully");
     Ok(tray)

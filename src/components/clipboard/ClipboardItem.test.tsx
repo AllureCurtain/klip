@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ClipboardItem } from './ClipboardItem';
 import type { ClipboardItem as ClipboardItemType } from '@/types';
 
@@ -30,30 +30,58 @@ function makeTextItem(): ClipboardItemType {
 }
 
 describe('ClipboardItem', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
   afterEach(() => {
     cleanup();
+    vi.useRealTimers();
     vi.restoreAllMocks();
     storeMocks.deleteItem.mockReset();
     storeMocks.copyItem.mockReset();
     storeMocks.toggleFavorite.mockReset();
   });
 
-  it('does not delete when the user cancels confirmation', () => {
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+  it('requires two clicks to delete (confirmation pattern)', () => {
     render(<ClipboardItem item={makeTextItem()} index={1} isSelected={false} />);
 
-    fireEvent.click(screen.getByRole('button', { name: '删除' }));
+    const deleteBtn = screen.getByRole('button', { name: '删除' });
 
-    expect(confirm).toHaveBeenCalledWith('确定要删除这条剪贴板历史吗？');
+    // First click enters confirmation state, does not delete
+    fireEvent.click(deleteBtn);
+    expect(storeMocks.deleteItem).not.toHaveBeenCalled();
+
+    // Second click confirms deletion
+    fireEvent.click(deleteBtn);
+    expect(storeMocks.deleteItem).toHaveBeenCalledWith(42);
+  });
+
+  it('resets confirmation state after timeout', () => {
+    render(<ClipboardItem item={makeTextItem()} index={1} isSelected={false} />);
+
+    const deleteBtn = screen.getByRole('button', { name: '删除' });
+
+    // First click enters confirmation state
+    fireEvent.click(deleteBtn);
+    expect(storeMocks.deleteItem).not.toHaveBeenCalled();
+
+    // Wait for the 2s timeout to expire
+    act(() => {
+      vi.advanceTimersByTime(2100);
+    });
+
+    // Now clicking again should NOT delete — it re-enters confirmation
+    fireEvent.click(deleteBtn);
     expect(storeMocks.deleteItem).not.toHaveBeenCalled();
   });
 
-  it('deletes when the user confirms', () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
+  it('toggles favorite on star click', () => {
     render(<ClipboardItem item={makeTextItem()} index={1} isSelected={false} />);
 
-    fireEvent.click(screen.getByRole('button', { name: '删除' }));
+    const starBtn = screen.getByRole('button', { name: '收藏' });
+    fireEvent.click(starBtn);
 
-    expect(storeMocks.deleteItem).toHaveBeenCalledWith(42);
+    expect(storeMocks.toggleFavorite).toHaveBeenCalledWith(42);
   });
 });

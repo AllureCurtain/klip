@@ -1,3 +1,4 @@
+use crate::AppError;
 use rusqlite::Connection;
 use std::sync::Mutex;
 use tauri::Manager;
@@ -11,11 +12,10 @@ pub struct Database {
 }
 
 impl Database {
-    pub fn new(path: &std::path::Path) -> Result<Self, String> {
-        let conn = Connection::open(path).map_err(|e| e.to_string())?;
+    pub fn new(path: &std::path::Path) -> Result<Self, AppError> {
+        let conn = Connection::open(path)?;
 
-        conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")
-            .map_err(|e| e.to_string())?;
+        conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")?;
 
         let db = Self {
             conn: Mutex::new(conn),
@@ -31,10 +31,12 @@ impl Database {
         }
     }
 
-    pub fn init_schema(&self) -> Result<(), String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+    pub fn init_schema(&self) -> Result<(), AppError> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| AppError::Database(format!("mutex poisoned: {}", e)))?;
 
-        // 创建剪贴板历史表
         conn.execute(
             "CREATE TABLE IF NOT EXISTS clipboard_items (
                 id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -49,53 +51,43 @@ impl Database {
                 last_used_at    INTEGER NOT NULL
             )",
             [],
-        )
-        .map_err(|e| e.to_string())?;
+        )?;
 
-        // 迁移：添加 metadata 列（如果不存在）
         let has_metadata: bool = conn
             .prepare("SELECT metadata FROM clipboard_items LIMIT 0")
             .map(|_| true)
             .unwrap_or(false);
 
         if !has_metadata {
-            conn.execute("ALTER TABLE clipboard_items ADD COLUMN metadata TEXT", [])
-                .map_err(|e| e.to_string())?;
+            conn.execute("ALTER TABLE clipboard_items ADD COLUMN metadata TEXT", [])?;
         }
 
-        // 创建索引
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_clipboard_created_at ON clipboard_items(created_at DESC)",
             [],
-        )
-        .map_err(|e| e.to_string())?;
+        )?;
 
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_clipboard_last_used_created_at
              ON clipboard_items(last_used_at DESC, created_at DESC)",
             [],
-        )
-        .map_err(|e| e.to_string())?;
+        )?;
 
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_clipboard_content_type ON clipboard_items(content_type)",
             [],
-        )
-        .map_err(|e| e.to_string())?;
+        )?;
 
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_clipboard_hash ON clipboard_items(hash)",
             [],
-        )
-        .map_err(|e| e.to_string())?;
+        )?;
 
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_clipboard_preview ON clipboard_items(preview)",
             [],
-        )
-        .map_err(|e| e.to_string())?;
+        )?;
 
-        // 创建配置表
         conn.execute(
             "CREATE TABLE IF NOT EXISTS app_config (
                 key         TEXT PRIMARY KEY,
@@ -103,10 +95,8 @@ impl Database {
                 updated_at  INTEGER NOT NULL
             )",
             [],
-        )
-        .map_err(|e| e.to_string())?;
+        )?;
 
-        // 初始化默认配置
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -129,8 +119,7 @@ impl Database {
             conn.execute(
                 "INSERT OR IGNORE INTO app_config (key, value, updated_at) VALUES (?1, ?2, ?3)",
                 [key, value, &now.to_string()],
-            )
-            .map_err(|e| e.to_string())?;
+            )?;
         }
 
         normalize_legacy_hotkey_config(&conn, now)?;
@@ -139,58 +128,58 @@ impl Database {
         Ok(())
     }
 
-    pub fn get_connection(&self) -> Result<std::sync::MutexGuard<'_, Connection>, String> {
-        self.conn.lock().map_err(|e| e.to_string())
+    pub fn get_connection(&self) -> Result<std::sync::MutexGuard<'_, Connection>, AppError> {
+        self.conn
+            .lock()
+            .map_err(|e| AppError::Database(format!("mutex poisoned: {}", e)))
     }
 }
 
-pub fn get_db_path(app_handle: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
+pub fn get_db_path(app_handle: &tauri::AppHandle) -> Result<std::path::PathBuf, AppError> {
     let app_data_dir = app_handle
         .path()
         .app_data_dir()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| AppError::System(format!("failed to resolve app data dir: {}", e)))?;
 
-    std::fs::create_dir_all(&app_data_dir).map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&app_data_dir)
+        .map_err(|e| AppError::System(format!("failed to create app data dir: {}", e)))?;
 
     Ok(app_data_dir.join("klip.db"))
 }
 
-pub fn init(app_handle: tauri::AppHandle) -> Result<(), String> {
+pub fn init(app_handle: tauri::AppHandle) -> Result<(), AppError> {
     let db_path = get_db_path(&app_handle)?;
     let db = Database::new(&db_path)?;
     app_handle.manage(db);
     Ok(())
 }
 
-fn migrate_window_size_defaults(conn: &Connection, now: i64) -> Result<(), String> {
+fn migrate_window_size_defaults(conn: &Connection, now: i64) -> Result<(), AppError> {
     conn.execute(
         "UPDATE app_config
          SET value = '480', updated_at = ?1
          WHERE key = 'window_width' AND value = '400'",
         [&now.to_string()],
-    )
-    .map_err(|e| e.to_string())?;
+    )?;
 
     conn.execute(
         "UPDATE app_config
          SET value = '720', updated_at = ?1
          WHERE key = 'window_height' AND value = '600'",
         [&now.to_string()],
-    )
-    .map_err(|e| e.to_string())?;
+    )?;
 
     Ok(())
 }
 
-fn normalize_legacy_hotkey_config(conn: &Connection, now: i64) -> Result<(), String> {
+fn normalize_legacy_hotkey_config(conn: &Connection, now: i64) -> Result<(), AppError> {
     conn.execute(
         "UPDATE app_config
          SET value = ?1, updated_at = ?2
          WHERE key = 'hotkey_toggle_window'
            AND value = 'CommandOrControl+Shift+V'",
         [DEFAULT_TOGGLE_HOTKEY, &now.to_string()],
-    )
-    .map_err(|e| e.to_string())?;
+    )?;
 
     conn.execute(
         "UPDATE app_config
@@ -198,8 +187,7 @@ fn normalize_legacy_hotkey_config(conn: &Connection, now: i64) -> Result<(), Str
          WHERE key = 'hotkey_quick_paste_prefix'
            AND value = 'CommandOrControl+Shift'",
         [DEFAULT_QUICK_PASTE_PREFIX, &now.to_string()],
-    )
-    .map_err(|e| e.to_string())?;
+    )?;
 
     Ok(())
 }

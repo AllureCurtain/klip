@@ -1,10 +1,7 @@
 import { create } from 'zustand';
 import type { ClipboardItem } from '@/types';
+import { getErrorMessage } from '@/types';
 import { clipboardApi } from '@/lib/tauri';
-
-function getErrorMessage(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
-}
 
 interface ClipboardStore {
   items: ClipboardItem[];

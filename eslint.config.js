@@ -8,6 +8,7 @@ export default tseslint.config(
       'dist/**',
       'node_modules/**',
       'src-tauri/**',
+      '.claude/**',
       '*.tsbuildinfo',
       'vite.config.js',
       'vite.config.d.ts',

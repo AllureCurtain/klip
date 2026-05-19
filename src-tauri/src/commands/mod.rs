@@ -1,4 +1,5 @@
 use crate::database::{self, ClipboardItem, DiagnosticsInfo, SystemInfo};
+use crate::AppError;
 use tauri::{Emitter, Manager, State};
 use tauri_plugin_autostart::ManagerExt;
 
@@ -7,7 +8,7 @@ pub fn get_clipboard_list(
     db: State<'_, database::Database>,
     limit: Option<i64>,
     offset: Option<i64>,
-) -> Result<Vec<ClipboardItem>, String> {
+) -> Result<Vec<ClipboardItem>, AppError> {
     database::clipboard::get_list(&db, limit.unwrap_or(100), offset.unwrap_or(0))
 }
 
@@ -17,7 +18,7 @@ pub fn search_clipboard(
     query: String,
     content_type: Option<String>,
     limit: Option<i64>,
-) -> Result<Vec<ClipboardItem>, String> {
+) -> Result<Vec<ClipboardItem>, AppError> {
     database::clipboard::search(&db, &query, content_type.as_deref(), limit.unwrap_or(100))
 }
 
@@ -25,12 +26,12 @@ pub fn search_clipboard(
 pub fn get_clipboard_by_id(
     db: State<'_, database::Database>,
     id: i64,
-) -> Result<Option<ClipboardItem>, String> {
+) -> Result<Option<ClipboardItem>, AppError> {
     database::clipboard::get_by_id(&db, id)
 }
 
 #[tauri::command]
-pub fn delete_clipboard_item(db: State<'_, database::Database>, id: i64) -> Result<(), String> {
+pub fn delete_clipboard_item(db: State<'_, database::Database>, id: i64) -> Result<(), AppError> {
     database::clipboard::delete(&db, id)
 }
 
@@ -38,7 +39,7 @@ pub fn delete_clipboard_item(db: State<'_, database::Database>, id: i64) -> Resu
 pub fn toggle_favorite(
     db: State<'_, database::Database>,
     id: i64,
-) -> Result<ClipboardItem, String> {
+) -> Result<ClipboardItem, AppError> {
     database::clipboard::toggle_favorite(&db, id)
 }
 
@@ -46,15 +47,16 @@ pub fn toggle_favorite(
 pub fn clear_clipboard_history(
     app: tauri::AppHandle,
     db: State<'_, database::Database>,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     database::clipboard::clear(&db)?;
     let _ = app.emit("clipboard-cleared", ());
     Ok(())
 }
 
 #[tauri::command]
-pub fn copy_to_clipboard(db: State<'_, database::Database>, id: i64) -> Result<(), String> {
-    let item = database::clipboard::get_by_id(&db, id)?.ok_or("Item not found")?;
+pub fn copy_to_clipboard(db: State<'_, database::Database>, id: i64) -> Result<(), AppError> {
+    let item = database::clipboard::get_by_id(&db, id)?
+        .ok_or_else(|| AppError::NotFound(format!("clipboard item {} not found", id)))?;
 
     crate::clipboard::copy_to_clipboard(
         &item.content,
@@ -70,8 +72,9 @@ pub fn paste_from_clipboard(
     app: tauri::AppHandle,
     db: State<'_, database::Database>,
     id: i64,
-) -> Result<(), String> {
-    let item = database::clipboard::get_by_id(&db, id)?.ok_or("Item not found")?;
+) -> Result<(), AppError> {
+    let item = database::clipboard::get_by_id(&db, id)?
+        .ok_or_else(|| AppError::NotFound(format!("clipboard item {} not found", id)))?;
 
     crate::clipboard::copy_to_clipboard(
         &item.content,
@@ -79,23 +82,16 @@ pub fn paste_from_clipboard(
         item.metadata.as_deref(),
     )?;
 
-    // Bump last_used_at so this item floats to the top on next list refresh.
     let _ = database::clipboard::touch_last_used(&db, id);
 
-    // Hide the Klip window
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.hide();
     }
 
-    // Restore focus to the window that was foreground BEFORE Klip opened.
-    // Without this, Ctrl+V is sent to whatever window the OS picked after
-    // hide() — often the desktop on Win11 — and file paste silently fails.
     #[cfg(target_os = "windows")]
     {
-        // Tiny pause for hide() to start propagating, then restore foreground.
         std::thread::sleep(std::time::Duration::from_millis(30));
         let _ = crate::restore_previous_foreground();
-        // Give the target window time to accept focus before sending Ctrl+V.
         std::thread::sleep(std::time::Duration::from_millis(120));
         if let Ok(mut enigo) = enigo::Enigo::new(&enigo::Settings::default()) {
             use enigo::Keyboard;
@@ -134,14 +130,14 @@ pub fn paste_from_clipboard(
 pub fn get_config(
     db: State<'_, database::Database>,
     key: String,
-) -> Result<Option<String>, String> {
+) -> Result<Option<String>, AppError> {
     database::config::get(&db, &key)
 }
 
 #[tauri::command]
 pub fn get_all_config(
     db: State<'_, database::Database>,
-) -> Result<std::collections::HashMap<String, String>, String> {
+) -> Result<std::collections::HashMap<String, String>, AppError> {
     database::config::get_all(&db)
 }
 
@@ -151,7 +147,7 @@ pub fn set_config(
     db: State<'_, database::Database>,
     key: String,
     value: String,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let previous_value = if key == "hotkey_toggle_window" || key == "hotkey_quick_paste_prefix" {
         crate::hotkey::manager::validate_config_value(&key, &value)?;
         database::config::get(&db, &key)?
@@ -159,7 +155,6 @@ pub fn set_config(
         None
     };
 
-    // Only a subset of app_config keys currently has runtime side effects.
     database::config::set(&db, &key, &value)?;
 
     if key == "window_width" || key == "window_height" {
@@ -196,7 +191,7 @@ pub fn set_config(
                 );
             }
 
-            return Err(format!("Failed to reload hotkeys: {}", err));
+            return Err(AppError::Hotkey(format!("Failed to reload hotkeys: {}", err)));
         }
     }
 
@@ -210,7 +205,7 @@ pub fn set_config(
 fn apply_window_size_from_config(
     app: &tauri::AppHandle,
     db: &database::Database,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let width: u32 = database::config::get(db, "window_width")?
         .and_then(|v| v.parse().ok())
         .unwrap_or(480);
@@ -221,41 +216,44 @@ fn apply_window_size_from_config(
     if let Some(window) = app.get_webview_window("main") {
         window
             .set_size(tauri::Size::Physical(tauri::PhysicalSize { width, height }))
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| AppError::Window(e.to_string()))?;
     }
 
     Ok(())
 }
 
 #[tauri::command]
-pub fn toggle_window(app: tauri::AppHandle) -> Result<(), String> {
+pub fn toggle_window(app: tauri::AppHandle) -> Result<(), AppError> {
     if let Some(window) = app.get_webview_window("main") {
         if window.is_visible().unwrap_or(false) {
-            window.hide().map_err(|e| e.to_string())?;
+            window.hide().map_err(|e| AppError::Window(e.to_string()))?;
         } else {
-            // Capture the foreground window BEFORE we steal focus.
             crate::capture_previous_foreground();
-            window.show().map_err(|e| e.to_string())?;
-            window.set_focus().map_err(|e| e.to_string())?;
+            window.show().map_err(|e| AppError::Window(e.to_string()))?;
+            window
+                .set_focus()
+                .map_err(|e| AppError::Window(e.to_string()))?;
         }
     }
     Ok(())
 }
 
 #[tauri::command]
-pub fn show_window(app: tauri::AppHandle) -> Result<(), String> {
+pub fn show_window(app: tauri::AppHandle) -> Result<(), AppError> {
     if let Some(window) = app.get_webview_window("main") {
         crate::capture_previous_foreground();
-        window.show().map_err(|e| e.to_string())?;
-        window.set_focus().map_err(|e| e.to_string())?;
+        window.show().map_err(|e| AppError::Window(e.to_string()))?;
+        window
+            .set_focus()
+            .map_err(|e| AppError::Window(e.to_string()))?;
     }
     Ok(())
 }
 
 #[tauri::command]
-pub fn hide_window(app: tauri::AppHandle) -> Result<(), String> {
+pub fn hide_window(app: tauri::AppHandle) -> Result<(), AppError> {
     if let Some(window) = app.get_webview_window("main") {
-        window.hide().map_err(|e| e.to_string())?;
+        window.hide().map_err(|e| AppError::Window(e.to_string()))?;
     }
     Ok(())
 }
@@ -265,20 +263,20 @@ pub fn set_auto_start(
     app: tauri::AppHandle,
     db: State<'_, database::Database>,
     enabled: bool,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let manager = app.autolaunch();
 
     if enabled {
         manager.enable().map_err(|e| {
             tracing::error!("Failed to enable autostart: {}", e);
-            format!("Failed to enable autostart: {}", e)
+            AppError::System(format!("Failed to enable autostart: {}", e))
         })?;
         database::config::set(&db, "auto_start", "true")?;
         tracing::info!("Auto start enabled");
     } else {
         manager.disable().map_err(|e| {
             tracing::warn!("Failed to disable autostart: {}", e);
-            format!("Failed to disable autostart: {}", e)
+            AppError::System(format!("Failed to disable autostart: {}", e))
         })?;
         database::config::set(&db, "auto_start", "false")?;
         tracing::info!("Auto start disabled");
@@ -292,20 +290,37 @@ pub fn set_auto_start(
 }
 
 #[tauri::command]
-pub fn is_auto_start_enabled(app: tauri::AppHandle) -> Result<bool, String> {
+pub fn is_auto_start_enabled(app: tauri::AppHandle) -> Result<bool, AppError> {
     let manager = app.autolaunch();
     manager.is_enabled().map_err(|e| {
         tracing::warn!("Failed to query autostart state: {}", e);
-        e.to_string()
+        AppError::System(e.to_string())
     })
 }
 
 #[tauri::command]
-pub fn get_system_info() -> Result<SystemInfo, String> {
+pub fn get_system_info() -> Result<SystemInfo, AppError> {
     Ok(SystemInfo {
         platform: platform_name().to_string(),
         version: env!("CARGO_PKG_VERSION").to_string(),
         app_version: env!("CARGO_PKG_VERSION").to_string(),
+    })
+}
+
+#[tauri::command]
+pub fn get_diagnostics_info(app: tauri::AppHandle) -> Result<DiagnosticsInfo, AppError> {
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| AppError::System(format!("Failed to resolve app data dir: {}", e)))?;
+    let paths = build_diagnostics_paths(&data_dir);
+
+    Ok(DiagnosticsInfo {
+        platform: platform_name().to_string(),
+        app_version: env!("CARGO_PKG_VERSION").to_string(),
+        data_dir: paths.data_dir.to_string_lossy().to_string(),
+        db_path: paths.db_path.to_string_lossy().to_string(),
+        log_dir: paths.log_dir.to_string_lossy().to_string(),
     })
 }
 
@@ -333,23 +348,6 @@ fn build_diagnostics_paths(data_dir: &std::path::Path) -> DiagnosticsPaths {
         db_path: data_dir.join("klip.db"),
         log_dir: data_dir.join("logs"),
     }
-}
-
-#[tauri::command]
-pub fn get_diagnostics_info(app: tauri::AppHandle) -> Result<DiagnosticsInfo, String> {
-    let data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to resolve app data dir: {}", e))?;
-    let paths = build_diagnostics_paths(&data_dir);
-
-    Ok(DiagnosticsInfo {
-        platform: platform_name().to_string(),
-        app_version: env!("CARGO_PKG_VERSION").to_string(),
-        data_dir: paths.data_dir.to_string_lossy().to_string(),
-        db_path: paths.db_path.to_string_lossy().to_string(),
-        log_dir: paths.log_dir.to_string_lossy().to_string(),
-    })
 }
 
 #[cfg(test)]

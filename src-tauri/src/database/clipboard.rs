@@ -3,7 +3,7 @@ use rusqlite::OptionalExtension;
 use base64::Engine;
 
 use crate::database::types::ContentType;
-use crate::Database;
+use crate::{AppError, Database};
 
 use super::types::ClipboardItem;
 
@@ -194,25 +194,19 @@ mod tests {
     }
 }
 
-pub fn get_list(db: &Database, limit: i64, offset: i64) -> Result<Vec<ClipboardItem>, String> {
+pub fn get_list(db: &Database, limit: i64, offset: i64) -> Result<Vec<ClipboardItem>, AppError> {
     let conn = db.get_connection()?;
 
-    // Sort by last_used_at first so re-pasted items float back to the top,
-    // then by created_at as a tie-breaker for never-pasted entries.
-    let mut stmt = conn
-        .prepare(
-            "SELECT id, content_type, content, preview, hash, size, metadata, is_favorited, created_at, last_used_at
-             FROM clipboard_items
-             ORDER BY last_used_at DESC, created_at DESC
-             LIMIT ?1 OFFSET ?2",
-        )
-        .map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare(
+        "SELECT id, content_type, content, preview, hash, size, metadata, is_favorited, created_at, last_used_at
+         FROM clipboard_items
+         ORDER BY last_used_at DESC, created_at DESC
+         LIMIT ?1 OFFSET ?2",
+    )?;
 
     let items = stmt
-        .query_map([limit, offset], |row| Ok(row_to_clipboard_item(row)))
-        .map_err(|e| e.to_string())?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())?;
+        .query_map([limit, offset], |row| Ok(row_to_clipboard_item(row)))?
+        .collect::<Result<Vec<_>, _>>()?;
 
     Ok(items)
 }
@@ -222,7 +216,7 @@ pub fn search(
     query: &str,
     content_type: Option<&str>,
     limit: i64,
-) -> Result<Vec<ClipboardItem>, String> {
+) -> Result<Vec<ClipboardItem>, AppError> {
     let start = std::time::Instant::now();
 
     let conn = db.get_connection()?;
@@ -244,7 +238,7 @@ pub fn search(
              LIMIT ?2",
     };
 
-    let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare(sql)?;
 
     let search_pattern = format!("%{}%", query);
     let limit_str = limit.to_string();
@@ -253,17 +247,13 @@ pub fn search(
         Some(ct) => stmt
             .query_map(rusqlite::params![&search_pattern, &limit_str, ct], |row| {
                 Ok(row_to_clipboard_item(row))
-            })
-            .map_err(|e| e.to_string())?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| e.to_string())?,
+            })?
+            .collect::<Result<Vec<_>, _>>()?,
         None => stmt
             .query_map([&search_pattern, &limit_str], |row| {
                 Ok(row_to_clipboard_item(row))
-            })
-            .map_err(|e| e.to_string())?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| e.to_string())?,
+            })?
+            .collect::<Result<Vec<_>, _>>()?,
     };
 
     let elapsed = start.elapsed();
@@ -279,21 +269,18 @@ pub fn search(
     Ok(items)
 }
 
-pub fn get_by_id(db: &Database, id: i64) -> Result<Option<ClipboardItem>, String> {
+pub fn get_by_id(db: &Database, id: i64) -> Result<Option<ClipboardItem>, AppError> {
     let conn = db.get_connection()?;
 
-    let mut stmt = conn
-        .prepare(
-            "SELECT id, content_type, content, preview, hash, size, metadata, is_favorited, created_at, last_used_at
-             FROM clipboard_items
-             WHERE id = ?1",
-        )
-        .map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare(
+        "SELECT id, content_type, content, preview, hash, size, metadata, is_favorited, created_at, last_used_at
+         FROM clipboard_items
+         WHERE id = ?1",
+    )?;
 
     let result = stmt
         .query_row([id], |row| Ok(row_to_clipboard_item(row)))
-        .optional()
-        .map_err(|e| e.to_string())?;
+        .optional()?;
 
     Ok(result)
 }
@@ -301,7 +288,7 @@ pub fn get_by_id(db: &Database, id: i64) -> Result<Option<ClipboardItem>, String
 pub fn insert(
     db: &Database,
     item: &crate::database::types::NewClipboardItem,
-) -> Result<ClipboardItem, String> {
+) -> Result<ClipboardItem, AppError> {
     let conn = db.get_connection()?;
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -331,38 +318,32 @@ pub fn insert(
             now,
             now,
         ],
-    ).map_err(|e| e.to_string())?;
+    )?;
 
-    let mut stmt = conn
-        .prepare(
-            "SELECT id, content_type, content, preview, hash, size, metadata, is_favorited, created_at, last_used_at
-             FROM clipboard_items
-             WHERE hash = ?1",
-        )
-        .map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare(
+        "SELECT id, content_type, content, preview, hash, size, metadata, is_favorited, created_at, last_used_at
+         FROM clipboard_items
+         WHERE hash = ?1",
+    )?;
 
-    let result = stmt
-        .query_row([&item.hash], |row| Ok(row_to_clipboard_item(row)))
-        .map_err(|e| e.to_string())?;
+    let result = stmt.query_row([&item.hash], |row| Ok(row_to_clipboard_item(row)))?;
 
     Ok(result)
 }
 
-pub fn delete(db: &Database, id: i64) -> Result<(), String> {
+pub fn delete(db: &Database, id: i64) -> Result<(), AppError> {
     let conn = db.get_connection()?;
-    conn.execute("DELETE FROM clipboard_items WHERE id = ?1", [id])
-        .map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM clipboard_items WHERE id = ?1", [id])?;
     Ok(())
 }
 
-pub fn clear(db: &Database) -> Result<(), String> {
+pub fn clear(db: &Database) -> Result<(), AppError> {
     let conn = db.get_connection()?;
-    conn.execute("DELETE FROM clipboard_items", [])
-        .map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM clipboard_items", [])?;
     Ok(())
 }
 
-pub fn cleanup_old_records(db: &Database, max_count: i64) -> Result<(), String> {
+pub fn cleanup_old_records(db: &Database, max_count: i64) -> Result<(), AppError> {
     let conn = db.get_connection()?;
     conn.execute(
         "DELETE FROM clipboard_items
@@ -374,15 +355,11 @@ pub fn cleanup_old_records(db: &Database, max_count: i64) -> Result<(), String> 
                LIMIT ?1
            )",
         [max_count],
-    )
-    .map_err(|e| e.to_string())?;
+    )?;
     Ok(())
 }
 
-/// Mark an item as just-used by bumping `last_used_at` to now.
-/// Called after a successful paste so the item floats to the top of the
-/// list view on the next render.
-pub fn touch_last_used(db: &Database, id: i64) -> Result<(), String> {
+pub fn touch_last_used(db: &Database, id: i64) -> Result<(), AppError> {
     let conn = db.get_connection()?;
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -392,29 +369,23 @@ pub fn touch_last_used(db: &Database, id: i64) -> Result<(), String> {
     conn.execute(
         "UPDATE clipboard_items SET last_used_at = ?1 WHERE id = ?2",
         rusqlite::params![now, id],
-    )
-    .map_err(|e| e.to_string())?;
+    )?;
     Ok(())
 }
 
-/// Toggle the `is_favorited` flag on a clipboard item and return the updated item.
-pub fn toggle_favorite(db: &Database, id: i64) -> Result<ClipboardItem, String> {
+pub fn toggle_favorite(db: &Database, id: i64) -> Result<ClipboardItem, AppError> {
     let conn = db.get_connection()?;
     conn.execute(
         "UPDATE clipboard_items SET is_favorited = CASE WHEN is_favorited = 0 THEN 1 ELSE 0 END WHERE id = ?1",
         [id],
-    )
-    .map_err(|e| e.to_string())?;
+    )?;
 
-    let mut stmt = conn
-        .prepare(
-            "SELECT id, content_type, content, preview, hash, size, metadata, is_favorited, created_at, last_used_at
-             FROM clipboard_items WHERE id = ?1",
-        )
-        .map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare(
+        "SELECT id, content_type, content, preview, hash, size, metadata, is_favorited, created_at, last_used_at
+         FROM clipboard_items WHERE id = ?1",
+    )?;
 
-    stmt.query_row([id], |row| Ok(row_to_clipboard_item(row)))
-        .map_err(|e| e.to_string())
+    Ok(stmt.query_row([id], |row| Ok(row_to_clipboard_item(row)))?)
 }
 
 fn row_to_clipboard_item(row: &rusqlite::Row<'_>) -> ClipboardItem {

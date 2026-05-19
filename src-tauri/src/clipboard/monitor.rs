@@ -534,8 +534,8 @@ pub fn copy_to_clipboard(
     content: &str,
     content_type: &crate::database::types::ContentType,
     metadata: Option<&str>,
-) -> Result<(), String> {
-    match content_type {
+) -> Result<(), crate::AppError> {
+    let result = match content_type {
         crate::database::types::ContentType::Text => raw_set_text_with_marker(content),
         crate::database::types::ContentType::Image => {
             let png_data = if let Some(stripped) = content.strip_prefix("data:image/png;base64,") {
@@ -553,12 +553,13 @@ pub fn copy_to_clipboard(
             let path_refs: Vec<&str> = paths.iter().map(|s| s.as_str()).collect();
             raw_set_file_list_with_marker(&path_refs)
         }
-    }
+    };
+    result.map_err(crate::AppError::Clipboard)
 }
 
-pub fn start_monitor(app_handle: AppHandle) -> Result<(), String> {
+pub fn start_monitor(app_handle: AppHandle) -> Result<(), crate::AppError> {
     let monitor = ClipboardMonitor::new(app_handle);
-    monitor.start()
+    monitor.start().map_err(crate::AppError::Clipboard)
 }
 
 #[cfg(all(test, target_os = "windows"))]

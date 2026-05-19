@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { configApi, systemApi } from '@/lib/tauri';
 import type { AppConfig, DiagnosticsInfo, SystemInfo } from '@/types';
+import { getErrorMessage } from '@/types';
 
 function parseBoolean(value: string | null, defaultValue: boolean): boolean {
   if (value === null) return defaultValue;
@@ -74,7 +75,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
       };
       set({ config, loading: false, hasChanges: false });
     } catch (error) {
-      set({ error: error instanceof Error ? error.message : String(error), loading: false });
+      set({ error: getErrorMessage(error), loading: false });
     }
   },
 
@@ -83,7 +84,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
       const systemInfo = await systemApi.getInfo();
       set({ systemInfo });
     } catch (error) {
-      console.error('Failed to fetch system info:', error);
+      set({ error: getErrorMessage(error) });
     }
   },
 
@@ -92,7 +93,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
       const diagnosticsInfo = await systemApi.getDiagnostics();
       set({ diagnosticsInfo });
     } catch (error) {
-      console.error('Failed to fetch diagnostics info:', error);
+      set({ error: getErrorMessage(error) });
     }
   },
 
@@ -124,7 +125,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
         config: { ...state.config, auto_start: value },
       }));
     } catch (error) {
-      set({ error: error instanceof Error ? error.message : String(error) });
+      set({ error: getErrorMessage(error) });
     }
   },
 
@@ -177,7 +178,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
       await configApi.set('search_debounce_ms', config.search_debounce_ms.toString());
       set({ loading: false, hasChanges: false });
     } catch (error) {
-      set({ error: error instanceof Error ? error.message : String(error), loading: false });
+      set({ error: getErrorMessage(error), loading: false });
     }
   },
 
