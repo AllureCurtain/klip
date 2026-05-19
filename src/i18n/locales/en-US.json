@@ -1,0 +1,112 @@
+{
+  "common": {
+    "loading": "Loading...",
+    "error": "Error",
+    "cancel": "Cancel",
+    "save": "Save",
+    "back": "Back"
+  },
+  "app": {
+    "loading": "Loading...",
+    "errorLabel": "Error"
+  },
+  "header": {
+    "searchPlaceholder": "Search clipboard history...",
+    "toggleTheme": "Toggle theme",
+    "showFavorites": "Show favorites only",
+    "clearHistory": "Clear history",
+    "settings": "Settings",
+    "filter": {
+      "all": "All",
+      "text": "Text",
+      "image": "Image",
+      "file": "File"
+    },
+    "clearDialog": {
+      "title": "Clear clipboard history",
+      "description": "Are you sure you want to clear all clipboard history? This action cannot be undone.",
+      "cancel": "Cancel",
+      "clearing": "Clearing...",
+      "confirm": "Confirm"
+    }
+  },
+  "clipboard": {
+    "copied": "Copied",
+    "favorite": "Favorite",
+    "unfavorite": "Unfavorite",
+    "delete": "Delete",
+    "confirmDelete": "Click again to confirm",
+    "file": "File",
+    "folder": "Folder",
+    "fileCount_one": "{{count}} file",
+    "fileCount_other": "{{count}} files",
+    "folderCount_one": "{{count}} folder",
+    "folderCount_other": "{{count}} folders",
+    "moreItems": " and {{count}} more",
+    "summarySeparator": ", ",
+    "sampleSeparator": ", "
+  },
+  "emptyState": {
+    "noFavorites": "No favorites yet",
+    "noFavoritesHint": "Click the star on an item to add it to favorites",
+    "noHistory": "No clipboard history",
+    "noHistoryHint": "Copied content will appear here automatically",
+    "hotkeyHint": "Press <1>{{hotkey}}</1> to show/hide the window"
+  },
+  "list": {
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "daysAgo_one": "{{count}} day ago",
+    "daysAgo_other": "{{count}} days ago"
+  },
+  "imagePreview": {
+    "title": "Image preview",
+    "download": "Download image"
+  },
+  "settings": {
+    "title": "Settings",
+    "back": "Back",
+    "tabs": {
+      "general": "General",
+      "shortcuts": "Shortcuts",
+      "behavior": "Behavior",
+      "about": "About"
+    },
+    "general": {
+      "historyCount": "History size",
+      "maxItems": "Max items",
+      "windowSize": "Window size",
+      "searchDebounce": "Search debounce",
+      "milliseconds": "ms",
+      "language": "Language",
+      "languageHint": "Display language for the UI"
+    },
+    "shortcuts": {
+      "toggleWindow": "Toggle window",
+      "toggleWindowHint": "Supports Ctrl+Alt+A through Ctrl+Alt+Z",
+      "quickPastePrefix": "Quick paste prefix",
+      "quickPasteHint": "Prefix + number key to quick-paste"
+    },
+    "behavior": {
+      "autoStart": "Launch at startup",
+      "autoStartDesc": "Run automatically when the system starts",
+      "closeToTray": "Close to tray",
+      "closeToTrayDesc": "Hide instead of quitting on close"
+    },
+    "about": {
+      "tagline": "Cross-platform clipboard manager",
+      "version": "Version",
+      "platform": "Platform",
+      "system": "System",
+      "dataDir": "Data directory",
+      "database": "Database",
+      "logDir": "Log directory"
+    },
+    "save": "Save",
+    "cancel": "Cancel"
+  },
+  "language": {
+    "zh-CN": "简体中文",
+    "en-US": "English"
+  }
+}

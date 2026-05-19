@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -16,6 +17,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { SUPPORTED_LANGUAGES } from '@/i18n';
 
 export type SettingsTab = 'general' | 'shortcuts' | 'behavior' | 'about';
 
@@ -23,14 +25,8 @@ interface SettingsViewProps {
   onBack: () => void;
 }
 
-const TAB_ITEMS: { value: SettingsTab; label: string; icon: React.ReactNode }[] = [
-  { value: 'general', label: '通用', icon: <Sliders className="h-3.5 w-3.5" /> },
-  { value: 'shortcuts', label: '快捷键', icon: <Keyboard className="h-3.5 w-3.5" /> },
-  { value: 'behavior', label: '行为', icon: <Monitor className="h-3.5 w-3.5" /> },
-  { value: 'about', label: '关于', icon: <Info className="h-3.5 w-3.5" /> },
-];
-
 export function SettingsView({ onBack }: SettingsViewProps) {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
   const {
     config,
@@ -50,9 +46,17 @@ export function SettingsView({ onBack }: SettingsViewProps) {
     setWindowWidth,
     setWindowHeight,
     setSearchDebounceMs,
+    setLanguage,
     saveChanges,
     resetChanges,
   } = useConfigStore();
+
+  const tabItems: { value: SettingsTab; label: string; icon: React.ReactNode }[] = [
+    { value: 'general', label: t('settings.tabs.general'), icon: <Sliders className="h-3.5 w-3.5" /> },
+    { value: 'shortcuts', label: t('settings.tabs.shortcuts'), icon: <Keyboard className="h-3.5 w-3.5" /> },
+    { value: 'behavior', label: t('settings.tabs.behavior'), icon: <Monitor className="h-3.5 w-3.5" /> },
+    { value: 'about', label: t('settings.tabs.about'), icon: <Info className="h-3.5 w-3.5" /> },
+  ];
 
   useEffect(() => {
     fetchConfig();
@@ -82,19 +86,19 @@ export function SettingsView({ onBack }: SettingsViewProps) {
           size="icon"
           className="size-7 shrink-0"
           onClick={handleCancel}
-          title="返回"
+          title={t('settings.back')}
         >
           <ArrowLeft className="h-3.5 w-3.5" />
         </Button>
         <div className="flex items-center gap-1.5" data-tauri-drag-region>
           <Settings className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className="text-xs font-medium">设置</span>
+          <span className="text-xs font-medium">{t('settings.title')}</span>
         </div>
       </div>
 
       {/* Tab row */}
       <div className="flex items-center gap-0.5 px-2 pb-1.5 border-b border-border">
-        {TAB_ITEMS.map((tab) => (
+        {tabItems.map((tab) => (
           <button
             key={tab.value}
             className={cn(
@@ -116,7 +120,7 @@ export function SettingsView({ onBack }: SettingsViewProps) {
         {activeTab === 'general' && (
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="max-history" className="text-xs">历史记录数量</Label>
+              <Label htmlFor="max-history" className="text-xs">{t('settings.general.historyCount')}</Label>
               <div className="flex items-center gap-3">
                 <Input
                   id="max-history"
@@ -128,7 +132,7 @@ export function SettingsView({ onBack }: SettingsViewProps) {
                   className="h-7 w-20 text-xs"
                 />
                 <span className="text-[10px] text-muted-foreground">
-                  最大条目数
+                  {t('settings.general.maxItems')}
                 </span>
               </div>
             </div>
@@ -136,7 +140,7 @@ export function SettingsView({ onBack }: SettingsViewProps) {
             <Separator />
 
             <div className="space-y-2">
-              <Label className="text-xs">窗口尺寸</Label>
+              <Label className="text-xs">{t('settings.general.windowSize')}</Label>
               <div className="flex items-center gap-2">
                 <Input
                   type="number"
@@ -162,7 +166,7 @@ export function SettingsView({ onBack }: SettingsViewProps) {
             <Separator />
 
             <div className="space-y-2">
-              <Label htmlFor="debounce" className="text-xs">搜索防抖</Label>
+              <Label htmlFor="debounce" className="text-xs">{t('settings.general.searchDebounce')}</Label>
               <div className="flex items-center gap-3">
                 <Input
                   id="debounce"
@@ -174,8 +178,31 @@ export function SettingsView({ onBack }: SettingsViewProps) {
                   onChange={(e) => setSearchDebounceMs(parseInt(e.target.value, 10) || 150)}
                   className="h-7 w-20 text-xs"
                 />
-                <span className="text-[10px] text-muted-foreground">毫秒</span>
+                <span className="text-[10px] text-muted-foreground">{t('settings.general.milliseconds')}</span>
               </div>
+            </div>
+
+            <Separator />
+
+            <div className="space-y-2">
+              <Label className="text-xs">{t('settings.general.language')}</Label>
+              <div className="flex items-center gap-2">
+                {SUPPORTED_LANGUAGES.map((lang) => (
+                  <button
+                    key={lang}
+                    className={cn(
+                      'h-7 px-3 rounded-md text-xs font-medium transition-colors',
+                      config.language === lang
+                        ? 'bg-accent text-accent-foreground'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+                    )}
+                    onClick={() => setLanguage(lang)}
+                  >
+                    {t(`language.${lang}`)}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[10px] text-muted-foreground">{t('settings.general.languageHint')}</p>
             </div>
           </div>
         )}
@@ -183,7 +210,7 @@ export function SettingsView({ onBack }: SettingsViewProps) {
         {activeTab === 'shortcuts' && (
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="hotkey-toggle-window" className="text-xs">切换窗口</Label>
+              <Label htmlFor="hotkey-toggle-window" className="text-xs">{t('settings.shortcuts.toggleWindow')}</Label>
               <Input
                 id="hotkey-toggle-window"
                 value={config.hotkey_toggle_window}
@@ -192,14 +219,14 @@ export function SettingsView({ onBack }: SettingsViewProps) {
                 className="h-7 font-mono text-xs"
               />
               <p className="text-[10px] text-muted-foreground">
-                支持 Ctrl+Alt+A 到 Ctrl+Alt+Z
+                {t('settings.shortcuts.toggleWindowHint')}
               </p>
             </div>
 
             <Separator />
 
             <div className="space-y-2">
-              <Label htmlFor="hotkey-quick-paste-prefix" className="text-xs">快速粘贴前缀</Label>
+              <Label htmlFor="hotkey-quick-paste-prefix" className="text-xs">{t('settings.shortcuts.quickPastePrefix')}</Label>
               <Input
                 id="hotkey-quick-paste-prefix"
                 value={config.hotkey_quick_paste_prefix}
@@ -208,7 +235,7 @@ export function SettingsView({ onBack }: SettingsViewProps) {
                 className="h-7 font-mono text-xs"
               />
               <p className="text-[10px] text-muted-foreground">
-                前缀 + 数字键快速粘贴
+                {t('settings.shortcuts.quickPasteHint')}
               </p>
               <div className="flex flex-wrap gap-1 mt-1.5">
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
@@ -225,9 +252,9 @@ export function SettingsView({ onBack }: SettingsViewProps) {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
-                <Label className="text-xs">开机自启动</Label>
+                <Label className="text-xs">{t('settings.behavior.autoStart')}</Label>
                 <p className="text-[10px] text-muted-foreground">
-                  系统启动时自动运行
+                  {t('settings.behavior.autoStartDesc')}
                 </p>
               </div>
               <Switch
@@ -240,9 +267,9 @@ export function SettingsView({ onBack }: SettingsViewProps) {
 
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
-                <Label className="text-xs">关闭到托盘</Label>
+                <Label className="text-xs">{t('settings.behavior.closeToTray')}</Label>
                 <p className="text-[10px] text-muted-foreground">
-                  关闭时隐藏而非退出
+                  {t('settings.behavior.closeToTrayDesc')}
                 </p>
               </div>
               <Switch
@@ -262,7 +289,7 @@ export function SettingsView({ onBack }: SettingsViewProps) {
               <div>
                 <h3 className="text-sm font-semibold">Klip</h3>
                 <p className="text-[10px] text-muted-foreground">
-                  跨平台剪贴板管理器
+                  {t('settings.about.tagline')}
                 </p>
               </div>
             </div>
@@ -270,17 +297,17 @@ export function SettingsView({ onBack }: SettingsViewProps) {
             {systemInfo && (
               <div className="space-y-1.5 text-xs">
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">版本</span>
+                  <span className="text-muted-foreground">{t('settings.about.version')}</span>
                   <span className="font-mono">{systemInfo.app_version}</span>
                 </div>
                 <Separator />
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">平台</span>
+                  <span className="text-muted-foreground">{t('settings.about.platform')}</span>
                   <span className="capitalize">{systemInfo.platform}</span>
                 </div>
                 <Separator />
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">系统</span>
+                  <span className="text-muted-foreground">{t('settings.about.system')}</span>
                   <span className="font-mono text-[10px]">{systemInfo.version}</span>
                 </div>
               </div>
@@ -289,21 +316,21 @@ export function SettingsView({ onBack }: SettingsViewProps) {
             {diagnosticsInfo && (
               <div className="space-y-1.5 rounded-md border bg-muted/30 p-2.5 text-[10px]">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-muted-foreground">数据目录</span>
+                  <span className="text-muted-foreground">{t('settings.about.dataDir')}</span>
                   <span className="truncate font-mono" title={diagnosticsInfo.data_dir}>
                     {diagnosticsInfo.data_dir}
                   </span>
                 </div>
                 <Separator />
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-muted-foreground">数据库</span>
+                  <span className="text-muted-foreground">{t('settings.about.database')}</span>
                   <span className="truncate font-mono" title={diagnosticsInfo.db_path}>
                     {diagnosticsInfo.db_path}
                   </span>
                 </div>
                 <Separator />
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-muted-foreground">日志目录</span>
+                  <span className="text-muted-foreground">{t('settings.about.logDir')}</span>
                   <span className="truncate font-mono" title={diagnosticsInfo.log_dir}>
                     {diagnosticsInfo.log_dir}
                   </span>
@@ -328,7 +355,7 @@ export function SettingsView({ onBack }: SettingsViewProps) {
           disabled={loading}
           className="h-7 text-xs"
         >
-          取消
+          {t('settings.cancel')}
         </Button>
         <Button
           size="sm"
@@ -337,7 +364,7 @@ export function SettingsView({ onBack }: SettingsViewProps) {
           className="h-7 text-xs"
         >
           {loading && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
-          保存
+          {t('settings.save')}
         </Button>
       </div>
     </div>

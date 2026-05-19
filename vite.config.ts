@@ -10,6 +10,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   test: {
     exclude: ['**/node_modules/**', '**/dist/**', '**/.claude/**'],
+    setupFiles: ['./src/test/setup.ts'],
   },
   clearScreen: false,
   server: {

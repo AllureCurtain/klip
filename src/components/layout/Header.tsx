@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Search,
   Settings,
@@ -33,17 +34,6 @@ interface HeaderProps {
   onSettingsOpen: () => void;
 }
 
-const CONTENT_FILTERS: {
-  value: string | null;
-  label: string;
-  icon: React.ReactNode;
-}[] = [
-  { value: null, label: '全部', icon: null },
-  { value: 'text', label: '文本', icon: <FileText className="h-3 w-3" /> },
-  { value: 'image', label: '图片', icon: <Image className="h-3 w-3" /> },
-  { value: 'file', label: '文件', icon: <FolderOpen className="h-3 w-3" /> },
-];
-
 export function Header({
   searchQuery,
   onSearchChange,
@@ -53,10 +43,22 @@ export function Header({
   onShowFavoritesChange,
   onSettingsOpen,
 }: HeaderProps) {
+  const { t } = useTranslation();
   const { resolvedTheme, setTheme } = useThemeStore();
   const { clearItems } = useClipboardStore();
   const [clearDialogOpen, setClearDialogOpen] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
+
+  const contentFilters: {
+    value: string | null;
+    label: string;
+    icon: React.ReactNode;
+  }[] = [
+    { value: null, label: t('header.filter.all'), icon: null },
+    { value: 'text', label: t('header.filter.text'), icon: <FileText className="h-3 w-3" /> },
+    { value: 'image', label: t('header.filter.image'), icon: <Image className="h-3 w-3" /> },
+    { value: 'file', label: t('header.filter.file'), icon: <FolderOpen className="h-3 w-3" /> },
+  ];
 
   useEffect(() => {
     const unlistenSettings = onOpenSettings(() => onSettingsOpen());
@@ -93,7 +95,7 @@ export function Header({
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
             <Input
               type="text"
-              placeholder="搜索剪贴板历史..."
+              placeholder={t('header.searchPlaceholder')}
               autoFocus
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
@@ -105,7 +107,7 @@ export function Header({
             size="icon"
             className="size-7 shrink-0"
             onClick={toggleTheme}
-            title="切换主题"
+            title={t('header.toggleTheme')}
           >
             {resolvedTheme === 'dark' ? (
               <Sun className="h-3.5 w-3.5" />
@@ -118,7 +120,7 @@ export function Header({
             size="icon"
             className={cn('size-7 shrink-0')}
             onClick={() => onShowFavoritesChange(!showFavorites)}
-            title="仅显示收藏"
+            title={t('header.showFavorites')}
           >
             <Star
               className={cn(
@@ -132,7 +134,7 @@ export function Header({
             size="icon"
             className="size-7 shrink-0"
             onClick={() => setClearDialogOpen(true)}
-            title="清空历史"
+            title={t('header.clearHistory')}
           >
             <Trash2 className="h-3.5 w-3.5" />
           </Button>
@@ -141,14 +143,14 @@ export function Header({
             size="icon"
             className="size-7 shrink-0"
             onClick={onSettingsOpen}
-            title="设置"
+            title={t('header.settings')}
           >
             <Settings className="h-3.5 w-3.5" />
           </Button>
         </div>
 
         <div className="flex items-center gap-0.5 px-2 pb-1.5">
-          {CONTENT_FILTERS.map((filter) => (
+          {contentFilters.map((filter) => (
             <button
               key={filter.value ?? 'all'}
               className={cn(
@@ -169,9 +171,9 @@ export function Header({
       <Dialog open={clearDialogOpen} onOpenChange={setClearDialogOpen}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>清空剪贴板历史</DialogTitle>
+            <DialogTitle>{t('header.clearDialog.title')}</DialogTitle>
             <DialogDescription>
-              确定要清空所有剪贴板历史记录吗？此操作无法撤销。
+              {t('header.clearDialog.description')}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -180,14 +182,14 @@ export function Header({
               onClick={() => setClearDialogOpen(false)}
               disabled={isClearing}
             >
-              取消
+              {t('header.clearDialog.cancel')}
             </Button>
             <Button
               variant="destructive"
               onClick={handleClearHistory}
               disabled={isClearing}
             >
-              {isClearing ? '清空中...' : '确认清空'}
+              {isClearing ? t('header.clearDialog.clearing') : t('header.clearDialog.confirm')}
             </Button>
           </DialogFooter>
         </DialogContent>

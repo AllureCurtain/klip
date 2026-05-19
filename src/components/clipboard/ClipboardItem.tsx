@@ -1,4 +1,5 @@
 import { FileText, Image, File, Folder, Files, Trash2, Star, Check } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui';
 import { useClipboardStore } from '@/stores';
 import { formatTime, formatSize, truncate, cn } from '@/lib/utils';
@@ -50,7 +51,7 @@ type FileShape =
 function classifyFile(item: ClipboardItemType): FileShape {
   const meta = parseFileMetadata(item);
   if (!meta) {
-    return { kind: 'unknown', preview: item.preview ?? '文件' };
+    return { kind: 'unknown', preview: item.preview ?? '' };
   }
 
   const fileCount = meta.file_count ?? 0;
@@ -75,6 +76,7 @@ function classifyFile(item: ClipboardItemType): FileShape {
 }
 
 export function ClipboardItem({ item, index, isSelected, onSelect }: ClipboardItemProps) {
+  const { t } = useTranslation();
   const { deleteItem, copyItem, toggleFavorite } = useClipboardStore();
   const [copied, setCopied] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -187,7 +189,7 @@ export function ClipboardItem({ item, index, isSelected, onSelect }: ClipboardIt
         if (!fileShape) {
           return <span className="text-xs text-foreground">{item.preview}</span>;
         }
-        return renderFilePreview(fileShape);
+        return renderFilePreview(fileShape, t);
       }
       default:
         return null;
@@ -222,7 +224,7 @@ export function ClipboardItem({ item, index, isSelected, onSelect }: ClipboardIt
             {copied && (
               <span className="flex items-center gap-0.5 text-[10px] font-medium text-primary">
                 <Check className="h-2.5 w-2.5" />
-                已复制
+                {t('clipboard.copied')}
               </span>
             )}
           </div>
@@ -234,8 +236,8 @@ export function ClipboardItem({ item, index, isSelected, onSelect }: ClipboardIt
           <Button
             variant="ghost"
             size="icon"
-            aria-label={item.is_favorited ? '取消收藏' : '收藏'}
-            title={item.is_favorited ? '取消收藏' : '收藏'}
+            aria-label={item.is_favorited ? t('clipboard.unfavorite') : t('clipboard.favorite')}
+            title={item.is_favorited ? t('clipboard.unfavorite') : t('clipboard.favorite')}
             className={cn(
               'size-6 transition-opacity',
               item.is_favorited
@@ -256,8 +258,8 @@ export function ClipboardItem({ item, index, isSelected, onSelect }: ClipboardIt
           <Button
             variant="ghost"
             size="icon"
-            aria-label="删除"
-            title={confirmDelete ? '再次点击确认删除' : '删除'}
+            aria-label={t('clipboard.delete')}
+            title={confirmDelete ? t('clipboard.confirmDelete') : t('clipboard.delete')}
             className={cn(
               'size-6 transition-opacity',
               confirmDelete
@@ -291,7 +293,10 @@ export function ClipboardItem({ item, index, isSelected, onSelect }: ClipboardIt
   );
 }
 
-function renderFilePreview(shape: FileShape) {
+function renderFilePreview(
+  shape: FileShape,
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
   switch (shape.kind) {
     case 'single-folder':
       return (
@@ -300,7 +305,7 @@ function renderFilePreview(shape: FileShape) {
             {shape.name}
           </span>
           <span className="text-[10px] text-amber-600 dark:text-amber-400 shrink-0">
-            文件夹
+            {t('clipboard.folder')}
           </span>
         </div>
       );
@@ -319,10 +324,14 @@ function renderFilePreview(shape: FileShape) {
       );
     case 'multi': {
       const parts: string[] = [];
-      if (shape.fileCount > 0) parts.push(`${shape.fileCount} 个文件`);
-      if (shape.dirCount > 0) parts.push(`${shape.dirCount} 个文件夹`);
-      const summary = parts.join('，');
-      const sampleLine = shape.sampleNames.join('、');
+      if (shape.fileCount > 0) {
+        parts.push(t('clipboard.fileCount', { count: shape.fileCount }));
+      }
+      if (shape.dirCount > 0) {
+        parts.push(t('clipboard.folderCount', { count: shape.dirCount }));
+      }
+      const summary = parts.join(t('clipboard.summarySeparator'));
+      const sampleLine = shape.sampleNames.join(t('clipboard.sampleSeparator'));
       const moreCount =
         shape.fileCount + shape.dirCount - shape.sampleNames.length;
       return (
@@ -340,7 +349,7 @@ function renderFilePreview(shape: FileShape) {
           {sampleLine && (
             <div className="text-[10px] text-muted-foreground/70 truncate mt-0.5">
               {sampleLine}
-              {moreCount > 0 ? ` 等 ${moreCount} 项` : ''}
+              {moreCount > 0 ? t('clipboard.moreItems', { count: moreCount }) : ''}
             </div>
           )}
         </div>

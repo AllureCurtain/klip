@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { listen } from '@tauri-apps/api/event';
 import { useClipboardStore } from './stores/clipboardStore';
 import { Header } from './components/layout/Header';
@@ -6,6 +7,7 @@ import { ClipboardList } from './components/clipboard/ClipboardList';
 import { EmptyState } from './components/layout/EmptyState';
 import { SettingsView } from './components/settings/SettingsView';
 import { onClipboardCleared, onConfigChanged, configApi } from '@/lib/tauri';
+import { setLanguage, type SupportedLanguage, SUPPORTED_LANGUAGES } from '@/i18n';
 import type { ClipboardItem } from './types';
 
 const DEFAULT_SEARCH_DEBOUNCE_MS = 150;
@@ -13,6 +15,7 @@ const DEFAULT_SEARCH_DEBOUNCE_MS = 150;
 type AppView = 'clipboard' | 'settings';
 
 function App() {
+  const { t } = useTranslation();
   const { items, loading, error, fetchItems, searchItems, addItems, setItems } =
     useClipboardStore();
   const [searchQuery, setSearchQuery] = useState('');
@@ -33,6 +36,12 @@ function App() {
       }
     });
 
+    configApi.get('language').then((value) => {
+      if (value && SUPPORTED_LANGUAGES.includes(value as SupportedLanguage)) {
+        setLanguage(value as SupportedLanguage);
+      }
+    });
+
     const unlistenPromise = listen<ClipboardItem>('clipboard-updated', (event) => {
       addItems([event.payload]);
     });
@@ -42,10 +51,13 @@ function App() {
     });
 
     const unlistenConfigPromise = onConfigChanged((key, value) => {
-      if (key !== 'search_debounce_ms') return;
-      const ms = parseInt(value, 10);
-      if (!isNaN(ms) && ms > 0) {
-        setSearchDebounceMs(ms);
+      if (key === 'search_debounce_ms') {
+        const ms = parseInt(value, 10);
+        if (!isNaN(ms) && ms > 0) {
+          setSearchDebounceMs(ms);
+        }
+      } else if (key === 'language' && SUPPORTED_LANGUAGES.includes(value as SupportedLanguage)) {
+        setLanguage(value as SupportedLanguage);
       }
     });
 
@@ -96,11 +108,11 @@ function App() {
       <main className="flex-1 overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-            加载中...
+            {t('app.loading')}
           </div>
         ) : error ? (
           <div className="flex items-center justify-center h-full text-destructive text-sm">
-            错误: {error}
+            {t('app.errorLabel')}: {error}
           </div>
         ) : filteredItems.length === 0 ? (
           <EmptyState showFavorites={showFavorites} />

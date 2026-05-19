@@ -34,6 +34,7 @@ interface ConfigState {
   setWindowWidth: (value: number) => void;
   setWindowHeight: (value: number) => void;
   setSearchDebounceMs: (value: number) => void;
+  setLanguage: (value: string) => void;
   saveChanges: () => Promise<void>;
   resetChanges: () => Promise<void>;
 }
@@ -48,6 +49,7 @@ const DEFAULT_CONFIG: AppConfig = {
   window_width: 480,
   window_height: 720,
   search_debounce_ms: 150,
+  language: 'zh-CN',
 };
 
 export const useConfigStore = create<ConfigState>((set, get) => ({
@@ -72,6 +74,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
         window_width: parseNumber(allConfig['window_width'], 480),
         window_height: parseNumber(allConfig['window_height'], 720),
         search_debounce_ms: parseNumber(allConfig['search_debounce_ms'], 150),
+        language: allConfig['language'] || 'zh-CN',
       };
       set({ config, loading: false, hasChanges: false });
     } catch (error) {
@@ -164,6 +167,13 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     }));
   },
 
+  setLanguage: (value) => {
+    set((state) => ({
+      config: { ...state.config, language: value },
+      hasChanges: true,
+    }));
+  },
+
   saveChanges: async () => {
     const { config } = get();
     set({ loading: true, error: null });
@@ -176,6 +186,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
       await configApi.set('window_width', config.window_width.toString());
       await configApi.set('window_height', config.window_height.toString());
       await configApi.set('search_debounce_ms', config.search_debounce_ms.toString());
+      await configApi.set('language', config.language);
       set({ loading: false, hasChanges: false });
     } catch (error) {
       set({ error: getErrorMessage(error), loading: false });

@@ -6,6 +6,33 @@ use tauri::{
 
 use crate::AppError;
 
+struct TrayLabels {
+    show: &'static str,
+    autostart: &'static str,
+    settings: &'static str,
+    about: &'static str,
+    quit: &'static str,
+}
+
+fn tray_labels(language: &str) -> TrayLabels {
+    match language {
+        "en-US" => TrayLabels {
+            show: "Show window",
+            autostart: "Launch at startup",
+            settings: "Settings",
+            about: "About",
+            quit: "Quit",
+        },
+        _ => TrayLabels {
+            show: "显示窗口",
+            autostart: "开机自启",
+            settings: "设置",
+            about: "关于",
+            quit: "退出",
+        },
+    }
+}
+
 pub fn setup_tray(app_handle: &AppHandle) -> Result<TrayIcon, AppError> {
     tracing::info!("Setting up tray icon...");
 
@@ -16,26 +43,32 @@ pub fn setup_tray(app_handle: &AppHandle) -> Result<TrayIcon, AppError> {
         .map(|v| v == "true")
         .unwrap_or(false);
 
-    let show_item = MenuItem::with_id(app_handle, "show", "显示窗口", true, None::<&str>)
+    let language = crate::database::config::get(&db, "language")
+        .ok()
+        .flatten()
+        .unwrap_or_else(|| "zh-CN".to_string());
+    let labels = tray_labels(&language);
+
+    let show_item = MenuItem::with_id(app_handle, "show", labels.show, true, None::<&str>)
         .map_err(|e| AppError::System(format!("Failed to create show item: {}", e)))?;
 
     let autostart_item = CheckMenuItem::with_id(
         app_handle,
         "autostart",
-        "开机自启",
+        labels.autostart,
         true,
         auto_start_enabled,
         None::<&str>,
     )
     .map_err(|e| AppError::System(format!("Failed to create autostart item: {}", e)))?;
 
-    let settings_item = MenuItem::with_id(app_handle, "settings", "设置", true, None::<&str>)
+    let settings_item = MenuItem::with_id(app_handle, "settings", labels.settings, true, None::<&str>)
         .map_err(|e| AppError::System(format!("Failed to create settings item: {}", e)))?;
 
-    let about_item = MenuItem::with_id(app_handle, "about", "关于", true, None::<&str>)
+    let about_item = MenuItem::with_id(app_handle, "about", labels.about, true, None::<&str>)
         .map_err(|e| AppError::System(format!("Failed to create about item: {}", e)))?;
 
-    let quit_item = MenuItem::with_id(app_handle, "quit", "退出", true, None::<&str>)
+    let quit_item = MenuItem::with_id(app_handle, "quit", labels.quit, true, None::<&str>)
         .map_err(|e| AppError::System(format!("Failed to create quit item: {}", e)))?;
 
     let menu = Menu::with_items(

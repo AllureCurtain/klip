@@ -42,6 +42,7 @@ export interface AppConfig {
   window_width: number;
   window_height: number;
   search_debounce_ms: number;
+  language: string;
 }
 
 export interface SystemInfo {

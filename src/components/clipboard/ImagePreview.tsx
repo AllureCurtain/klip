@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Dialog,
   DialogContent,
@@ -28,6 +29,7 @@ export function ImagePreview({
   open,
   onOpenChange,
 }: ImagePreviewProps) {
+  const { t } = useTranslation();
   const [isLoading, setIsLoading] = useState(true);
 
   const handleDownload = async () => {
@@ -52,7 +54,7 @@ export function ImagePreview({
       <DialogContent className="max-w-[440px] max-h-[90vh] overflow-hidden p-0">
         <DialogHeader className="flex-shrink-0 px-4 pt-4">
           <div className="flex items-center justify-between">
-            <DialogTitle className="text-sm">图片预览</DialogTitle>
+            <DialogTitle className="text-sm">{t('imagePreview.title')}</DialogTitle>
             <div className="flex items-center gap-2">
               {metadata && (
                 <>
@@ -73,7 +75,7 @@ export function ImagePreview({
                 size="icon"
                 className="size-7"
                 onClick={handleDownload}
-                title="下载图片"
+                title={t('imagePreview.download')}
               >
                 <Download className="h-3.5 w-3.5" />
               </Button>

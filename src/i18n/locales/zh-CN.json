@@ -1,0 +1,109 @@
+{
+  "common": {
+    "loading": "加载中...",
+    "error": "错误",
+    "cancel": "取消",
+    "save": "保存",
+    "back": "返回"
+  },
+  "app": {
+    "loading": "加载中...",
+    "errorLabel": "错误"
+  },
+  "header": {
+    "searchPlaceholder": "搜索剪贴板历史...",
+    "toggleTheme": "切换主题",
+    "showFavorites": "仅显示收藏",
+    "clearHistory": "清空历史",
+    "settings": "设置",
+    "filter": {
+      "all": "全部",
+      "text": "文本",
+      "image": "图片",
+      "file": "文件"
+    },
+    "clearDialog": {
+      "title": "清空剪贴板历史",
+      "description": "确定要清空所有剪贴板历史记录吗？此操作无法撤销。",
+      "cancel": "取消",
+      "clearing": "清空中...",
+      "confirm": "确认清空"
+    }
+  },
+  "clipboard": {
+    "copied": "已复制",
+    "favorite": "收藏",
+    "unfavorite": "取消收藏",
+    "delete": "删除",
+    "confirmDelete": "再次点击确认删除",
+    "file": "文件",
+    "folder": "文件夹",
+    "fileCount": "{{count}} 个文件",
+    "folderCount": "{{count}} 个文件夹",
+    "moreItems": " 等 {{count}} 项",
+    "summarySeparator": "，",
+    "sampleSeparator": "、"
+  },
+  "emptyState": {
+    "noFavorites": "暂无收藏",
+    "noFavoritesHint": "点击条目的星标将其添加到收藏",
+    "noHistory": "暂无剪贴板历史",
+    "noHistoryHint": "复制内容后将自动出现在这里",
+    "hotkeyHint": "按 <1>{{hotkey}}</1> 显示/隐藏窗口"
+  },
+  "list": {
+    "today": "今天",
+    "yesterday": "昨天",
+    "daysAgo": "{{count}} 天前"
+  },
+  "imagePreview": {
+    "title": "图片预览",
+    "download": "下载图片"
+  },
+  "settings": {
+    "title": "设置",
+    "back": "返回",
+    "tabs": {
+      "general": "通用",
+      "shortcuts": "快捷键",
+      "behavior": "行为",
+      "about": "关于"
+    },
+    "general": {
+      "historyCount": "历史记录数量",
+      "maxItems": "最大条目数",
+      "windowSize": "窗口尺寸",
+      "searchDebounce": "搜索防抖",
+      "milliseconds": "毫秒",
+      "language": "语言",
+      "languageHint": "界面显示语言"
+    },
+    "shortcuts": {
+      "toggleWindow": "切换窗口",
+      "toggleWindowHint": "支持 Ctrl+Alt+A 到 Ctrl+Alt+Z",
+      "quickPastePrefix": "快速粘贴前缀",
+      "quickPasteHint": "前缀 + 数字键快速粘贴"
+    },
+    "behavior": {
+      "autoStart": "开机自启动",
+      "autoStartDesc": "系统启动时自动运行",
+      "closeToTray": "关闭到托盘",
+      "closeToTrayDesc": "关闭时隐藏而非退出"
+    },
+    "about": {
+      "tagline": "跨平台剪贴板管理器",
+      "version": "版本",
+      "platform": "平台",
+      "system": "系统",
+      "dataDir": "数据目录",
+      "database": "数据库",
+      "logDir": "日志目录"
+    },
+    "save": "保存",
+    "cancel": "取消"
+  },
+  "language": {
+    "zh-CN": "简体中文",
+    "en-US": "English"
+  }
+}

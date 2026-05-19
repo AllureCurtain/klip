@@ -1,4 +1,5 @@
 import { useVirtualizer } from '@tanstack/react-virtual';
+import { useTranslation } from 'react-i18next';
 import { ClipboardItem } from './ClipboardItem';
 import { useClipboardStore } from '@/stores';
 import type { ClipboardItem as ClipboardItemType } from '@/types';
@@ -23,19 +24,24 @@ interface GroupItem {
 
 type VirtualRow = GroupHeader | GroupItem;
 
-function getTimeGroupLabel(timestamp: number): string {
+function getTimeGroupLabel(
+  timestamp: number,
+  t: (key: string, options?: Record<string, unknown>) => string,
+  locale: string,
+): string {
   const date = new Date(timestamp);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-  if (diffDays === 0) return '今天';
-  if (diffDays === 1) return '昨天';
-  if (diffDays < 7) return `${diffDays} 天前`;
-  return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
+  if (diffDays === 0) return t('list.today');
+  if (diffDays === 1) return t('list.yesterday');
+  if (diffDays < 7) return t('list.daysAgo', { count: diffDays });
+  return date.toLocaleDateString(locale, { month: 'short', day: 'numeric' });
 }
 
 export function ClipboardList({ items }: ClipboardListProps) {
+  const { t, i18n } = useTranslation();
   const { copyItem } = useClipboardStore();
   const [selectedIndex, setSelectedIndex] = useState(0);
   const selectedIndexRef = useRef(0);
@@ -48,7 +54,7 @@ export function ClipboardList({ items }: ClipboardListProps) {
     let itemIndex = 0;
 
     for (const item of items) {
-      const group = getTimeGroupLabel(item.created_at);
+      const group = getTimeGroupLabel(item.created_at, t, i18n.language);
       if (group !== lastGroup) {
         result.push({ type: 'header', id: `header-${group}`, label: group });
         lastGroup = group;

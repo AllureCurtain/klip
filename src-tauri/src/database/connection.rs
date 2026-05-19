@@ -112,6 +112,7 @@ impl Database {
             ("window_width", "480"),
             ("window_height", "720"),
             ("search_debounce_ms", "150"),
+            ("language", "zh-CN"),
             ("db_version", "2"),
         ];
 
