@@ -191,7 +191,10 @@ pub fn set_config(
                 );
             }
 
-            return Err(AppError::Hotkey(format!("Failed to reload hotkeys: {}", err)));
+            return Err(AppError::Hotkey(format!(
+                "Failed to reload hotkeys: {}",
+                err
+            )));
         }
     }
 

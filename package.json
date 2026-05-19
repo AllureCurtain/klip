@@ -12,7 +12,7 @@
     "tauri:build": "tauri build",
     "lint": "eslint .",
     "test": "vitest",
-    "verify": "pnpm lint && pnpm test -- --run && pnpm build",
+    "verify": "pnpm lint && pnpm test -- --run && pnpm build && cd src-tauri && cargo fmt -- --check && cargo clippy -- -D warnings && cargo test",
     "release:verify": "powershell -ExecutionPolicy Bypass -File scripts/verify-release.ps1"
   },
   "dependencies": {

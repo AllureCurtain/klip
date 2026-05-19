@@ -62,8 +62,9 @@ pub fn setup_tray(app_handle: &AppHandle) -> Result<TrayIcon, AppError> {
     )
     .map_err(|e| AppError::System(format!("Failed to create autostart item: {}", e)))?;
 
-    let settings_item = MenuItem::with_id(app_handle, "settings", labels.settings, true, None::<&str>)
-        .map_err(|e| AppError::System(format!("Failed to create settings item: {}", e)))?;
+    let settings_item =
+        MenuItem::with_id(app_handle, "settings", labels.settings, true, None::<&str>)
+            .map_err(|e| AppError::System(format!("Failed to create settings item: {}", e)))?;
 
     let about_item = MenuItem::with_id(app_handle, "about", labels.about, true, None::<&str>)
         .map_err(|e| AppError::System(format!("Failed to create about item: {}", e)))?;
