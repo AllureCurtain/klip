@@ -13,7 +13,8 @@
     "lint": "eslint .",
     "test": "vitest",
     "verify": "pnpm lint && pnpm test -- --run && pnpm build && cd src-tauri && cargo fmt -- --check && cargo clippy -- -D warnings && cargo test",
-    "release:verify": "powershell -ExecutionPolicy Bypass -File scripts/verify-release.ps1"
+    "release:verify": "powershell -ExecutionPolicy Bypass -File scripts/verify-release.ps1",
+    "prepare": "node scripts/install-hooks.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",

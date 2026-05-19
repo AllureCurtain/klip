@@ -1,0 +1,22 @@
+#!/bin/sh
+# Block push if verification (lint + tests + build + cargo fmt/clippy/test) fails.
+# Set KLIP_SKIP_VERIFY=1 to bypass in emergencies.
+
+if [ "$KLIP_SKIP_VERIFY" = "1" ]; then
+    echo "pre-push: KLIP_SKIP_VERIFY=1, skipping verify"
+    exit 0
+fi
+
+echo "pre-push: running pnpm verify..."
+pnpm verify
+status=$?
+
+if [ $status -ne 0 ]; then
+    echo ""
+    echo "pre-push: verify failed (exit $status). Push aborted."
+    echo "  - Fix the failures above, OR"
+    echo "  - Set KLIP_SKIP_VERIFY=1 to bypass (use with caution)."
+    exit 1
+fi
+
+exit 0
