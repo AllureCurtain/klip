@@ -8,6 +8,7 @@ Use this checklist for the Windows-first MVP release candidate.
 - [ ] Versions match in `package.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json`.
 - [ ] `CHANGELOG.md` includes the version being released.
 - [ ] `pnpm release:verify -SkipBundle` succeeds.
+- [ ] `pnpm e2e` succeeds on a Windows desktop session with `tauri-driver` and Edge WebDriver installed.
 
 ## 2. Installer Build
 
@@ -63,3 +64,9 @@ Use this checklist for the Windows-first MVP release candidate.
 - [ ] Release notes mention unsigned installer warnings.
 - [ ] Release notes state this is Windows-first and macOS/Linux are post-MVP.
 - [ ] Release notes state backup/restore, sync, auto-update, and encryption are not included.
+
+## 10. GitHub Release Workflow
+
+- [ ] Pushing a `v*` tag or manually running `Release` starts `.github/workflows/release.yml`.
+- [ ] The workflow creates a draft GitHub Release.
+- [ ] Windows NSIS and MSI artifacts are attached to the draft Release.

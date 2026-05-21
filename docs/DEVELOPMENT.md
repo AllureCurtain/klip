@@ -121,6 +121,8 @@ klip/
 │   └── DEVELOPMENT.md      # 开发指南
 │
 ├── tests/                  # 测试文件
+├── e2e/                    # Tauri WebDriver + Selenium 桌面 E2E 测试
+├── scripts/                # 发布验证、E2E runner、Git hooks
 ├── package.json            # 前端依赖配置
 ├── pnpm-lock.yaml          # 依赖锁定文件
 ├── tsconfig.json           # TypeScript 配置
@@ -192,9 +194,14 @@ pnpm test
 cd src-tauri
 cargo test
 
-# 运行所有测试
-pnpm test:all
+# 运行默认本地验证（不含桌面 E2E）
+pnpm verify
+
+# 桌面 E2E：需要 tauri-driver + Microsoft Edge WebDriver
+pnpm e2e
 ```
+
+`pnpm e2e` 会启动 `tauri-driver`，使用隔离的 `e2e/.tmp/` 应用数据目录，并覆盖文本复制、搜索、点击条目恢复剪贴板的核心流程。该命令依赖真实桌面会话和系统剪贴板，因此不放进默认 `pnpm verify`。
 
 ---
 

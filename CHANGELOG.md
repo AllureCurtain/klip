@@ -9,6 +9,8 @@
 - Global hotkeys for window toggle and quick paste, with runtime reload for supported settings.
 - Tray-first desktop behavior, settings panel, autostart toggle, and About diagnostics.
 - Windows installer bundles via Tauri MSI and NSIS targets.
+- Desktop E2E smoke test for text copy, search, and paste-path clipboard restoration.
+- GitHub Actions Release workflow for tag/manual Windows installer builds.
 
 ### Verification
 
@@ -18,6 +20,7 @@
 - `cargo fmt -- --check`
 - `cargo clippy -- -D warnings`
 - `cargo test`
+- `pnpm e2e`
 - `pnpm tauri:build`
 
 ### Known MVP Caveats

@@ -76,6 +76,20 @@ pnpm release:verify
 
 当前安装包尚未代码签名，Windows 可能显示 SmartScreen 或未知发布者提示。
 
+## 桌面 E2E 测试
+
+E2E 使用 Tauri WebDriver + Selenium，覆盖文本复制、搜索和点击条目恢复剪贴板的核心流程：
+
+```powershell
+pnpm e2e
+```
+
+运行前需要安装 `tauri-driver` 和 Microsoft Edge WebDriver。详情见 [E2E README](e2e/README.md)。
+
+## GitHub Release
+
+`.github/workflows/release.yml` 支持 tag `v*` 触发或手动触发，使用 `tauri-apps/tauri-action` 构建 Windows 安装产物并创建草稿 Release。
+
 ## 贡献
 
 欢迎贡献！请阅读 [贡献指南](CONTRIBUTING.md)。

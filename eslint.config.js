@@ -9,7 +9,6 @@ export default tseslint.config(
       'node_modules/**',
       'src-tauri/**',
       '.claude/**',
-      'scripts/**',
       '*.tsbuildinfo',
       'vite.config.js',
       'vite.config.d.ts',
@@ -35,6 +34,17 @@ export default tseslint.config(
           varsIgnorePattern: '^_',
         },
       ],
+    },
+  },
+  {
+    files: ['e2e/**/*.js', 'scripts/**/*.mjs'],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      globals: {
+        ...globals.node,
+        ...globals.mocha,
+      },
     },
   }
 );

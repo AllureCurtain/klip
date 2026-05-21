@@ -117,6 +117,16 @@ fn main() {
                     }
                 });
                 tracing::info!("Window focus handler registered");
+
+                if should_show_window_for_e2e(std::env::var_os("KLIP_E2E_SHOW_WINDOW").as_deref()) {
+                    tracing::info!("KLIP_E2E_SHOW_WINDOW is set, showing main window for E2E");
+                    if let Err(e) = window.show() {
+                        tracing::warn!("Failed to show E2E window: {}", e);
+                    }
+                    if let Err(e) = window.set_focus() {
+                        tracing::warn!("Failed to focus E2E window: {}", e);
+                    }
+                }
             } else {
                 tracing::warn!("Main window not found during setup");
             }
@@ -194,6 +204,13 @@ fn restore_autostart_state(app: &tauri::AppHandle) {
     }
 }
 
+fn should_show_window_for_e2e(value: Option<&std::ffi::OsStr>) -> bool {
+    value
+        .and_then(|v| v.to_str())
+        .map(|v| matches!(v, "1" | "true" | "TRUE" | "True"))
+        .unwrap_or(false)
+}
+
 /// Initialize the global tracing subscriber with two outputs:
 ///   1. stderr (so `pnpm tauri:dev` shows logs in the terminal)
 ///   2. a daily-rotating file under the OS-standard log dir, e.g.
@@ -229,4 +246,15 @@ fn init_tracing(app: &tauri::AppHandle) -> WorkerGuard {
 
     eprintln!("Logs writing to: {}", log_dir.display());
     guard
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn should_show_window_for_e2e_env_flag_is_explicit() {
+        assert!(super::should_show_window_for_e2e(Some(
+            std::ffi::OsStr::new("1")
+        )));
+        assert!(!super::should_show_window_for_e2e(None));
+    }
 }

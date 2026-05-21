@@ -12,3 +12,4 @@ vite.config.js
 src-tauri/gen/
 src-tauri/icons/android/
 src-tauri/icons/ios/
+e2e/.tmp/
