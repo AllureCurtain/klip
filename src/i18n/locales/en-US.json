@@ -16,11 +16,20 @@
     "showFavorites": "Show favorites only",
     "clearHistory": "Clear history",
     "settings": "Settings",
+    "selectedCount_one": "{{count}} selected",
+    "selectedCount_other": "{{count}} selected",
+    "favoriteSelected": "Favorite selected",
+    "deleteSelected": "Delete selected",
+    "clearSelection": "Clear selection",
+    "assignTagSelected": "Assign {{name}}",
     "filter": {
       "all": "All",
       "text": "Text",
       "image": "Image",
       "file": "File"
+    },
+    "tags": {
+      "all": "All tags"
     },
     "clearDialog": {
       "title": "Clear clipboard history",
@@ -34,6 +43,8 @@
     "copied": "Copied",
     "favorite": "Favorite",
     "unfavorite": "Unfavorite",
+    "select": "Select item",
+    "sensitive": "Sensitive",
     "delete": "Delete",
     "confirmDelete": "Click again to confirm",
     "file": "File",
@@ -70,6 +81,7 @@
       "general": "General",
       "shortcuts": "Shortcuts",
       "behavior": "Behavior",
+      "data": "Data",
       "about": "About"
     },
     "general": {
@@ -92,6 +104,26 @@
       "autoStartDesc": "Run automatically when the system starts",
       "closeToTray": "Close to tray",
       "closeToTrayDesc": "Hide instead of quitting on close"
+    },
+    "data": {
+      "tags": "Tags and groups",
+      "tagName": "Tag name",
+      "tagColor": "Tag color",
+      "tagCreated": "Created tag {{name}}",
+      "deleteTag": "Delete {{name}}",
+      "json": "JSON import/export path",
+      "csv": "CSV import/export path",
+      "backup": "Database backup path",
+      "export": "Export",
+      "import": "Import",
+      "backupNow": "Backup",
+      "restore": "Restore",
+      "exported": "Export completed",
+      "imported": "Import completed",
+      "backedUp": "Backup completed",
+      "restored": "Restore completed",
+      "rescanSensitive": "Rescan sensitive content",
+      "sensitiveScanned": "Sensitive content scan completed"
     },
     "about": {
       "tagline": "Cross-platform clipboard manager",

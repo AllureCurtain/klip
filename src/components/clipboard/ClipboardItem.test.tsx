@@ -8,6 +8,8 @@ const storeMocks = vi.hoisted(() => ({
   deleteItem: vi.fn(),
   copyItem: vi.fn(),
   toggleFavorite: vi.fn(),
+  selectedIds: [] as number[],
+  toggleSelected: vi.fn(),
 }));
 
 vi.mock('@/stores', () => ({
@@ -24,6 +26,9 @@ function makeTextItem(): ClipboardItemType {
     size: 5,
     metadata: null,
     is_favorited: false,
+    is_sensitive: false,
+    sensitivity_reason: null,
+    tags: [],
     created_at: 1_714_000_000_000,
     last_used_at: 1_714_000_000_000,
   };

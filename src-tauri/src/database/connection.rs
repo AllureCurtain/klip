@@ -62,6 +62,14 @@ impl Database {
             conn.execute("ALTER TABLE clipboard_items ADD COLUMN metadata TEXT", [])?;
         }
 
+        add_column_if_missing(
+            &conn,
+            "clipboard_items",
+            "is_sensitive",
+            "INTEGER NOT NULL DEFAULT 0",
+        )?;
+        add_column_if_missing(&conn, "clipboard_items", "sensitivity_reason", "TEXT")?;
+
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_clipboard_created_at ON clipboard_items(created_at DESC)",
             [],
@@ -85,6 +93,45 @@ impl Database {
 
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_clipboard_preview ON clipboard_items(preview)",
+            [],
+        )?;
+
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_clipboard_favorite_last_used
+             ON clipboard_items(is_favorited, last_used_at DESC, created_at DESC)",
+            [],
+        )?;
+
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_clipboard_sensitive
+             ON clipboard_items(is_sensitive, last_used_at DESC, created_at DESC)",
+            [],
+        )?;
+
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS tags (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                name        TEXT NOT NULL UNIQUE,
+                color       TEXT,
+                created_at  INTEGER NOT NULL
+            )",
+            [],
+        )?;
+
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS clipboard_item_tags (
+                item_id INTEGER NOT NULL,
+                tag_id  INTEGER NOT NULL,
+                PRIMARY KEY (item_id, tag_id),
+                FOREIGN KEY (item_id) REFERENCES clipboard_items(id) ON DELETE CASCADE,
+                FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+            )",
+            [],
+        )?;
+
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_clipboard_item_tags_tag_id
+             ON clipboard_item_tags(tag_id, item_id)",
             [],
         )?;
 
@@ -134,6 +181,29 @@ impl Database {
             .lock()
             .map_err(|e| AppError::Database(format!("mutex poisoned: {}", e)))
     }
+}
+
+fn add_column_if_missing(
+    conn: &Connection,
+    table: &str,
+    column: &str,
+    definition: &str,
+) -> Result<(), AppError> {
+    let mut stmt = conn.prepare(&format!("PRAGMA table_info({})", table))?;
+    let exists = stmt
+        .query_map([], |row| row.get::<_, String>(1))?
+        .collect::<Result<Vec<_>, _>>()?
+        .iter()
+        .any(|name| name == column);
+
+    if !exists {
+        conn.execute(
+            &format!("ALTER TABLE {} ADD COLUMN {} {}", table, column, definition),
+            [],
+        )?;
+    }
+
+    Ok(())
 }
 
 pub fn get_db_path(app_handle: &tauri::AppHandle) -> Result<std::path::PathBuf, AppError> {

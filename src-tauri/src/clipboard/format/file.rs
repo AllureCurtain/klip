@@ -129,12 +129,15 @@ impl ClipboardFormatStrategy for FileStrategy {
         #[cfg(not(target_os = "windows"))]
         {
             let _ = paths;
-            return Err(FormatError::CopyBackFailed(
+            Err(FormatError::CopyBackFailed(
                 "file copy back not supported on this platform".into(),
-            ));
+            ))
         }
 
-        Ok(())
+        #[cfg(target_os = "windows")]
+        {
+            Ok(())
+        }
     }
 
     fn generate_preview(&self, content: &[u8], metadata: Option<&str>) -> String {

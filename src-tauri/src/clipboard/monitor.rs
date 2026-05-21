@@ -7,6 +7,7 @@ use std::sync::Arc;
 use std::thread;
 use tauri::{AppHandle, Emitter, Manager};
 
+#[cfg(target_os = "windows")]
 use crate::clipboard::format::{ExtractedContent, FormatStrategyRegistry, ImageDimensions};
 use crate::database::{self, NewClipboardItem};
 
@@ -18,6 +19,7 @@ use arboard::Clipboard;
 
 static LAST_HASH: std::sync::OnceLock<std::sync::Mutex<String>> = std::sync::OnceLock::new();
 
+#[cfg(target_os = "windows")]
 const KLIP_IGNORE_FORMAT: &str = "Clipboard Viewer Ignore";
 #[cfg(target_os = "windows")]
 const CLIPBOARD_SETTLE_DELAY: std::time::Duration = std::time::Duration::from_millis(150);
@@ -113,11 +115,6 @@ fn is_self_copy_marker_present() -> bool {
         Some(id) => clipboard_win::raw::is_format_avail(id.get()),
         None => false,
     }
-}
-
-#[cfg(not(target_os = "windows"))]
-fn is_self_copy_marker_present() -> bool {
-    false
 }
 
 // --- Write operations with self-copy marker ---
@@ -453,6 +450,7 @@ impl ClipboardHandler for WindowsClipboardHandler {
 
 // --- Content processing ---
 
+#[cfg(target_os = "windows")]
 fn process_extracted_content(extracted: ExtractedContent) -> Option<NewClipboardItem> {
     if let Some(last_hash) = LAST_HASH.get() {
         let mut last = last_hash.lock().ok()?;

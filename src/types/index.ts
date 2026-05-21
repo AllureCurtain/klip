@@ -7,8 +7,36 @@ export interface ClipboardItem {
   size: number;
   metadata: string | null;
   is_favorited: boolean;
+  is_sensitive: boolean;
+  sensitivity_reason: string | null;
+  tags: Tag[];
   created_at: number;
   last_used_at: number;
+}
+
+export interface Tag {
+  id: number;
+  name: string;
+  color: string | null;
+  created_at: number;
+}
+
+export interface ImportSummary {
+  imported: number;
+  skipped: number;
+}
+
+export interface BackupSummary {
+  path: string;
+  size: number;
+}
+
+export interface ClipboardQueryOptions {
+  contentType?: ContentType | null;
+  favoriteOnly?: boolean;
+  tagId?: number | null;
+  limit?: number;
+  offset?: number;
 }
 
 export interface ImageMetadata {

@@ -16,11 +16,19 @@
     "showFavorites": "仅显示收藏",
     "clearHistory": "清空历史",
     "settings": "设置",
+    "selectedCount": "已选择 {{count}} 项",
+    "favoriteSelected": "收藏已选",
+    "deleteSelected": "删除已选",
+    "clearSelection": "清除选择",
+    "assignTagSelected": "分配 {{name}}",
     "filter": {
       "all": "全部",
       "text": "文本",
       "image": "图片",
       "file": "文件"
+    },
+    "tags": {
+      "all": "全部标签"
     },
     "clearDialog": {
       "title": "清空剪贴板历史",
@@ -34,6 +42,8 @@
     "copied": "已复制",
     "favorite": "收藏",
     "unfavorite": "取消收藏",
+    "select": "选择条目",
+    "sensitive": "敏感",
     "delete": "删除",
     "confirmDelete": "再次点击确认删除",
     "file": "文件",
@@ -67,6 +77,7 @@
       "general": "通用",
       "shortcuts": "快捷键",
       "behavior": "行为",
+      "data": "数据",
       "about": "关于"
     },
     "general": {
@@ -89,6 +100,26 @@
       "autoStartDesc": "系统启动时自动运行",
       "closeToTray": "关闭到托盘",
       "closeToTrayDesc": "关闭时隐藏而非退出"
+    },
+    "data": {
+      "tags": "标签/分组",
+      "tagName": "标签名称",
+      "tagColor": "标签颜色",
+      "tagCreated": "已创建标签 {{name}}",
+      "deleteTag": "删除 {{name}}",
+      "json": "JSON 导入/导出路径",
+      "csv": "CSV 导入/导出路径",
+      "backup": "数据库备份路径",
+      "export": "导出",
+      "import": "导入",
+      "backupNow": "备份",
+      "restore": "恢复",
+      "exported": "导出完成",
+      "imported": "导入完成",
+      "backedUp": "备份完成",
+      "restored": "恢复完成",
+      "rescanSensitive": "重新扫描敏感内容",
+      "sensitiveScanned": "敏感内容扫描完成"
     },
     "about": {
       "tagline": "跨平台剪贴板管理器",

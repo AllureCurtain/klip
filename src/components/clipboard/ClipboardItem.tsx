@@ -1,4 +1,14 @@
-import { FileText, Image, File, Folder, Files, Trash2, Star, Check } from 'lucide-react';
+import {
+  FileText,
+  Image,
+  File,
+  Folder,
+  Files,
+  Trash2,
+  Star,
+  Check,
+  ShieldAlert,
+} from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui';
 import { useClipboardStore } from '@/stores';
@@ -77,11 +87,13 @@ function classifyFile(item: ClipboardItemType): FileShape {
 
 export function ClipboardItem({ item, index, isSelected, onSelect }: ClipboardItemProps) {
   const { t } = useTranslation();
-  const { deleteItem, copyItem, toggleFavorite } = useClipboardStore();
+  const { deleteItem, copyItem, toggleFavorite, selectedIds, toggleSelected } =
+    useClipboardStore();
   const [copied, setCopied] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [imagePreviewOpen, setImagePreviewOpen] = useState(false);
   const confirmTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const isBatchSelected = selectedIds.includes(item.id);
 
   const handleCopy = useCallback(() => {
     copyItem(item.id);
@@ -109,6 +121,11 @@ export function ClipboardItem({ item, index, isSelected, onSelect }: ClipboardIt
   const handleToggleFavorite = (e: React.MouseEvent) => {
     e.stopPropagation();
     toggleFavorite(item.id);
+  };
+
+  const handleToggleSelected = (e: React.MouseEvent<HTMLInputElement>) => {
+    e.stopPropagation();
+    toggleSelected(item.id);
   };
 
   const handleImageClick = (e: React.MouseEvent) => {
@@ -202,13 +219,23 @@ export function ClipboardItem({ item, index, isSelected, onSelect }: ClipboardIt
         ref={itemRef}
         onClick={handleClick}
         className={cn(
-          'group relative flex items-center gap-2 px-2.5 h-14 cursor-pointer transition-colors overflow-hidden',
+          'group relative flex h-16 cursor-pointer items-center gap-2 overflow-hidden px-2.5 transition-colors',
           isSelected
             ? 'bg-accent'
             : 'hover:bg-muted/60',
+          isBatchSelected && 'bg-primary/5',
           copied && 'bg-primary/5'
         )}
       >
+        <input
+          type="checkbox"
+          checked={isBatchSelected}
+          onClick={handleToggleSelected}
+          onChange={() => undefined}
+          aria-label={t('clipboard.select')}
+          className="size-3.5 shrink-0 accent-primary"
+        />
+
         {/* Index badge */}
         <span className="w-5 text-right text-[10px] font-mono tabular-nums text-muted-foreground/60 shrink-0 select-none">
           {index}
@@ -227,8 +254,36 @@ export function ClipboardItem({ item, index, isSelected, onSelect }: ClipboardIt
                 {t('clipboard.copied')}
               </span>
             )}
+            {item.is_sensitive && (
+              <span
+                className="flex items-center gap-0.5 text-[10px] font-medium text-destructive"
+                title={item.sensitivity_reason ?? t('clipboard.sensitive')}
+              >
+                <ShieldAlert className="h-2.5 w-2.5" />
+                {t('clipboard.sensitive')}
+              </span>
+            )}
           </div>
           {renderPreview()}
+          {item.tags.length > 0 && (
+            <div className="mt-0.5 flex gap-1 overflow-hidden">
+              {item.tags.slice(0, 3).map((tag) => (
+                <span
+                  key={tag.id}
+                  className="inline-flex max-w-20 items-center gap-1 rounded-sm bg-muted px-1.5 py-0.5 text-[9px] text-muted-foreground"
+                  title={tag.name}
+                >
+                  {tag.color && (
+                    <span
+                      className="size-1.5 shrink-0 rounded-full"
+                      style={{ backgroundColor: tag.color }}
+                    />
+                  )}
+                  <span className="truncate">{tag.name}</span>
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Actions */}

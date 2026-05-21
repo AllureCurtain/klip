@@ -5,6 +5,11 @@ import { Header } from './Header';
 
 const storeMocks = vi.hoisted(() => ({
   clearItems: vi.fn(),
+  selectedIds: [] as number[],
+  clearSelection: vi.fn(),
+  deleteSelected: vi.fn(),
+  assignTagToSelected: vi.fn(),
+  setFavoriteForSelected: vi.fn(),
   resolvedTheme: 'light' as const,
   setTheme: vi.fn(),
 }));
@@ -23,7 +28,14 @@ const eventMocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/stores', () => ({
-  useClipboardStore: () => ({ clearItems: storeMocks.clearItems }),
+  useClipboardStore: () => ({
+    clearItems: storeMocks.clearItems,
+    selectedIds: storeMocks.selectedIds,
+    clearSelection: storeMocks.clearSelection,
+    deleteSelected: storeMocks.deleteSelected,
+    assignTagToSelected: storeMocks.assignTagToSelected,
+    setFavoriteForSelected: storeMocks.setFavoriteForSelected,
+  }),
   useThemeStore: () => ({
     resolvedTheme: storeMocks.resolvedTheme,
     setTheme: storeMocks.setTheme,
@@ -52,6 +64,9 @@ describe('Header', () => {
         onContentTypeChange={vi.fn()}
         showFavorites={false}
         onShowFavoritesChange={vi.fn()}
+        tags={[]}
+        selectedTagId={null}
+        onSelectedTagChange={vi.fn()}
         onSettingsOpen={vi.fn()}
       />
     );
@@ -71,6 +86,9 @@ describe('Header', () => {
         onContentTypeChange={vi.fn()}
         showFavorites={false}
         onShowFavoritesChange={vi.fn()}
+        tags={[]}
+        selectedTagId={null}
+        onSelectedTagChange={vi.fn()}
         onSettingsOpen={onSettingsOpen}
       />
     );
@@ -90,6 +108,9 @@ describe('Header', () => {
         onContentTypeChange={vi.fn()}
         showFavorites={false}
         onShowFavoritesChange={vi.fn()}
+        tags={[]}
+        selectedTagId={null}
+        onSelectedTagChange={vi.fn()}
         onSettingsOpen={onSettingsOpen}
       />
     );
