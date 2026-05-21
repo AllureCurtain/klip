@@ -49,7 +49,7 @@ pub fn get_text() -> Result<String, String> {
 pub fn set_file_list(paths: &[&str]) -> Result<(), String> {
     let uri_list = paths
         .iter()
-        .map(|path| format!("file://{}", path))
+        .map(|path| file_uri_from_path(Path::new(path)))
         .collect::<Vec<_>>()
         .join("\n");
 
@@ -153,6 +153,23 @@ fn desktop_entry(app_exe: &Path) -> String {
     )
 }
 
+fn file_uri_from_path(path: &Path) -> String {
+    let path = path.to_string_lossy();
+    let mut uri = String::from("file://");
+    for byte in path.as_bytes() {
+        match *byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' | b'/' => {
+                uri.push(*byte as char)
+            }
+            _ => {
+                use std::fmt::Write;
+                let _ = write!(uri, "%{byte:02X}");
+            }
+        }
+    }
+    uri
+}
+
 fn shell_escape(path: &Path) -> String {
     let value = path.to_string_lossy();
     format!("'{}'", value.replace('\'', "'\\''"))
@@ -201,4 +218,40 @@ fn read_stdout(command: &str, args: &[&str]) -> Result<String, String> {
         return Err(format!("{} exited with status {}", command, output.status));
     }
     String::from_utf8(output.stdout).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{desktop_entry, file_uri_from_path, shell_escape};
+    use std::path::Path;
+
+    #[test]
+    fn file_uri_preserves_path_separators_and_escapes_special_bytes() {
+        assert_eq!(
+            file_uri_from_path(Path::new("/home/me/My File #1.txt")),
+            "file:///home/me/My%20File%20%231.txt"
+        );
+    }
+
+    #[test]
+    fn file_uri_escapes_non_ascii_as_utf8_bytes() {
+        assert_eq!(
+            file_uri_from_path(Path::new("/tmp/截图.png")),
+            "file:///tmp/%E6%88%AA%E5%9B%BE.png"
+        );
+    }
+
+    #[test]
+    fn shell_escape_wraps_and_escapes_single_quotes() {
+        assert_eq!(
+            shell_escape(Path::new("/opt/Klip's App/klip")),
+            "'/opt/Klip'\\''s App/klip'"
+        );
+    }
+
+    #[test]
+    fn desktop_entry_uses_escaped_exec_path() {
+        let entry = desktop_entry(Path::new("/opt/Klip App/klip"));
+        assert!(entry.contains("Exec='/opt/Klip App/klip'\n"));
+    }
 }
