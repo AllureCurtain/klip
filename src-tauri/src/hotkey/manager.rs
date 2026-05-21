@@ -1,7 +1,7 @@
 use tauri::{AppHandle, Manager};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
-#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+#[cfg(any(target_os = "windows", target_os = "macos"))]
 use enigo::{Enigo, Settings};
 
 use crate::AppError;
@@ -342,13 +342,10 @@ fn quick_paste(app_handle: &AppHandle, index: i64) {
 
                 #[cfg(target_os = "linux")]
                 {
-                    std::thread::sleep(std::time::Duration::from_millis(50));
-                    if let Ok(mut enigo) = Enigo::new(&Settings::default()) {
-                        use enigo::Keyboard;
-                        let _ = enigo.key(enigo::Key::Control, enigo::Direction::Press);
-                        let _ = enigo.key(enigo::Key::Unicode('v'), enigo::Direction::Click);
-                        let _ = enigo.key(enigo::Key::Control, enigo::Direction::Release);
-                        tracing::info!("Quick paste: simulated Ctrl+V");
+                    if let Err(e) = crate::platform::linux::simulate_paste() {
+                        tracing::warn!("Quick paste: Linux paste simulation failed: {}", e);
+                    } else {
+                        tracing::info!("Quick paste: simulated Linux paste");
                     }
                 }
             } else {

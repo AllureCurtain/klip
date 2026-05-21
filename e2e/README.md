@@ -12,12 +12,30 @@ cargo install tauri-driver --locked
 
 Install Microsoft Edge WebDriver (`msedgedriver.exe`) and make sure it is available on `PATH`.
 
-## Run
+## Linux Setup
+
+Install the native WebDriver and clipboard pieces once:
+
+```bash
+cargo install tauri-driver --locked
+sudo apt install xclip xsel xdotool
+# Wayland sessions should also install wl-clipboard and may need wtype or ydotool.
+```
+
+Linux E2E needs a real desktop session with clipboard access. Wayland compositors can block global shortcuts and synthetic paste; use an X11 session for full paste-flow coverage, or install compositor-compatible tools (`wl-clipboard`, `wtype`, `ydotool`) and expect compositor-specific behavior.
+
+## Run On Windows
 
 ```powershell
 pnpm e2e
 ```
 
-The runner builds the frontend and debug Tauri binary, starts `tauri-driver`, launches Klip with an isolated app data directory under `e2e/.tmp/`, and runs the clipboard capture/search/paste flow.
+## Run On Linux
+
+```bash
+scripts/run-e2e-linux.sh
+```
+
+The runners build the frontend and debug Tauri binary, start `tauri-driver`, launch Klip with isolated app data under `e2e/.tmp/`, and run the clipboard capture/search/paste flow.
 
 `pnpm verify` does not run E2E because it depends on a real desktop session, system clipboard access, and WebDriver binaries.

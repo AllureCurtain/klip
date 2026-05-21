@@ -5,6 +5,7 @@ pub use productization::*;
 use crate::database::{self, ClipboardItem, DiagnosticsInfo, SystemInfo};
 use crate::AppError;
 use tauri::{Emitter, Manager, State};
+#[cfg(not(target_os = "linux"))]
 use tauri_plugin_autostart::ManagerExt;
 
 #[tauri::command]
@@ -118,13 +119,7 @@ pub fn paste_from_clipboard(
 
     #[cfg(target_os = "linux")]
     {
-        std::thread::sleep(std::time::Duration::from_millis(50));
-        if let Ok(mut enigo) = enigo::Enigo::new(&enigo::Settings::default()) {
-            use enigo::Keyboard;
-            let _ = enigo.key(enigo::Key::Control, enigo::Direction::Press);
-            let _ = enigo.key(enigo::Key::Unicode('v'), enigo::Direction::Click);
-            let _ = enigo.key(enigo::Key::Control, enigo::Direction::Release);
-        }
+        crate::platform::linux::simulate_paste()?;
     }
 
     Ok(())
@@ -271,38 +266,63 @@ pub fn set_auto_start(
     db: State<'_, database::Database>,
     enabled: bool,
 ) -> Result<(), AppError> {
-    let manager = app.autolaunch();
-
-    if enabled {
-        manager.enable().map_err(|e| {
-            tracing::error!("Failed to enable autostart: {}", e);
-            AppError::System(format!("Failed to enable autostart: {}", e))
-        })?;
-        database::config::set(&db, "auto_start", "true")?;
-        tracing::info!("Auto start enabled");
-    } else {
-        manager.disable().map_err(|e| {
-            tracing::warn!("Failed to disable autostart: {}", e);
-            AppError::System(format!("Failed to disable autostart: {}", e))
-        })?;
-        database::config::set(&db, "auto_start", "false")?;
-        tracing::info!("Auto start disabled");
+    #[cfg(target_os = "linux")]
+    {
+        let exe = std::env::current_exe()
+            .map_err(|e| AppError::System(format!("Failed to resolve current exe: {}", e)))?;
+        crate::platform::linux::set_autostart(enabled, &exe)?;
+        database::config::set(&db, "auto_start", if enabled { "true" } else { "false" })?;
+        let _ = app.emit(
+            "config-changed",
+            serde_json::json!({ "key": "auto_start", "value": enabled.to_string() }),
+        );
+        Ok(())
     }
 
-    let _ = app.emit(
-        "config-changed",
-        serde_json::json!({ "key": "auto_start", "value": enabled.to_string() }),
-    );
-    Ok(())
+    #[cfg(not(target_os = "linux"))]
+    {
+        let manager = app.autolaunch();
+
+        if enabled {
+            manager.enable().map_err(|e| {
+                tracing::error!("Failed to enable autostart: {}", e);
+                AppError::System(format!("Failed to enable autostart: {}", e))
+            })?;
+            database::config::set(&db, "auto_start", "true")?;
+            tracing::info!("Auto start enabled");
+        } else {
+            manager.disable().map_err(|e| {
+                tracing::warn!("Failed to disable autostart: {}", e);
+                AppError::System(format!("Failed to disable autostart: {}", e))
+            })?;
+            database::config::set(&db, "auto_start", "false")?;
+            tracing::info!("Auto start disabled");
+        }
+
+        let _ = app.emit(
+            "config-changed",
+            serde_json::json!({ "key": "auto_start", "value": enabled.to_string() }),
+        );
+        Ok(())
+    }
 }
 
 #[tauri::command]
 pub fn is_auto_start_enabled(app: tauri::AppHandle) -> Result<bool, AppError> {
-    let manager = app.autolaunch();
-    manager.is_enabled().map_err(|e| {
-        tracing::warn!("Failed to query autostart state: {}", e);
-        AppError::System(e.to_string())
-    })
+    #[cfg(target_os = "linux")]
+    {
+        let _ = app;
+        crate::platform::linux::is_autostart_enabled()
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        let manager = app.autolaunch();
+        manager.is_enabled().map_err(|e| {
+            tracing::warn!("Failed to query autostart state: {}", e);
+            AppError::System(e.to_string())
+        })
+    }
 }
 
 #[tauri::command]
@@ -316,10 +336,18 @@ pub fn get_system_info() -> Result<SystemInfo, AppError> {
 
 #[tauri::command]
 pub fn get_diagnostics_info(app: tauri::AppHandle) -> Result<DiagnosticsInfo, AppError> {
+    #[cfg(target_os = "linux")]
+    let data_dir = crate::platform::linux::data_dir();
+
+    #[cfg(not(target_os = "linux"))]
     let data_dir = app
         .path()
         .app_data_dir()
         .map_err(|e| AppError::System(format!("Failed to resolve app data dir: {}", e)))?;
+
+    #[cfg(target_os = "linux")]
+    let _ = app;
+
     let paths = build_diagnostics_paths(&data_dir);
 
     Ok(DiagnosticsInfo {
@@ -350,10 +378,16 @@ fn platform_name() -> &'static str {
 }
 
 fn build_diagnostics_paths(data_dir: &std::path::Path) -> DiagnosticsPaths {
+    #[cfg(target_os = "linux")]
+    let log_dir = crate::platform::linux::log_dir();
+
+    #[cfg(not(target_os = "linux"))]
+    let log_dir = data_dir.join("logs");
+
     DiagnosticsPaths {
         data_dir: data_dir.to_path_buf(),
         db_path: data_dir.join("klip.db"),
-        log_dir: data_dir.join("logs"),
+        log_dir,
     }
 }
 

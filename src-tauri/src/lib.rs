@@ -4,6 +4,7 @@ pub mod config;
 pub mod database;
 pub mod error;
 pub mod hotkey;
+pub mod platform;
 pub mod tray;
 
 pub use error::AppError;

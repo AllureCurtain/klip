@@ -207,10 +207,17 @@ fn add_column_if_missing(
 }
 
 pub fn get_db_path(app_handle: &tauri::AppHandle) -> Result<std::path::PathBuf, AppError> {
+    #[cfg(target_os = "linux")]
+    let app_data_dir = crate::platform::linux::data_dir();
+
+    #[cfg(not(target_os = "linux"))]
     let app_data_dir = app_handle
         .path()
         .app_data_dir()
         .map_err(|e| AppError::System(format!("failed to resolve app data dir: {}", e)))?;
+
+    #[cfg(target_os = "linux")]
+    let _ = app_handle;
 
     std::fs::create_dir_all(&app_data_dir)
         .map_err(|e| AppError::System(format!("failed to create app data dir: {}", e)))?;

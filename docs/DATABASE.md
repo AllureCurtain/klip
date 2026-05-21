@@ -15,7 +15,7 @@
 |------|------|
 | Windows | `%APPDATA%\com.klip.app\klip.db` |
 | macOS | `~/Library/Application Support/com.klip.app/klip.db` |
-| Linux | `~/.local/share/com.klip.app/klip.db` |
+| Linux | `~/.local/share/klip/klip.db` |
 
 ---
 
