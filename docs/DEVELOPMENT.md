@@ -70,13 +70,27 @@ sudo apt install libwebkit2gtk-4.1-dev \
     libssl-dev \
     libgtk-3-dev \
     libayatana-appindicator3-dev \
-    librsvg2-dev
+    librsvg2-dev \
+    xclip \
+    xsel \
+    xdotool \
+    wl-clipboard
+
+# Wayland paste automation may also require compositor-compatible tools:
+# sudo apt install wtype ydotool
 
 # 验证安装
 node --version
 pnpm --version
 rustc --version
 ```
+
+Linux runtime notes:
+
+- Clipboard text uses `wl-copy`/`wl-paste` on Wayland when available, then `xclip` or `xsel` fallbacks.
+- Paste simulation uses `xdotool` on X11 and tries `ydotool`/`wtype` on Wayland. Some Wayland compositors intentionally block synthetic paste.
+- Global shortcuts depend on desktop environment support. Wayland sessions may not deliver global hotkeys reliably.
+- System tray visibility depends on the desktop shell. KDE/XFCE usually expose tray icons directly; GNOME may require an AppIndicator/status icon extension.
 
 ---
 

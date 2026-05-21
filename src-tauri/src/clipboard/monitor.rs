@@ -1,5 +1,3 @@
-use base64::Engine;
-use image::GenericImageView;
 use std::sync::atomic::{AtomicBool, Ordering};
 #[cfg(target_os = "windows")]
 use std::sync::mpsc::{self, Receiver, SyncSender, TryRecvError, TrySendError};
@@ -7,18 +5,18 @@ use std::sync::Arc;
 use std::thread;
 use tauri::{AppHandle, Emitter, Manager};
 
-use crate::clipboard::format::{ExtractedContent, FormatStrategyRegistry, ImageDimensions};
+#[cfg(target_os = "windows")]
+use crate::clipboard::format::{ExtractedContent, FormatStrategyRegistry};
 use crate::database::{self, NewClipboardItem};
 
 #[cfg(target_os = "windows")]
 use clipboard_master::{CallbackResult, ClipboardHandler, Master};
 
-#[cfg(not(target_os = "windows"))]
+#[cfg(all(not(target_os = "windows"), not(target_os = "linux")))]
 use arboard::Clipboard;
 
 static LAST_HASH: std::sync::OnceLock<std::sync::Mutex<String>> = std::sync::OnceLock::new();
 
-const KLIP_IGNORE_FORMAT: &str = "Clipboard Viewer Ignore";
 #[cfg(target_os = "windows")]
 const CLIPBOARD_SETTLE_DELAY: std::time::Duration = std::time::Duration::from_millis(150);
 
@@ -63,185 +61,13 @@ fn drain_pending_events(rx: &Receiver<()>) -> usize {
     }
 }
 
-// --- RAII ClipboardGuard (Windows only) ---
-
-/// RAII guard that opens the Win32 clipboard on creation and closes it on Drop.
-/// Prevents clipboard lock leaks if any code path forgets to close.
-#[cfg(target_os = "windows")]
-struct ClipboardGuard {
-    _private: (),
-}
-
-#[cfg(target_os = "windows")]
-impl ClipboardGuard {
-    /// Open the clipboard with retry, returning a guard that will close on drop.
-    fn open(max_attempts: u32) -> Result<Self, String> {
-        let mut attempts = 0;
-        loop {
-            match clipboard_win::raw::open() {
-                Ok(()) => return Ok(Self { _private: () }),
-                Err(e) => {
-                    attempts += 1;
-                    if attempts >= max_attempts {
-                        return Err(format!(
-                            "failed to open clipboard after {} retries: {}",
-                            attempts, e
-                        ));
-                    }
-                    thread::sleep(std::time::Duration::from_millis(50));
-                }
-            }
-        }
-    }
-}
-
-#[cfg(target_os = "windows")]
-impl Drop for ClipboardGuard {
-    fn drop(&mut self) {
-        if let Err(e) = clipboard_win::raw::close() {
-            tracing::warn!("Failed to close clipboard: {}", e);
-        }
-    }
-}
-
-// --- Self-copy marker ---
-
 #[cfg(target_os = "windows")]
 fn is_self_copy_marker_present() -> bool {
-    let format_id = clipboard_win::raw::register_format(KLIP_IGNORE_FORMAT);
+    let format_id = clipboard_win::raw::register_format("Clipboard Viewer Ignore");
     match format_id {
         Some(id) => clipboard_win::raw::is_format_avail(id.get()),
         None => false,
     }
-}
-
-#[cfg(not(target_os = "windows"))]
-fn is_self_copy_marker_present() -> bool {
-    false
-}
-
-// --- Write operations with self-copy marker ---
-
-#[cfg(target_os = "windows")]
-fn raw_set_text_with_marker(text: &str) -> Result<(), String> {
-    let ignore_format = clipboard_win::raw::register_format(KLIP_IGNORE_FORMAT);
-    let _guard = ClipboardGuard::open(10)?;
-
-    clipboard_win::raw::empty().map_err(|e| e.to_string())?;
-    clipboard_win::raw::set_string(text).map_err(|e| e.to_string())?;
-
-    if let Some(id) = ignore_format {
-        clipboard_win::raw::set_without_clear(id.get(), b"Klip").map_err(|e| e.to_string())?;
-    }
-    Ok(())
-}
-
-#[cfg(not(target_os = "windows"))]
-fn raw_set_text_with_marker(text: &str) -> Result<(), String> {
-    let mut cb = arboard::Clipboard::new().map_err(|e| e.to_string())?;
-    cb.set_text(text).map_err(|e| e.to_string())
-}
-
-#[cfg(target_os = "windows")]
-fn raw_set_image_with_marker(png_data: &[u8], metadata: Option<&str>) -> Result<(), String> {
-    let img =
-        image::load_from_memory(png_data).map_err(|e| format!("failed to decode PNG: {}", e))?;
-
-    let (w, h) = if let Some(meta_str) = metadata {
-        serde_json::from_str::<ImageDimensions>(meta_str)
-            .map(|m| (m.width as usize, m.height as usize))
-            .unwrap_or_else(|_| {
-                let dims = img.dimensions();
-                (dims.0 as usize, dims.1 as usize)
-            })
-    } else {
-        let dims = img.dimensions();
-        (dims.0 as usize, dims.1 as usize)
-    };
-
-    let rgba = img.to_rgba8();
-    let raw = arboard::ImageData {
-        width: w,
-        height: h,
-        bytes: rgba.as_raw().clone().into(),
-    };
-
-    let mut attempts = 0;
-    loop {
-        let mut cb = arboard::Clipboard::new().map_err(|e| e.to_string())?;
-        match cb.set_image(raw.clone()) {
-            Ok(()) => break,
-            Err(e) => {
-                attempts += 1;
-                if attempts >= 10 {
-                    return Err(format!(
-                        "failed to set image after {} retries: {}",
-                        attempts, e
-                    ));
-                }
-                thread::sleep(std::time::Duration::from_millis(50));
-            }
-        }
-    }
-
-    // Add the ignore marker after image is set
-    let ignore_format = clipboard_win::raw::register_format(KLIP_IGNORE_FORMAT);
-    if let Ok(_guard) = ClipboardGuard::open(5) {
-        if let Some(id) = ignore_format {
-            if let Err(e) = clipboard_win::raw::set_without_clear(id.get(), b"Klip") {
-                tracing::warn!("Failed to set ignore marker: {}", e);
-            }
-        }
-    }
-
-    Ok(())
-}
-
-#[cfg(not(target_os = "windows"))]
-fn raw_set_image_with_marker(png_data: &[u8], _metadata: Option<&str>) -> Result<(), String> {
-    let img =
-        image::load_from_memory(png_data).map_err(|e| format!("failed to decode PNG: {}", e))?;
-    let dims = img.dimensions();
-    let rgba = img.to_rgba8();
-    let raw = arboard::ImageData {
-        width: dims.0 as usize,
-        height: dims.1 as usize,
-        bytes: rgba.as_raw().clone().into(),
-    };
-    let mut cb = arboard::Clipboard::new().map_err(|e| e.to_string())?;
-    cb.set_image(raw).map_err(|e| e.to_string())
-}
-
-#[cfg(target_os = "windows")]
-fn raw_set_file_list_with_marker(paths: &[&str]) -> Result<(), String> {
-    // CFSTR_PREFERREDDROPEFFECT — required so Explorer treats CF_HDROP as a
-    // copy operation. Without it, "Paste" in Explorer is disabled / ignored.
-    const DROPEFFECT_COPY: u32 = 5;
-
-    let ignore_format = clipboard_win::raw::register_format(KLIP_IGNORE_FORMAT);
-    let dropeffect_format = clipboard_win::raw::register_format("Preferred DropEffect");
-
-    let _guard = ClipboardGuard::open(10)?;
-
-    clipboard_win::raw::empty().map_err(|e| e.to_string())?;
-    clipboard_win::raw::set_file_list(paths).map_err(|e| e.to_string())?;
-
-    if let Some(id) = dropeffect_format {
-        clipboard_win::raw::set_without_clear(id.get(), &DROPEFFECT_COPY.to_le_bytes())
-            .map_err(|e| e.to_string())?;
-    } else {
-        tracing::warn!("Failed to register Preferred DropEffect format");
-    }
-
-    if let Some(id) = ignore_format {
-        clipboard_win::raw::set_without_clear(id.get(), b"Klip").map_err(|e| e.to_string())?;
-    }
-    Ok(())
-}
-
-#[cfg(not(target_os = "windows"))]
-fn raw_set_file_list_with_marker(_paths: &[&str]) -> Result<(), String> {
-    Err("file copy back not supported on this platform".to_string())
 }
 
 // --- ClipboardMonitor ---
@@ -352,18 +178,10 @@ impl ClipboardMonitor {
         let app_handle = self.app_handle.clone();
 
         thread::spawn(move || {
-            let mut clipboard = match Clipboard::new() {
-                Ok(cb) => cb,
-                Err(e) => {
-                    tracing::error!("Failed to initialize clipboard: {}", e);
-                    return;
-                }
-            };
-
             tracing::info!("Starting clipboard monitor (polling-based)");
 
             while running.load(Ordering::Relaxed) {
-                if let Ok(text) = clipboard.get_text() {
+                if let Ok(text) = read_platform_text() {
                     if let Some(item) = process_extracted_text(&text) {
                         save_clipboard_item(&app_handle, &item);
                     }
@@ -453,6 +271,7 @@ impl ClipboardHandler for WindowsClipboardHandler {
 
 // --- Content processing ---
 
+#[cfg(target_os = "windows")]
 fn process_extracted_content(extracted: ExtractedContent) -> Option<NewClipboardItem> {
     if let Some(last_hash) = LAST_HASH.get() {
         let mut last = last_hash.lock().ok()?;
@@ -470,6 +289,17 @@ fn process_extracted_content(extracted: ExtractedContent) -> Option<NewClipboard
         size: extracted.size,
         metadata: extracted.metadata,
     })
+}
+
+#[cfg(target_os = "linux")]
+fn read_platform_text() -> Result<String, String> {
+    crate::platform::linux::get_text()
+}
+
+#[cfg(all(not(target_os = "windows"), not(target_os = "linux")))]
+fn read_platform_text() -> Result<String, String> {
+    let mut clipboard = Clipboard::new().map_err(|e| e.to_string())?;
+    clipboard.get_text().map_err(|e| e.to_string())
 }
 
 #[cfg(not(target_os = "windows"))]
@@ -528,33 +358,6 @@ fn save_clipboard_item(app_handle: &AppHandle, item: &NewClipboardItem) {
             tracing::error!("Failed to save clipboard item: {}", e);
         }
     }
-}
-
-pub fn copy_to_clipboard(
-    content: &str,
-    content_type: &crate::database::types::ContentType,
-    metadata: Option<&str>,
-) -> Result<(), crate::AppError> {
-    let result = match content_type {
-        crate::database::types::ContentType::Text => raw_set_text_with_marker(content),
-        crate::database::types::ContentType::Image => {
-            let png_data = if let Some(stripped) = content.strip_prefix("data:image/png;base64,") {
-                base64::engine::general_purpose::STANDARD
-                    .decode(stripped)
-                    .map_err(|e| e.to_string())?
-            } else {
-                content.as_bytes().to_vec()
-            };
-            raw_set_image_with_marker(&png_data, metadata)
-        }
-        crate::database::types::ContentType::File => {
-            let paths: Vec<String> = serde_json::from_str(content)
-                .map_err(|e| format!("invalid file path JSON: {}", e))?;
-            let path_refs: Vec<&str> = paths.iter().map(|s| s.as_str()).collect();
-            raw_set_file_list_with_marker(&path_refs)
-        }
-    };
-    result.map_err(crate::AppError::Clipboard)
 }
 
 pub fn start_monitor(app_handle: AppHandle) -> Result<(), crate::AppError> {

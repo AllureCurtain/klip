@@ -168,6 +168,7 @@ fn main() {
 /// Respects user preference instead of always disabling.
 fn restore_autostart_state(app: &tauri::AppHandle) {
     use tauri::Manager;
+    #[cfg(not(target_os = "linux"))]
     use tauri_plugin_autostart::ManagerExt;
 
     let db = app.state::<klip::database::Database>();
@@ -177,30 +178,46 @@ fn restore_autostart_state(app: &tauri::AppHandle) {
         .map(|v| v == "true")
         .unwrap_or(false);
 
-    let manager = app.autolaunch();
-    match manager.is_enabled() {
-        Ok(os_enabled) => {
-            if config_enabled && !os_enabled {
-                if let Err(e) = manager.enable() {
-                    tracing::warn!("Failed to enable autostart at startup: {}", e);
-                } else {
-                    tracing::info!("Restored autostart state (enabled)");
-                }
-            } else if !config_enabled && os_enabled {
-                if let Err(e) = manager.disable() {
-                    tracing::warn!("Failed to disable autostart at startup: {}", e);
-                } else {
-                    tracing::info!("Restored autostart state (disabled)");
-                }
-            } else {
-                tracing::info!(
-                    "Autostart state already synced (config={}, os={})",
-                    config_enabled,
-                    os_enabled
-                );
-            }
+    #[cfg(target_os = "linux")]
+    {
+        match std::env::current_exe()
+            .map_err(|e| e.to_string())
+            .and_then(|exe| {
+                klip::platform::linux::set_autostart(config_enabled, &exe)
+                    .map_err(|e| e.to_string())
+            }) {
+            Ok(()) => tracing::info!("Restored Linux autostart state ({})", config_enabled),
+            Err(e) => tracing::warn!("Failed to restore Linux autostart state: {}", e),
         }
-        Err(e) => tracing::warn!("Failed to query OS autostart state: {}", e),
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        let manager = app.autolaunch();
+        match manager.is_enabled() {
+            Ok(os_enabled) => {
+                if config_enabled && !os_enabled {
+                    if let Err(e) = manager.enable() {
+                        tracing::warn!("Failed to enable autostart at startup: {}", e);
+                    } else {
+                        tracing::info!("Restored autostart state (enabled)");
+                    }
+                } else if !config_enabled && os_enabled {
+                    if let Err(e) = manager.disable() {
+                        tracing::warn!("Failed to disable autostart at startup: {}", e);
+                    } else {
+                        tracing::info!("Restored autostart state (disabled)");
+                    }
+                } else {
+                    tracing::info!(
+                        "Autostart state already synced (config={}, os={})",
+                        config_enabled,
+                        os_enabled
+                    );
+                }
+            }
+            Err(e) => tracing::warn!("Failed to query OS autostart state: {}", e),
+        }
     }
 }
 
@@ -216,7 +233,7 @@ fn should_show_window_for_e2e(value: Option<&std::ffi::OsStr>) -> bool {
 ///   2. a daily-rotating file under the OS-standard log dir, e.g.
 ///      Windows: %LOCALAPPDATA%\com.klip.app\logs\klip.log.YYYY-MM-DD
 ///      macOS:   ~/Library/Logs/com.klip.app/klip.log.YYYY-MM-DD
-///      Linux:   ~/.local/share/com.klip.app/logs/klip.log.YYYY-MM-DD
+///      Linux:   ~/.local/share/klip/logs/klip.log.YYYY-MM-DD
 ///
 /// Returns the non-blocking appender's `WorkerGuard`; the caller MUST keep it
 /// alive for the lifetime of the process or buffered log entries are dropped.
@@ -224,10 +241,17 @@ fn init_tracing(app: &tauri::AppHandle) -> WorkerGuard {
     use tracing_appender::rolling::{RollingFileAppender, Rotation};
     use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
+    #[cfg(target_os = "linux")]
+    let log_dir = klip::platform::linux::log_dir();
+
+    #[cfg(not(target_os = "linux"))]
     let log_dir = app
         .path()
         .app_log_dir()
         .unwrap_or_else(|_| std::env::temp_dir().join("klip-logs"));
+
+    #[cfg(target_os = "linux")]
+    let _ = app;
     let _ = std::fs::create_dir_all(&log_dir);
 
     let appender = RollingFileAppender::new(Rotation::DAILY, &log_dir, "klip.log");

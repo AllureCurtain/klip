@@ -4,6 +4,7 @@ pub mod config;
 pub mod database;
 pub mod error;
 pub mod hotkey;
+pub mod platform;
 pub mod tray;
 
 pub use error::AppError;
@@ -11,7 +12,9 @@ pub use error::AppError;
 pub use commands::*;
 pub use database::Database;
 
-use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
+#[cfg(target_os = "windows")]
+use std::sync::atomic::AtomicI64;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 /// Timestamp of the last tray click (ms since epoch).
@@ -26,6 +29,7 @@ const TRAY_CLICK_GUARD_MS: u64 = 300;
 /// OS happens to pick (often the desktop on Win11 → silent paste failure).
 /// Stored as i64 so we can use `AtomicI64::new(0)` in a const context;
 /// HWND fits in an isize / i64 on both x86 and x64.
+#[cfg(target_os = "windows")]
 static PREV_FOREGROUND_HWND: AtomicI64 = AtomicI64::new(0);
 
 fn now_ms() -> u64 {
