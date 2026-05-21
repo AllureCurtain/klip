@@ -7,11 +7,26 @@ import type { ClipboardItem } from '@/types';
 vi.mock('@/lib/tauri', () => ({
   clipboardApi: {
     getList: vi.fn(),
+    getListFiltered: vi.fn(),
     search: vi.fn(),
+    searchFiltered: vi.fn(),
     delete: vi.fn(),
+    deleteMany: vi.fn(),
     paste: vi.fn(),
     clear: vi.fn(),
     toggleFavorite: vi.fn(),
+    setFavoriteForItems: vi.fn(),
+    listTags: vi.fn(),
+    createTag: vi.fn(),
+    assignTagToItem: vi.fn(),
+    removeTagFromItem: vi.fn(),
+    rescanSensitive: vi.fn(),
+    exportJson: vi.fn(),
+    exportCsv: vi.fn(),
+    importJson: vi.fn(),
+    importCsv: vi.fn(),
+    backupDatabase: vi.fn(),
+    restoreDatabase: vi.fn(),
   },
   configApi: {
     get: vi.fn(),
@@ -41,6 +56,9 @@ function makeItem(id: number, overrides: Partial<ClipboardItem> = {}): Clipboard
     size: 10,
     metadata: null,
     is_favorited: false,
+    is_sensitive: false,
+    sensitivity_reason: null,
+    tags: [],
     created_at: Date.now(),
     last_used_at: Date.now(),
     ...overrides,
@@ -54,6 +72,8 @@ describe('clipboardStore', () => {
       items: [],
       loading: false,
       error: null,
+      tags: [],
+      selectedIds: [],
     });
     vi.clearAllMocks();
   });
@@ -118,25 +138,25 @@ describe('clipboardStore', () => {
   describe('fetchItems with contentType', () => {
     it('calls getList when no contentType', async () => {
       const items = [makeItem(1), makeItem(2)];
-      vi.mocked(clipboardApi.getList).mockResolvedValue(items);
+      vi.mocked(clipboardApi.getListFiltered).mockResolvedValue(items);
 
       const { fetchItems } = useClipboardStore.getState();
       await fetchItems();
 
-      expect(clipboardApi.getList).toHaveBeenCalled();
-      expect(clipboardApi.search).not.toHaveBeenCalled();
+      expect(clipboardApi.getListFiltered).toHaveBeenCalledWith({});
+      expect(clipboardApi.searchFiltered).not.toHaveBeenCalled();
       expect(useClipboardStore.getState().items).toEqual(items);
     });
 
     it('calls search with empty query when contentType is provided', async () => {
       const items = [makeItem(1, { content_type: 'text' })];
-      vi.mocked(clipboardApi.search).mockResolvedValue(items);
+      vi.mocked(clipboardApi.getListFiltered).mockResolvedValue(items);
 
       const { fetchItems } = useClipboardStore.getState();
-      await fetchItems('text');
+      await fetchItems({ contentType: 'text' });
 
-      expect(clipboardApi.search).toHaveBeenCalledWith('', 'text');
-      expect(clipboardApi.getList).not.toHaveBeenCalled();
+      expect(clipboardApi.getListFiltered).toHaveBeenCalledWith({ contentType: 'text' });
+      expect(clipboardApi.searchFiltered).not.toHaveBeenCalled();
       expect(useClipboardStore.getState().items).toEqual(items);
     });
   });
@@ -144,22 +164,22 @@ describe('clipboardStore', () => {
   describe('searchItems with contentType', () => {
     it('passes contentType to clipboardApi.search', async () => {
       const items = [makeItem(1)];
-      vi.mocked(clipboardApi.search).mockResolvedValue(items);
+      vi.mocked(clipboardApi.searchFiltered).mockResolvedValue(items);
 
       const { searchItems } = useClipboardStore.getState();
-      await searchItems('hello', 'image');
+      await searchItems('hello', { contentType: 'image' });
 
-      expect(clipboardApi.search).toHaveBeenCalledWith('hello', 'image');
+      expect(clipboardApi.searchFiltered).toHaveBeenCalledWith('hello', { contentType: 'image' });
     });
 
     it('calls search without contentType when not provided', async () => {
       const items = [makeItem(1)];
-      vi.mocked(clipboardApi.search).mockResolvedValue(items);
+      vi.mocked(clipboardApi.searchFiltered).mockResolvedValue(items);
 
       const { searchItems } = useClipboardStore.getState();
       await searchItems('hello');
 
-      expect(clipboardApi.search).toHaveBeenCalledWith('hello', undefined);
+      expect(clipboardApi.searchFiltered).toHaveBeenCalledWith('hello', {});
     });
   });
 
@@ -187,6 +207,37 @@ describe('clipboardStore', () => {
       expect(clipboardApi.delete).toHaveBeenCalledWith(2);
       const state = useClipboardStore.getState();
       expect(state.items.map((i) => i.id)).toEqual([1, 3]);
+    });
+  });
+
+  describe('batch operations', () => {
+    it('deletes selected items and clears selection', async () => {
+      useClipboardStore.setState({
+        items: [makeItem(1), makeItem(2), makeItem(3)],
+        selectedIds: [1, 3],
+      });
+      vi.mocked(clipboardApi.deleteMany).mockResolvedValue(2);
+
+      const { deleteSelected } = useClipboardStore.getState();
+      await deleteSelected();
+
+      expect(clipboardApi.deleteMany).toHaveBeenCalledWith([1, 3]);
+      expect(useClipboardStore.getState().items.map((i) => i.id)).toEqual([2]);
+      expect(useClipboardStore.getState().selectedIds).toEqual([]);
+    });
+
+    it('sets favorite state for selected items', async () => {
+      useClipboardStore.setState({
+        items: [makeItem(1), makeItem(2)],
+        selectedIds: [1, 2],
+      });
+      vi.mocked(clipboardApi.setFavoriteForItems).mockResolvedValue(2);
+
+      const { setFavoriteForSelected } = useClipboardStore.getState();
+      await setFavoriteForSelected(true);
+
+      expect(clipboardApi.setFavoriteForItems).toHaveBeenCalledWith([1, 2], true);
+      expect(useClipboardStore.getState().items.every((item) => item.is_favorited)).toBe(true);
     });
   });
 });

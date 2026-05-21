@@ -34,6 +34,9 @@ pub struct ClipboardItem {
     pub size: i64,
     pub metadata: Option<String>,
     pub is_favorited: bool,
+    pub is_sensitive: bool,
+    pub sensitivity_reason: Option<String>,
+    pub tags: Vec<Tag>,
     pub created_at: i64,
     pub last_used_at: i64,
 }
@@ -69,4 +72,24 @@ pub struct DiagnosticsInfo {
     pub data_dir: String,
     pub db_path: String,
     pub log_dir: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Tag {
+    pub id: i64,
+    pub name: String,
+    pub color: Option<String>,
+    pub created_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImportSummary {
+    pub imported: usize,
+    pub skipped: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BackupSummary {
+    pub path: String,
+    pub size: u64,
 }

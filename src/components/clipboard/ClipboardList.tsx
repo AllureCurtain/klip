@@ -42,7 +42,7 @@ function getTimeGroupLabel(
 
 export function ClipboardList({ items }: ClipboardListProps) {
   const { t, i18n } = useTranslation();
-  const { copyItem } = useClipboardStore();
+  const { copyItem, hasMore, loadMore, loadingMore } = useClipboardStore();
   const [selectedIndex, setSelectedIndex] = useState(0);
   const selectedIndexRef = useRef(0);
   const parentRef = useRef<HTMLDivElement>(null);
@@ -80,7 +80,7 @@ export function ClipboardList({ items }: ClipboardListProps) {
   selectedIndexRef.current = selectedIndex;
 
   const HEADER_HEIGHT = 28;
-  const ITEM_HEIGHT = 56;
+  const ITEM_HEIGHT = 64;
 
   const virtualizer = useVirtualizer({
     count: rows.length,
@@ -88,6 +88,15 @@ export function ClipboardList({ items }: ClipboardListProps) {
     estimateSize: (index) => (rows[index]?.type === 'header' ? HEADER_HEIGHT : ITEM_HEIGHT),
     overscan: 8,
   });
+  const virtualItems = virtualizer.getVirtualItems();
+
+  useEffect(() => {
+    const lastVirtualItem = virtualItems[virtualItems.length - 1];
+    if (!lastVirtualItem || !hasMore || loadingMore) return;
+    if (lastVirtualItem.index >= rows.length - 4) {
+      void loadMore();
+    }
+  }, [hasMore, loadMore, loadingMore, rows.length, virtualItems]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -139,7 +148,7 @@ export function ClipboardList({ items }: ClipboardListProps) {
           position: 'relative',
         }}
       >
-        {virtualizer.getVirtualItems().map((virtualRow) => {
+        {virtualItems.map((virtualRow) => {
           const row = rows[virtualRow.index];
           if (!row) return null;
 
@@ -187,6 +196,11 @@ export function ClipboardList({ items }: ClipboardListProps) {
           );
         })}
       </div>
+      {loadingMore ? (
+        <div className="h-9 flex items-center justify-center text-[11px] text-muted-foreground">
+          {t('app.loading')}
+        </div>
+      ) : null}
     </div>
   );
 }

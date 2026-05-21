@@ -1,3 +1,7 @@
+mod productization;
+
+pub use productization::*;
+
 use crate::database::{self, ClipboardItem, DiagnosticsInfo, SystemInfo};
 use crate::AppError;
 use tauri::{Emitter, Manager, State};

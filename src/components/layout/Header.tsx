@@ -10,6 +10,7 @@ import {
   Moon,
   Trash2,
   Star,
+  X,
 } from 'lucide-react';
 import { Input, Button } from '@/components/ui';
 import {
@@ -23,6 +24,7 @@ import {
 import { useThemeStore, useClipboardStore } from '@/stores';
 import { cn } from '@/lib/utils';
 import { onOpenSettings, onOpenAbout } from '@/lib/tauri';
+import type { Tag } from '@/types';
 
 interface HeaderProps {
   searchQuery: string;
@@ -31,6 +33,9 @@ interface HeaderProps {
   onContentTypeChange: (type: string | null) => void;
   showFavorites: boolean;
   onShowFavoritesChange: (show: boolean) => void;
+  tags: Tag[];
+  selectedTagId: number | null;
+  onSelectedTagChange: (tagId: number | null) => void;
   onSettingsOpen: () => void;
 }
 
@@ -41,11 +46,21 @@ export function Header({
   onContentTypeChange,
   showFavorites,
   onShowFavoritesChange,
+  tags,
+  selectedTagId,
+  onSelectedTagChange,
   onSettingsOpen,
 }: HeaderProps) {
   const { t } = useTranslation();
   const { resolvedTheme, setTheme } = useThemeStore();
-  const { clearItems } = useClipboardStore();
+  const {
+    clearItems,
+    selectedIds,
+    clearSelection,
+    deleteSelected,
+    assignTagToSelected,
+    setFavoriteForSelected,
+  } = useClipboardStore();
   const [clearDialogOpen, setClearDialogOpen] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
 
@@ -166,6 +181,93 @@ export function Header({
             </button>
           ))}
         </div>
+        {tags.length > 0 && (
+          <div className="flex items-center gap-1 overflow-x-auto px-2 pb-1.5 scrollbar-thin">
+            <button
+              className={cn(
+                'h-6 shrink-0 rounded-md px-2 text-[11px] font-medium transition-colors',
+                selectedTagId === null
+                  ? 'bg-accent text-accent-foreground'
+                  : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+              )}
+              onClick={() => onSelectedTagChange(null)}
+            >
+              {t('header.tags.all')}
+            </button>
+            {tags.map((tag) => (
+              <button
+                key={tag.id}
+                className={cn(
+                  'flex h-6 shrink-0 items-center gap-1 rounded-md px-2 text-[11px] font-medium transition-colors',
+                  selectedTagId === tag.id
+                    ? 'bg-accent text-accent-foreground'
+                    : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+                )}
+                onClick={() => onSelectedTagChange(tag.id)}
+              >
+                {tag.color && (
+                  <span
+                    className="size-2 rounded-full"
+                    style={{ backgroundColor: tag.color }}
+                  />
+                )}
+                {tag.name}
+              </button>
+            ))}
+          </div>
+        )}
+        {selectedIds.length > 0 && (
+          <div className="flex items-center gap-1 border-t border-border px-2 py-1">
+            <span className="mr-auto text-[10px] text-muted-foreground">
+              {t('header.selectedCount', { count: selectedIds.length })}
+            </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-6"
+              onClick={() => setFavoriteForSelected(true)}
+              title={t('header.favoriteSelected')}
+            >
+              <Star className="h-3 w-3" />
+            </Button>
+            {tags.slice(0, 4).map((tag) => (
+              <Button
+                key={tag.id}
+                variant="ghost"
+                size="sm"
+                className="h-6 max-w-20 px-1.5 text-[10px]"
+                onClick={() => assignTagToSelected(tag.id)}
+                title={t('header.assignTagSelected', { name: tag.name })}
+              >
+                {tag.color && (
+                  <span
+                    className="size-1.5 rounded-full"
+                    style={{ backgroundColor: tag.color }}
+                  />
+                )}
+                <span className="truncate">{tag.name}</span>
+              </Button>
+            ))}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-6"
+              onClick={deleteSelected}
+              title={t('header.deleteSelected')}
+            >
+              <Trash2 className="h-3 w-3 text-destructive" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-6"
+              onClick={clearSelection}
+              title={t('header.clearSelection')}
+            >
+              <X className="h-3 w-3" />
+            </Button>
+          </div>
+        )}
       </header>
 
       <Dialog open={clearDialogOpen} onOpenChange={setClearDialogOpen}>

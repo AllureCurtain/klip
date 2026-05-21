@@ -15,11 +15,13 @@ import {
   Info,
   Monitor,
   Loader2,
+  Database,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { SUPPORTED_LANGUAGES } from '@/i18n';
+import { DataManagementView } from './DataManagementView';
 
-export type SettingsTab = 'general' | 'shortcuts' | 'behavior' | 'about';
+export type SettingsTab = 'general' | 'shortcuts' | 'behavior' | 'data' | 'about';
 
 interface SettingsViewProps {
   onBack: () => void;
@@ -55,6 +57,7 @@ export function SettingsView({ onBack }: SettingsViewProps) {
     { value: 'general', label: t('settings.tabs.general'), icon: <Sliders className="h-3.5 w-3.5" /> },
     { value: 'shortcuts', label: t('settings.tabs.shortcuts'), icon: <Keyboard className="h-3.5 w-3.5" /> },
     { value: 'behavior', label: t('settings.tabs.behavior'), icon: <Monitor className="h-3.5 w-3.5" /> },
+    { value: 'data', label: t('settings.tabs.data'), icon: <Database className="h-3.5 w-3.5" /> },
     { value: 'about', label: t('settings.tabs.about'), icon: <Info className="h-3.5 w-3.5" /> },
   ];
 
@@ -279,6 +282,8 @@ export function SettingsView({ onBack }: SettingsViewProps) {
             </div>
           </div>
         )}
+
+        {activeTab === 'data' && <DataManagementView />}
 
         {activeTab === 'about' && (
           <div className="space-y-3">

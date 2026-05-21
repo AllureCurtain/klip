@@ -46,7 +46,7 @@ mod tests {
         ).unwrap();
 
         let mut stmt = conn.prepare(
-            "SELECT id, content_type, content, preview, hash, size, metadata, is_favorited, created_at, last_used_at
+            "SELECT id, content_type, content, preview, hash, size, metadata, is_favorited, created_at, last_used_at, is_sensitive, sensitivity_reason
              FROM clipboard_items WHERE hash = ?1",
         ).unwrap();
         stmt.query_row([&hash], |row| Ok(row_to_clipboard_item(row)))
@@ -198,7 +198,7 @@ pub fn get_list(db: &Database, limit: i64, offset: i64) -> Result<Vec<ClipboardI
     let conn = db.get_connection()?;
 
     let mut stmt = conn.prepare(
-        "SELECT id, content_type, content, preview, hash, size, metadata, is_favorited, created_at, last_used_at
+        "SELECT id, content_type, content, preview, hash, size, metadata, is_favorited, created_at, last_used_at, is_sensitive, sensitivity_reason
          FROM clipboard_items
          ORDER BY last_used_at DESC, created_at DESC
          LIMIT ?1 OFFSET ?2",
@@ -223,14 +223,14 @@ pub fn search(
 
     let sql = match content_type {
         Some(_) =>
-            "SELECT id, content_type, content, preview, hash, size, metadata, is_favorited, created_at, last_used_at
+            "SELECT id, content_type, content, preview, hash, size, metadata, is_favorited, created_at, last_used_at, is_sensitive, sensitivity_reason
              FROM clipboard_items
              WHERE (preview LIKE ?1 OR (content_type != 'image' AND content LIKE ?1))
                AND content_type = ?3
              ORDER BY last_used_at DESC, created_at DESC
              LIMIT ?2",
         None =>
-            "SELECT id, content_type, content, preview, hash, size, metadata, is_favorited, created_at, last_used_at
+            "SELECT id, content_type, content, preview, hash, size, metadata, is_favorited, created_at, last_used_at, is_sensitive, sensitivity_reason
              FROM clipboard_items
              WHERE preview LIKE ?1
                 OR (content_type != 'image' AND content LIKE ?1)
@@ -273,7 +273,7 @@ pub fn get_by_id(db: &Database, id: i64) -> Result<Option<ClipboardItem>, AppErr
     let conn = db.get_connection()?;
 
     let mut stmt = conn.prepare(
-        "SELECT id, content_type, content, preview, hash, size, metadata, is_favorited, created_at, last_used_at
+        "SELECT id, content_type, content, preview, hash, size, metadata, is_favorited, created_at, last_used_at, is_sensitive, sensitivity_reason
          FROM clipboard_items
          WHERE id = ?1",
     )?;
@@ -303,11 +303,18 @@ pub fn insert(
         ),
         ContentType::File => String::from_utf8_lossy(&item.data).to_string(),
     };
+    let sensitivity =
+        crate::database::productization::detect_sensitive(item.content_type.as_str(), &content_str);
 
     conn.execute(
-        "INSERT INTO clipboard_items (content_type, content, preview, hash, size, metadata, created_at, last_used_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
-         ON CONFLICT(hash) DO UPDATE SET last_used_at = excluded.last_used_at",
+        "INSERT INTO clipboard_items
+         (content_type, content, preview, hash, size, metadata, is_sensitive,
+          sensitivity_reason, created_at, last_used_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+         ON CONFLICT(hash) DO UPDATE SET
+            last_used_at = excluded.last_used_at,
+            is_sensitive = excluded.is_sensitive,
+            sensitivity_reason = excluded.sensitivity_reason",
         rusqlite::params![
             item.content_type.as_str(),
             content_str,
@@ -315,13 +322,15 @@ pub fn insert(
             item.hash,
             item.size,
             item.metadata,
+            sensitivity.is_some() as i64,
+            sensitivity.as_deref(),
             now,
             now,
         ],
     )?;
 
     let mut stmt = conn.prepare(
-        "SELECT id, content_type, content, preview, hash, size, metadata, is_favorited, created_at, last_used_at
+        "SELECT id, content_type, content, preview, hash, size, metadata, is_favorited, created_at, last_used_at, is_sensitive, sensitivity_reason
          FROM clipboard_items
          WHERE hash = ?1",
     )?;
@@ -381,7 +390,7 @@ pub fn toggle_favorite(db: &Database, id: i64) -> Result<ClipboardItem, AppError
     )?;
 
     let mut stmt = conn.prepare(
-        "SELECT id, content_type, content, preview, hash, size, metadata, is_favorited, created_at, last_used_at
+        "SELECT id, content_type, content, preview, hash, size, metadata, is_favorited, created_at, last_used_at, is_sensitive, sensitivity_reason
          FROM clipboard_items WHERE id = ?1",
     )?;
 
@@ -406,5 +415,8 @@ fn row_to_clipboard_item(row: &rusqlite::Row<'_>) -> ClipboardItem {
         is_favorited: row.get::<_, i64>(7).unwrap_or(0) != 0,
         created_at: row.get(8).unwrap_or(0),
         last_used_at: row.get(9).unwrap_or(0),
+        is_sensitive: row.get::<_, i64>(10).unwrap_or(0) != 0,
+        sensitivity_reason: row.get(11).unwrap_or(None),
+        tags: Vec::new(),
     }
 }
