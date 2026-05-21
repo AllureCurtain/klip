@@ -1,4 +1,5 @@
 use crate::AppError;
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
@@ -139,9 +140,16 @@ pub fn is_autostart_enabled() -> Result<bool, AppError> {
 }
 
 fn autostart_file_path() -> Result<PathBuf, AppError> {
-    let config_home = std::env::var_os("XDG_CONFIG_HOME")
+    autostart_file_path_from_env(std::env::var_os("XDG_CONFIG_HOME"), dirs::home_dir())
+}
+
+fn autostart_file_path_from_env(
+    xdg_config_home: Option<OsString>,
+    home_dir: Option<PathBuf>,
+) -> Result<PathBuf, AppError> {
+    let config_home = xdg_config_home
         .map(PathBuf::from)
-        .or_else(|| dirs::home_dir().map(|home| home.join(".config")))
+        .or_else(|| home_dir.map(|home| home.join(".config")))
         .ok_or_else(|| AppError::System("failed to resolve Linux config directory".into()))?;
     Ok(config_home.join("autostart").join(AUTOSTART_FILE))
 }
@@ -222,8 +230,9 @@ fn read_stdout(command: &str, args: &[&str]) -> Result<String, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{desktop_entry, file_uri_from_path, shell_escape};
-    use std::path::Path;
+    use super::{autostart_file_path_from_env, desktop_entry, file_uri_from_path, shell_escape};
+    use std::ffi::OsString;
+    use std::path::{Path, PathBuf};
 
     #[test]
     fn file_uri_preserves_path_separators_and_escapes_special_bytes() {
@@ -253,5 +262,29 @@ mod tests {
     fn desktop_entry_uses_escaped_exec_path() {
         let entry = desktop_entry(Path::new("/opt/Klip App/klip"));
         assert!(entry.contains("Exec='/opt/Klip App/klip'\n"));
+    }
+
+    #[test]
+    fn autostart_path_uses_xdg_config_home() {
+        let path = autostart_file_path_from_env(
+            Some(OsString::from("/tmp/xdg-config")),
+            Some(PathBuf::from("/home/me")),
+        )
+        .unwrap();
+
+        assert_eq!(
+            path,
+            PathBuf::from("/tmp/xdg-config/autostart/klip.desktop")
+        );
+    }
+
+    #[test]
+    fn autostart_path_falls_back_to_home_config() {
+        let path = autostart_file_path_from_env(None, Some(PathBuf::from("/home/me"))).unwrap();
+
+        assert_eq!(
+            path,
+            PathBuf::from("/home/me/.config/autostart/klip.desktop")
+        );
     }
 }
