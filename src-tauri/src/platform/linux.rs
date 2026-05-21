@@ -6,11 +6,11 @@ use std::process::{Command, Stdio};
 const AUTOSTART_FILE: &str = "klip.desktop";
 
 pub fn data_dir() -> PathBuf {
-    std::env::var_os("XDG_DATA_HOME")
-        .map(PathBuf::from)
-        .or_else(|| dirs::home_dir().map(|home| home.join(".local/share")))
-        .unwrap_or_else(std::env::temp_dir)
-        .join("klip")
+    data_dir_from_env(
+        std::env::var_os("XDG_DATA_HOME"),
+        dirs::home_dir(),
+        std::env::temp_dir(),
+    )
 }
 
 pub fn log_dir() -> PathBuf {
@@ -143,6 +143,18 @@ fn autostart_file_path() -> Result<PathBuf, AppError> {
     autostart_file_path_from_env(std::env::var_os("XDG_CONFIG_HOME"), dirs::home_dir())
 }
 
+fn data_dir_from_env(
+    xdg_data_home: Option<OsString>,
+    home_dir: Option<PathBuf>,
+    temp_dir: PathBuf,
+) -> PathBuf {
+    xdg_data_home
+        .map(PathBuf::from)
+        .or_else(|| home_dir.map(|home| home.join(".local/share")))
+        .unwrap_or(temp_dir)
+        .join("klip")
+}
+
 fn autostart_file_path_from_env(
     xdg_config_home: Option<OsString>,
     home_dir: Option<PathBuf>,
@@ -230,7 +242,10 @@ fn read_stdout(command: &str, args: &[&str]) -> Result<String, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{autostart_file_path_from_env, desktop_entry, file_uri_from_path, shell_escape};
+    use super::{
+        autostart_file_path_from_env, data_dir_from_env, desktop_entry, file_uri_from_path,
+        shell_escape,
+    };
     use std::ffi::OsString;
     use std::path::{Path, PathBuf};
 
@@ -285,6 +300,28 @@ mod tests {
         assert_eq!(
             path,
             PathBuf::from("/home/me/.config/autostart/klip.desktop")
+        );
+    }
+
+    #[test]
+    fn data_dir_uses_xdg_data_home() {
+        let path = data_dir_from_env(
+            Some(OsString::from("/tmp/xdg-data")),
+            Some(PathBuf::from("/home/me")),
+            PathBuf::from("/tmp"),
+        );
+
+        assert_eq!(path, PathBuf::from("/tmp/xdg-data/klip"));
+    }
+
+    #[test]
+    fn data_dir_falls_back_to_home_local_share() {
+        let path = data_dir_from_env(None, Some(PathBuf::from("/home/me")), PathBuf::from("/tmp"));
+
+        assert_eq!(path, PathBuf::from("/home/me/.local/share/klip"));
+        assert_eq!(
+            path.join("logs"),
+            PathBuf::from("/home/me/.local/share/klip/logs")
         );
     }
 }
