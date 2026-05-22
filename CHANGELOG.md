@@ -1,5 +1,17 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Database schema version gating with forward-version rejection.
+- Automatic recovery for corrupt SQLite databases by preserving the broken file and recreating a clean schema.
+- Restore-time rejection for backups from newer database schema versions.
+
+### Changed
+
+- Database migration versioning is now centralized so future release bumps cannot drift between init and restore paths.
+
 ## [0.1.1] - Windows-first productization patch
 
 ### Added
