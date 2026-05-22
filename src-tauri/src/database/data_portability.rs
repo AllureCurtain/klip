@@ -4,12 +4,13 @@ use crate::database::types::{
 };
 use crate::{AppError, Database};
 use base64::Engine;
-use rusqlite::Connection;
+use rusqlite::{Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use sha2::Digest;
 use std::path::{Path, PathBuf};
 
 const SUPPORTED_EXPORT_VERSION: u32 = 1;
+const CURRENT_DB_VERSION: i64 = 2;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct ExportFile {
@@ -434,6 +435,25 @@ fn validate_backup_database(path: &Path) -> Result<(), AppError> {
         }
     }
 
+    let backup_version = conn
+        .query_row(
+            "SELECT value FROM app_config WHERE key = 'db_version'",
+            [],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(|e| AppError::InvalidInput(format!("invalid backup database: {}", e)))?
+        .unwrap_or_else(|| "0".to_string())
+        .parse::<i64>()
+        .map_err(|e| AppError::InvalidInput(format!("invalid backup database version: {}", e)))?;
+
+    if backup_version > CURRENT_DB_VERSION {
+        return Err(AppError::InvalidInput(format!(
+            "newer database schema version {} is not supported by this app version",
+            backup_version
+        )));
+    }
+
     Ok(())
 }
 
@@ -623,5 +643,34 @@ mod tests {
         let backup_path = PathBuf::from(summary.pre_restore_backup_path);
         assert!(backup_path.exists());
         assert_eq!(count_items(&backup_path), 1);
+    }
+
+    #[test]
+    fn restore_rejects_newer_backup_versions_without_overwriting_current_database() {
+        let dir = temp_dir("newer-restore");
+        let current_path = dir.join("current.db");
+        let restore_path = dir.join("restore.db");
+
+        let current = create_db(&current_path);
+        insert_text(&current, "keep-current-data");
+
+        let restore = create_db(&restore_path);
+        {
+            let conn = restore.get_connection().unwrap();
+            conn.execute(
+                "UPDATE app_config SET value = '999' WHERE key = 'db_version'",
+                [],
+            )
+            .unwrap();
+        }
+        drop(restore);
+
+        let result = restore_database(&current, &current_path, restore_path.to_str().unwrap());
+
+        assert!(matches!(
+            result,
+            Err(AppError::InvalidInput(message)) if message.contains("newer database schema")
+        ));
+        assert_eq!(count_items(&current_path), 1);
     }
 }
