@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.1.1] - Windows-first productization patch
+
+### Added
+
+- Tags and grouped history filters.
+- JSON/CSV import and export.
+- Database backup and restore with backup validation and an automatic pre-restore backup.
+- Sensitive-content detection with configurable capture policy and masked previews.
+- Linux platform groundwork for paths, clipboard write-back, paste simulation, autostart, and E2E runner.
+
+### Changed
+
+- Release, API, architecture, database, and roadmap docs now match the current productized feature set.
+
+### Known Caveats
+
+- Installers are not code signed yet, so Windows may show SmartScreen or publisher warnings.
+- macOS/Linux parity remains post-MVP work; Linux support still needs real desktop validation before it is treated as complete.
+- Auto-update, sync, and database encryption are not included in v0.1.1.
+
 ## [0.1.0] - Windows-first MVP
 
 ### Added
@@ -11,10 +31,6 @@
 - Windows installer bundles via Tauri MSI and NSIS targets.
 - Desktop E2E smoke test for text copy, search, and paste-path clipboard restoration.
 - GitHub Actions Release workflow for tag/manual Windows installer builds.
-- Tags and grouped history filters.
-- JSON/CSV import and export.
-- Database backup and restore with backup validation and an automatic pre-restore backup.
-- Sensitive-content detection with configurable capture policy and masked previews.
 
 ### Verification
 
@@ -31,4 +47,4 @@
 
 - Installers are not code signed yet, so Windows may show SmartScreen or publisher warnings.
 - macOS and Linux parity remains post-MVP work.
-- Auto-update, sync, and database encryption are not included in v0.1.0.
+- Import/export, backup/restore, auto-update, sync, sensitive-content rules, and database encryption are not included in v0.1.0.
