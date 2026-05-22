@@ -11,6 +11,10 @@
 - Windows installer bundles via Tauri MSI and NSIS targets.
 - Desktop E2E smoke test for text copy, search, and paste-path clipboard restoration.
 - GitHub Actions Release workflow for tag/manual Windows installer builds.
+- Tags and grouped history filters.
+- JSON/CSV import and export.
+- Database backup and restore with backup validation and an automatic pre-restore backup.
+- Sensitive-content detection with configurable capture policy and masked previews.
 
 ### Verification
 
@@ -27,4 +31,4 @@
 
 - Installers are not code signed yet, so Windows may show SmartScreen or publisher warnings.
 - macOS and Linux parity remains post-MVP work.
-- Import/export, backup/restore, auto-update, sync, and encryption are not included in v0.1.0.
+- Auto-update, sync, and database encryption are not included in v0.1.0.

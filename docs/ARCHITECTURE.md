@@ -123,7 +123,8 @@ src/
 │   │   ├── ClipboardItem.tsx   # 统一的列表项（内部按 content_type 分支渲染）
 │   │   └── ImagePreview.tsx    # 图片大图预览弹窗
 │   └── settings/        # 设置相关
-│       └── SettingsView.tsx    # 全页设置（4 个 Tab：通用/快捷键/行为/关于）
+│       ├── SettingsView.tsx        # 全页设置（通用/快捷键/行为/数据/关于）
+│       └── DataManagementView.tsx  # 标签、导入导出、备份恢复、敏感内容设置
 │
 ├── stores/              # Zustand 状态
 │   ├── clipboardStore.ts  # 剪贴板列表、搜索、删除、收藏
@@ -149,8 +150,9 @@ src-tauri/src/
 ├── main.rs              # 应用启动、tracing 初始化、窗口焦点处理
 ├── lib.rs               # 模块导出、托盘点击守卫、前台窗口捕获/恢复
 │
-├── commands/            # IPC 命令（17 个 #[tauri::command]）
-│   └── mod.rs
+├── commands/            # IPC 命令
+│   ├── mod.rs           # 基础剪贴板、配置、窗口、系统命令
+│   └── productization.rs # 筛选、标签、导入导出、备份恢复、敏感内容
 │
 ├── clipboard/           # 剪贴板监听与格式处理
 │   ├── mod.rs
@@ -166,6 +168,8 @@ src-tauri/src/
 │   ├── connection.rs    # 连接管理、建表、迁移
 │   ├── clipboard.rs     # 剪贴板 CRUD
 │   ├── config.rs        # 配置 CRUD
+│   ├── data_portability.rs # JSON/CSV 导入导出、数据库备份恢复
+│   ├── productization.rs   # 筛选、标签、敏感内容扫描
 │   └── types.rs         # 数据类型（ClipboardItem, SystemInfo 等）
 │
 ├── hotkey/              # 快捷键管理
@@ -257,6 +261,9 @@ interface ClipboardItem {
   size: number;
   metadata: string | null;   // JSON: ImageMetadata | FileMetadata
   is_favorited: boolean;
+  is_sensitive: boolean;
+  sensitivity_reason: string | null;
+  tags: Tag[];
   created_at: number;
   last_used_at: number;
 }
@@ -272,6 +279,9 @@ interface AppConfig {
   window_width: number;
   window_height: number;
   search_debounce_ms: number;
+  language: string;
+  sensitive_capture_policy: 'flag' | 'skip';
+  mask_sensitive_previews: boolean;
 }
 ```
 
@@ -286,13 +296,29 @@ interface AppConfig {
 | 命令 | 参数 | 返回 | 说明 |
 |------|------|------|------|
 | `get_clipboard_list` | limit, offset | ClipboardItem[] | 获取列表 |
+| `get_clipboard_list_filtered` | filters | ClipboardItem[] | 筛选列表 |
 | `search_clipboard` | query, content_type?, limit | ClipboardItem[] | 搜索 |
+| `search_clipboard_filtered` | query, filters | ClipboardItem[] | 搜索并筛选 |
 | `get_clipboard_by_id` | id | ClipboardItem? | 按 ID 获取 |
 | `delete_clipboard_item` | id | void | 删除 |
+| `delete_clipboard_items` | ids | number | 批量删除 |
 | `copy_to_clipboard` | id | void | 复制到系统剪贴板 |
 | `paste_from_clipboard` | id | void | 复制后模拟粘贴 |
 | `toggle_favorite` | id | ClipboardItem | 切换收藏 |
+| `set_favorite_for_items` | ids, is_favorited | number | 批量收藏/取消收藏 |
 | `clear_clipboard_history` | - | void | 清空历史 |
+| `list_tags` | - | Tag[] | 获取标签 |
+| `create_tag` | name, color | Tag | 创建标签 |
+| `delete_tag` | id | void | 删除标签 |
+| `assign_tag_to_item` | item_id, tag_id | void | 添加标签关联 |
+| `remove_tag_from_item` | item_id, tag_id | void | 移除标签关联 |
+| `export_clipboard_json` | path | BackupSummary | 导出 JSON |
+| `export_clipboard_csv` | path | BackupSummary | 导出 CSV |
+| `import_clipboard_json` | path | ImportSummary | 导入 JSON |
+| `import_clipboard_csv` | path | ImportSummary | 导入 CSV |
+| `backup_database` | path | BackupSummary | 备份数据库 |
+| `restore_database` | path | RestoreSummary | 校验并恢复数据库 |
+| `rescan_sensitive_items` | - | number | 重新扫描敏感内容 |
 | `get_config` | key | string? | 获取配置 |
 | `get_all_config` | - | Record<string, string> | 获取全部配置 |
 | `set_config` | key, value | void | 设置配置（热键变更会立即重载） |
@@ -314,9 +340,10 @@ interface AppConfig {
 
 ### 6.3 运行时配置约定
 
-- 当前后端实际消费的配置键为 `hotkey_toggle_window`、`hotkey_quick_paste_prefix`、`auto_start`
+- 当前后端实际消费的配置键包括 `hotkey_toggle_window`、`hotkey_quick_paste_prefix`、`auto_start`、`sensitive_capture_policy`
 - `set_config` 修改这两个键后，后端会立即注销旧热键并重新注册
 - `set_auto_start` 会调用系统自启动管理器，并将 `auto_start` 持久化到数据库
+- `mask_sensitive_previews` 由前端列表渲染消费，默认开启
 - 其他配置键当前主要承担持久化职责，不保证在运行中立即产生副作用
 
 ---

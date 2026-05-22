@@ -59,13 +59,24 @@ Use this checklist for the Windows-first MVP release candidate.
 - [ ] Settings changes persist after relaunch.
 - [ ] Log files are created under the About diagnostics log directory.
 
-## 9. Distribution Caveats
+## 9. Data Portability and Sensitive Content
+
+- [ ] Export JSON and confirm the file is created.
+- [ ] Export CSV and confirm the file is created.
+- [ ] Import JSON/CSV into an isolated profile and confirm imported items appear.
+- [ ] Create a database backup and confirm the backup file is created.
+- [ ] Restore a valid database backup and confirm the previous database is saved as a pre-restore backup.
+- [ ] Copy a password/API-key-like text and confirm it is flagged as sensitive.
+- [ ] Confirm sensitive item previews are masked by default.
+- [ ] Enable "Skip sensitive clipboard content" and confirm newly copied sensitive text is not saved.
+
+## 10. Distribution Caveats
 
 - [ ] Release notes mention unsigned installer warnings.
 - [ ] Release notes state this is Windows-first and macOS/Linux are post-MVP.
-- [ ] Release notes state backup/restore, sync, auto-update, and encryption are not included.
+- [ ] Release notes state sync, auto-update, database encryption, and code signing are not included.
 
-## 10. GitHub Release Workflow
+## 11. GitHub Release Workflow
 
 - [ ] Pushing a `v*` tag or manually running `Release` starts `.github/workflows/release.yml`.
 - [ ] The workflow creates a draft GitHub Release.

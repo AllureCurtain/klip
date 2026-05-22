@@ -12,7 +12,7 @@
 ## Post-MVP
 
 - macOS and Linux behavior parity.
-- Import/export and backup/restore.
-- Sensitive content rules and optional database encryption.
+- Broader validation for import/export, backup/restore, and sensitive content rules.
+- Optional database encryption.
 - Tags, snippets, and richer history organization.
 - Optional sync or plugin capabilities.

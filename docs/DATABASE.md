@@ -33,7 +33,10 @@ CREATE TABLE clipboard_items (
     preview         TEXT,                       -- 预览文本 (用于列表显示和搜索)
     hash            TEXT NOT NULL UNIQUE,       -- 内容哈希 (SHA256, 用于去重)
     size            INTEGER NOT NULL DEFAULT 0, -- 内容大小 (字节)
+    metadata        TEXT,                       -- JSON 元数据
     is_favorited    INTEGER NOT NULL DEFAULT 0, -- 是否收藏 (预留字段)
+    is_sensitive    INTEGER NOT NULL DEFAULT 0, -- 是否敏感
+    sensitivity_reason TEXT,                    -- 敏感原因
     created_at      INTEGER NOT NULL,           -- 创建时间 (毫秒时间戳)
     last_used_at    INTEGER NOT NULL            -- 最后使用时间 (毫秒时间戳)
 );
@@ -44,6 +47,7 @@ CREATE INDEX idx_clipboard_last_used_created_at ON clipboard_items(last_used_at 
 CREATE INDEX idx_clipboard_hash ON clipboard_items(hash);
 CREATE INDEX idx_clipboard_preview ON clipboard_items(preview);
 CREATE INDEX idx_clipboard_content_type ON clipboard_items(content_type);
+CREATE INDEX idx_clipboard_sensitive ON clipboard_items(is_sensitive, last_used_at DESC, created_at DESC);
 ```
 
 #### 字段说明
@@ -56,7 +60,10 @@ CREATE INDEX idx_clipboard_content_type ON clipboard_items(content_type);
 | preview | TEXT | 否 | 预览文本，用于列表显示 |
 | hash | TEXT | 是 | SHA256 哈希，唯一约束 |
 | size | INTEGER | 是 | 内容大小，单位字节 |
+| metadata | TEXT | 否 | 图片或文件元数据 JSON |
 | is_favorited | INTEGER | 是 | 是否收藏，0/1 |
+| is_sensitive | INTEGER | 是 | 是否敏感，0/1 |
+| sensitivity_reason | TEXT | 否 | 敏感内容检测原因 |
 | created_at | INTEGER | 是 | 创建时间，毫秒时间戳 |
 | last_used_at | INTEGER | 是 | 最后使用时间，毫秒时间戳 |
 
@@ -97,9 +104,12 @@ INSERT INTO app_config (key, value, updated_at) VALUES
     ('auto_start', 'false', strftime('%s', 'now') * 1000),
     ('close_to_tray', 'true', strftime('%s', 'now') * 1000),
     ('show_in_tray', 'true', strftime('%s', 'now') * 1000),
-    ('window_width', '400', strftime('%s', 'now') * 1000),
-    ('window_height', '600', strftime('%s', 'now') * 1000),
-    ('search_debounce_ms', '150', strftime('%s', 'now') * 1000);
+    ('window_width', '480', strftime('%s', 'now') * 1000),
+    ('window_height', '720', strftime('%s', 'now') * 1000),
+    ('search_debounce_ms', '150', strftime('%s', 'now') * 1000),
+    ('language', 'zh-CN', strftime('%s', 'now') * 1000),
+    ('sensitive_capture_policy', 'flag', strftime('%s', 'now') * 1000),
+    ('mask_sensitive_previews', 'true', strftime('%s', 'now') * 1000);
 ```
 
 #### 配置项说明
@@ -112,9 +122,12 @@ INSERT INTO app_config (key, value, updated_at) VALUES
 | auto_start | boolean | false | 开机自启动开关；启动时会与系统层面的自启状态同步 |
 | close_to_tray | boolean | true | 关闭时最小化到托盘 |
 | show_in_tray | boolean | true | 显示托盘图标 |
-| window_width | number | 400 | 窗口宽度 |
-| window_height | number | 600 | 窗口高度 |
+| window_width | number | 480 | 窗口宽度 |
+| window_height | number | 720 | 窗口高度 |
 | search_debounce_ms | number | 150 | 搜索防抖时间 |
+| language | string | zh-CN | UI 语言 |
+| sensitive_capture_policy | flag/skip | flag | 敏感内容保存策略；`skip` 会跳过新捕获的敏感文本 |
+| mask_sensitive_previews | boolean | true | 列表中默认遮罩敏感内容预览 |
 
 ---
 
@@ -258,31 +271,26 @@ fn cleanup_old_records(db: &Connection, max_count: i64) -> Result<()> {
 
 ---
 
-## 6. 备份与恢复（后续阶段）
+## 6. 导入导出、备份与恢复
 
-### 6.1 备份
+### 6.1 JSON/CSV 导入导出
 
-当前版本尚未提供正式的备份/恢复命令，以下内容表示规划方向，不代表现有实现。
+当前版本提供 JSON 和 CSV 导入导出命令。JSON 导入会校验导出版本；CSV 导入支持带引号的多行字段。导出命令会创建目标父目录。
+
+### 6.2 数据库备份
+
+`backup_database` 会把当前数据库复制到用户选择的路径；如果目标文件已存在，会先删除再写入。命令返回实际路径和文件大小。
+
+### 6.3 数据库恢复
+
+`restore_database` 会先用只读 SQLite 连接校验备份文件，执行 `PRAGMA integrity_check`，并确认必需表存在。恢复前会自动创建当前数据库的 `.pre-restore.bak` 备份。恢复时通过当前连接 `ATTACH DATABASE` 后导入数据，不直接替换已打开的数据库文件。
 
 ```rust
-fn backup_database(db_path: &Path, backup_path: &Path) -> Result<()> {
-    std::fs::copy(db_path, backup_path)?;
-    Ok(())
-}
-```
-
-### 6.2 恢复
-
-```rust
-fn restore_database(backup_path: &Path, db_path: &Path) -> Result<()> {
-    // 验证备份文件
-    let conn = Connection::open(backup_path)?;
-    validate_database(&conn)?;
-
-    // 关闭当前连接
-    // 复制备份文件
-    std::fs::copy(backup_path, db_path)?;
-    Ok(())
+pub struct RestoreSummary {
+    pub path: String,
+    pub size: u64,
+    pub pre_restore_backup_path: String,
+    pub pre_restore_backup_size: u64,
 }
 ```
 
@@ -299,6 +307,7 @@ fn restore_database(backup_path: &Path, db_path: &Path) -> Result<()> {
 | idx_clipboard_hash | 去重检查 |
 | idx_clipboard_preview | 搜索优化 |
 | idx_clipboard_content_type | 类型筛选 |
+| idx_clipboard_sensitive | 敏感条目筛选和排序 |
 
 ### 7.2 查询优化
 

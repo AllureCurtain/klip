@@ -54,6 +54,51 @@ const results = await invoke('search_clipboard', { query: 'hello' });
 
 ---
 
+#### `get_clipboard_list_filtered`
+
+按内容类型、收藏状态或标签筛选剪贴板历史。
+
+**参数**:
+```typescript
+{
+  contentType?: 'text' | 'image' | 'file' | null;
+  favoriteOnly?: boolean;
+  tagId?: number | null;
+  limit?: number;
+  offset?: number;
+}
+```
+
+**返回**:
+```typescript
+ClipboardItem[]
+```
+
+---
+
+#### `search_clipboard_filtered`
+
+在关键词搜索基础上叠加内容类型、收藏状态或标签筛选。
+
+**参数**:
+```typescript
+{
+  query: string;
+  contentType?: 'text' | 'image' | 'file' | null;
+  favoriteOnly?: boolean;
+  tagId?: number | null;
+  limit?: number;
+  offset?: number;
+}
+```
+
+**返回**:
+```typescript
+ClipboardItem[]
+```
+
+---
+
 #### `get_clipboard_by_id`
 
 获取单条剪贴板记录。
@@ -103,6 +148,43 @@ void
 
 ---
 
+#### `delete_clipboard_items`
+
+批量删除剪贴板记录。
+
+**参数**:
+```typescript
+{
+  ids: number[];
+}
+```
+
+**返回**:
+```typescript
+number
+```
+
+---
+
+#### `set_favorite_for_items`
+
+批量设置收藏状态。
+
+**参数**:
+```typescript
+{
+  ids: number[];
+  isFavorited: boolean;
+}
+```
+
+**返回**:
+```typescript
+number
+```
+
+---
+
 #### `copy_to_clipboard`
 
 将记录内容复制到系统剪贴板。
@@ -121,7 +203,163 @@ void
 
 ---
 
-### 1.2 配置管理
+### 1.2 标签、数据导入导出和敏感内容
+
+#### `list_tags`
+
+返回所有标签。
+
+**参数**: 无
+
+**返回**:
+```typescript
+Tag[]
+```
+
+---
+
+#### `create_tag`
+
+创建标签。
+
+**参数**:
+```typescript
+{
+  name: string;
+  color?: string | null;
+}
+```
+
+**返回**:
+```typescript
+Tag
+```
+
+---
+
+#### `delete_tag`
+
+删除标签，并移除剪贴板条目上的关联。
+
+**参数**:
+```typescript
+{
+  id: number;
+}
+```
+
+**返回**:
+```typescript
+void
+```
+
+---
+
+#### `assign_tag_to_item` / `remove_tag_from_item`
+
+给剪贴板条目添加或移除标签。
+
+**参数**:
+```typescript
+{
+  itemId: number;
+  tagId: number;
+}
+```
+
+**返回**:
+```typescript
+void
+```
+
+---
+
+#### `export_clipboard_json` / `export_clipboard_csv`
+
+导出剪贴板历史。导出命令会创建目标父目录。
+
+**参数**:
+```typescript
+{
+  path: string;
+}
+```
+
+**返回**:
+```typescript
+BackupSummary
+```
+
+---
+
+#### `import_clipboard_json` / `import_clipboard_csv`
+
+导入剪贴板历史。JSON 导入会校验导出版本；CSV 导入支持带引号的多行字段。
+
+**参数**:
+```typescript
+{
+  path: string;
+}
+```
+
+**返回**:
+```typescript
+ImportSummary
+```
+
+---
+
+#### `backup_database`
+
+创建当前 SQLite 数据库备份。
+
+**参数**:
+```typescript
+{
+  path: string;
+}
+```
+
+**返回**:
+```typescript
+BackupSummary
+```
+
+---
+
+#### `restore_database`
+
+恢复 SQLite 数据库备份。恢复前会校验备份数据库，并把当前数据库保存为 `.pre-restore.bak`。
+
+**参数**:
+```typescript
+{
+  path: string;
+}
+```
+
+**返回**:
+```typescript
+RestoreSummary
+```
+
+---
+
+#### `rescan_sensitive_items`
+
+重新扫描历史文本，刷新敏感内容标记。
+
+**参数**: 无
+
+**返回**:
+```typescript
+number
+```
+
+---
+
+### 1.3 配置管理
 
 #### `get_config`
 
@@ -176,11 +414,13 @@ void
 - `hotkey_toggle_window` 和 `hotkey_quick_paste_prefix` 会在写入后立即触发后端热键重载
 - 当前支持的窗口热键配置范围为 `Ctrl+Alt+<A-Z>`
 - 当前支持的快速粘贴前缀为 `Ctrl+Alt`，实际生效组合为 `Ctrl+Alt+1` 到 `Ctrl+Alt+9`
+- `sensitive_capture_policy=skip` 会让后端跳过新捕获的敏感文本
+- `mask_sensitive_previews` 由前端列表渲染消费，默认遮罩敏感内容预览
 - 其他配置键当前主要负责持久化，不保证立即产生运行时副作用
 
 ---
 
-### 1.3 系统操作
+### 1.4 系统操作
 
 #### `toggle_window`
 
@@ -338,12 +578,26 @@ interface ClipboardItem {
   size: number;
   metadata: string | null;
   is_favorited: boolean;
+  is_sensitive: boolean;
+  sensitivity_reason: string | null;
+  tags: Tag[];
   created_at: number;   // 毫秒时间戳
   last_used_at: number; // 毫秒时间戳
 }
 ```
 
-### 3.2 AppConfig
+### 3.2 Tag
+
+```typescript
+interface Tag {
+  id: number;
+  name: string;
+  color: string | null;
+  created_at: number;
+}
+```
+
+### 3.3 AppConfig
 
 应用配置。
 
@@ -358,10 +612,34 @@ interface AppConfig {
   window_width: number;
   window_height: number;
   search_debounce_ms: number;
+  language: string;
+  sensitive_capture_policy: 'flag' | 'skip';
+  mask_sensitive_previews: boolean;
 }
 ```
 
-### 3.3 ContentType
+### 3.4 ImportSummary / BackupSummary / RestoreSummary
+
+```typescript
+interface ImportSummary {
+  imported: number;
+  skipped: number;
+}
+
+interface BackupSummary {
+  path: string;
+  size: number;
+}
+
+interface RestoreSummary {
+  path: string;
+  size: number;
+  pre_restore_backup_path: string;
+  pre_restore_backup_size: number;
+}
+```
+
+### 3.5 ContentType
 
 内容类型枚举。
 
@@ -369,7 +647,7 @@ interface AppConfig {
 type ContentType = 'text' | 'image' | 'file';
 ```
 
-### 3.4 SystemInfo
+### 3.6 SystemInfo
 
 系统信息。
 
@@ -397,14 +675,68 @@ export const clipboardApi = {
   getList: (limit = 100, offset = 0) =>
     invoke<ClipboardItem[]>('get_clipboard_list', { limit, offset }),
 
+  getListFiltered: (options: ClipboardQueryOptions = {}) =>
+    invoke<ClipboardItem[]>('get_clipboard_list_filtered', options),
+
   search: (query: string, limit = 100) =>
     invoke<ClipboardItem[]>('search_clipboard', { query, limit }),
+
+  searchFiltered: (query: string, options: ClipboardQueryOptions = {}) =>
+    invoke<ClipboardItem[]>('search_clipboard_filtered', { query, ...options }),
 
   delete: (id: number) =>
     invoke('delete_clipboard_item', { id }),
 
+  deleteMany: (ids: number[]) =>
+    invoke<number>('delete_clipboard_items', { ids }),
+
   copy: (id: number) =>
     invoke('copy_to_clipboard', { id }),
+
+  paste: (id: number) =>
+    invoke('paste_from_clipboard', { id }),
+
+  toggleFavorite: (id: number) =>
+    invoke<ClipboardItem>('toggle_favorite', { id }),
+
+  setFavoriteForItems: (ids: number[], isFavorited: boolean) =>
+    invoke<number>('set_favorite_for_items', { ids, isFavorited }),
+
+  listTags: () =>
+    invoke<Tag[]>('list_tags'),
+
+  createTag: (name: string, color?: string | null) =>
+    invoke<Tag>('create_tag', { name, color }),
+
+  deleteTag: (id: number) =>
+    invoke('delete_tag', { id }),
+
+  assignTagToItem: (itemId: number, tagId: number) =>
+    invoke('assign_tag_to_item', { itemId, tagId }),
+
+  removeTagFromItem: (itemId: number, tagId: number) =>
+    invoke('remove_tag_from_item', { itemId, tagId }),
+
+  rescanSensitive: () =>
+    invoke<number>('rescan_sensitive_items'),
+
+  exportJson: (path: string) =>
+    invoke<BackupSummary>('export_clipboard_json', { path }),
+
+  exportCsv: (path: string) =>
+    invoke<BackupSummary>('export_clipboard_csv', { path }),
+
+  importJson: (path: string) =>
+    invoke<ImportSummary>('import_clipboard_json', { path }),
+
+  importCsv: (path: string) =>
+    invoke<ImportSummary>('import_clipboard_csv', { path }),
+
+  backupDatabase: (path: string) =>
+    invoke<BackupSummary>('backup_database', { path }),
+
+  restoreDatabase: (path: string) =>
+    invoke<RestoreSummary>('restore_database', { path }),
 
   clear: () =>
     invoke('clear_clipboard_history'),
@@ -441,6 +773,9 @@ export const systemApi = {
 
   getInfo: () =>
     invoke<SystemInfo>('get_system_info'),
+
+  getDiagnostics: () =>
+    invoke<DiagnosticsInfo>('get_diagnostics_info'),
 };
 
 // 事件监听

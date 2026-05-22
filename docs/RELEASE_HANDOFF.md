@@ -694,9 +694,11 @@ Klip v0.1.0 is a Windows-first MVP.
 Installers are unsigned; Windows may show SmartScreen or unknown publisher
 warnings.
 Included: text/image/file clipboard history, search, favorites, tray behavior,
-global hotkeys, local SQLite persistence, settings, diagnostics, autostart.
-Not included: macOS/Linux parity, backup/restore, sync, auto-update, database
-encryption, code signing.
+global hotkeys, local SQLite persistence, settings, diagnostics, autostart,
+tags, JSON/CSV import/export, database backup/restore, and sensitive-content
+rules.
+Not included: full macOS/Linux parity, sync, auto-update, database encryption,
+code signing.
 ```
 
 - [ ] **Step 2: Attach or verify assets**
@@ -777,8 +779,9 @@ Known caveats
 - Installers are unsigned.
 - No auto-updater is configured.
 - macOS/Linux parity is not part of this release.
-- Backup/restore, sync, import/export, database encryption, and sensitive
-  content detection are post-MVP features.
+- Sync and database encryption are not part of this release.
+- Import/export, database backup/restore, and sensitive-content rules are now
+  implemented, but still need installed-build smoke testing before publishing.
 - `tauri.conf.json` currently uses identifier `com.klip.app`; Tauri warns that
   identifiers ending in `.app` are not recommended for macOS bundle naming.
   This is not blocking Windows v0.1.0, but should be revisited before macOS
