@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-05-22
+
 ### Added
 
 - Database schema version gating with forward-version rejection.
