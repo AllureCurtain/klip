@@ -5,7 +5,7 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20first-blue.svg)]()
 
-**Klip** 是一个当前以 Windows 为主要交付目标的剪贴板管理器，`v0.1.1` 已发布，帮助你高效管理剪贴板历史记录。macOS / Linux 支持作为后续阶段完善。
+**Klip** 是一个当前以 Windows 为主要交付目标的剪贴板管理器，`v0.1.2` 已发布，帮助你高效管理剪贴板历史记录。macOS / Linux 支持作为后续阶段完善。
 
 ## 特性
 
@@ -92,7 +92,7 @@ pnpm e2e
 
 ## GitHub Release
 
-`.github/workflows/release.yml` 支持 tag `v*` 触发或手动触发，使用 `tauri-apps/tauri-action` 构建 Windows 安装产物并创建 GitHub Release。当前公开版本为 `v0.1.1`。
+`.github/workflows/release.yml` 支持 tag `v*` 触发或手动触发，使用 `tauri-apps/tauri-action` 构建 Windows 安装产物并创建 GitHub Release。当前公开版本为 `v0.1.2`。
 
 ## 贡献
 
