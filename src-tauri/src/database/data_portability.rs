@@ -10,8 +10,6 @@ use sha2::Digest;
 use std::path::{Path, PathBuf};
 
 const SUPPORTED_EXPORT_VERSION: u32 = 1;
-const CURRENT_DB_VERSION: i64 = 2;
-
 #[derive(Debug, Serialize, Deserialize)]
 struct ExportFile {
     version: u32,
@@ -447,7 +445,7 @@ fn validate_backup_database(path: &Path) -> Result<(), AppError> {
         .parse::<i64>()
         .map_err(|e| AppError::InvalidInput(format!("invalid backup database version: {}", e)))?;
 
-    if backup_version > CURRENT_DB_VERSION {
+    if backup_version > crate::database::CURRENT_DB_VERSION {
         return Err(AppError::InvalidInput(format!(
             "newer database schema version {} is not supported by this app version",
             backup_version

@@ -6,7 +6,6 @@ use std::{
 };
 use tauri::Manager;
 
-const CURRENT_DB_VERSION: i64 = 2;
 const DEFAULT_TOGGLE_HOTKEY: &str = "Ctrl+Alt+K";
 const DEFAULT_QUICK_PASTE_PREFIX: &str = "Ctrl+Alt";
 const DEFAULT_AUTO_START: &str = "false";
@@ -333,7 +332,7 @@ fn normalize_legacy_hotkey_config(conn: &Connection, now: i64) -> Result<(), App
 
 fn run_schema_migrations(conn: &Connection, now: i64) -> Result<(), AppError> {
     let stored_version = read_schema_version(conn)?;
-    if stored_version > CURRENT_DB_VERSION {
+    if stored_version > crate::database::CURRENT_DB_VERSION {
         return Err(AppError::Database(format!(
             "newer database schema version {} is not supported by this app version",
             stored_version
@@ -344,7 +343,7 @@ fn run_schema_migrations(conn: &Connection, now: i64) -> Result<(), AppError> {
         migrate_to_v2(conn, now)?;
     }
 
-    write_schema_version(conn, now, CURRENT_DB_VERSION)
+    write_schema_version(conn, now, crate::database::CURRENT_DB_VERSION)
 }
 
 fn read_schema_version(conn: &Connection) -> Result<i64, AppError> {
@@ -510,6 +509,38 @@ mod tests {
             .unwrap();
 
         assert_eq!(version, "2");
+    }
+
+    #[test]
+    fn legacy_window_size_defaults_are_migrated_to_current_values() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "PRAGMA journal_mode=WAL;
+             PRAGMA foreign_keys=ON;
+             CREATE TABLE app_config (
+                 key TEXT PRIMARY KEY,
+                 value TEXT NOT NULL,
+                 updated_at INTEGER NOT NULL
+             );
+             INSERT INTO app_config (key, value, updated_at) VALUES
+                 ('db_version', '1', 1),
+                 ('window_width', '400', 1),
+                 ('window_height', '600', 1);",
+        )
+        .unwrap();
+
+        let db = Database::from_conn(conn);
+        db.init_schema().unwrap();
+
+        let width = crate::database::config::get(&db, "window_width")
+            .unwrap()
+            .unwrap();
+        let height = crate::database::config::get(&db, "window_height")
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(width, "480");
+        assert_eq!(height, "720");
     }
 
     #[test]
