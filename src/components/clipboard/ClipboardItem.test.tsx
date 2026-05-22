@@ -38,7 +38,6 @@ function makeTextItem(overrides: Partial<ClipboardItemType> = {}): ClipboardItem
 
 describe('ClipboardItem', () => {
   beforeEach(() => {
-    vi.useFakeTimers();
     useConfigStore.setState((state) => ({
       config: { ...state.config, mask_sensitive_previews: true },
     }));
@@ -68,6 +67,7 @@ describe('ClipboardItem', () => {
   });
 
   it('resets confirmation state after timeout', () => {
+    vi.useFakeTimers();
     render(<ClipboardItem item={makeTextItem()} index={1} isSelected={false} />);
 
     const deleteBtn = screen.getByRole('button', { name: '删除' });
