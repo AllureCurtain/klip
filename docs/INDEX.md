@@ -22,7 +22,7 @@
 | [DATABASE.md](DATABASE.md) | 数据库表结构、查询 | 开发者 |
 | [API.md](API.md) | IPC 接口、数据类型 | 开发者 |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | 开发环境、代码规范 | 开发者 |
-| [RELEASE_HANDOFF.md](RELEASE_HANDOFF.md) | v0.1.0 发布接续状态与剩余验收 | 发布执行者 |
+| [RELEASE_HANDOFF.md](RELEASE_HANDOFF.md) | v0.1.0 历史发布接续状态与剩余验收 | 发布执行者 |
 | [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) | Windows 安装包发布验收清单 | 发布执行者 |
 
 ### 文档阅读顺序
@@ -43,6 +43,9 @@
 ### 当前阶段
 
 **Phase 1: Windows-first MVP 收敛阶段**
+
+- 当前公开版本: `v0.1.1`
+- Windows Release: 已发布 MSI / NSIS 安装包
 
 ### 已完成工作
 
@@ -135,4 +138,4 @@ klip/
 
 ---
 
-> 最后更新: 2026-05-03 (MVP v0.1.0)
+> 最后更新: 2026-05-22 (MVP v0.1.1 已发布)

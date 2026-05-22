@@ -1,6 +1,6 @@
 # Klip Release Checklist
 
-Use this checklist for the Windows-first MVP release candidate.
+Use this checklist for Windows-first release verification. The current public release is `v0.1.1`.
 
 ## 1. Preflight
 

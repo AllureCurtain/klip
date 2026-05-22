@@ -356,14 +356,14 @@ tracing_subscriber::fmt()
 
 ```bash
 # 创建 tag
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.1.1
+git push origin v0.1.1
 
 # 构建
 pnpm tauri build
 
 # 上传到 GitHub
-gh release create v0.1.0 ./src-tauri/target/release/bundle/*
+gh release create v0.1.1 ./src-tauri/target/release/bundle/*
 ```
 
 ---
