@@ -36,6 +36,23 @@ function makeTextItem(overrides: Partial<ClipboardItemType> = {}): ClipboardItem
   };
 }
 
+function makeImageItem(overrides: Partial<ClipboardItemType> = {}): ClipboardItemType {
+  return {
+    ...makeTextItem(),
+    id: 84,
+    content_type: 'image',
+    content: 'data:image/png;base64,iVBORw0KGgo=',
+    preview: 'Image 24x24',
+    size: 12,
+    metadata: JSON.stringify({
+      width: 24,
+      height: 24,
+      format: 'png',
+    }),
+    ...overrides,
+  };
+}
+
 describe('ClipboardItem', () => {
   beforeEach(() => {
     useConfigStore.setState((state) => ({
@@ -133,5 +150,14 @@ describe('ClipboardItem', () => {
 
     expect(screen.getByText('password=super-secret')).toBeTruthy();
     expect(screen.queryByText('已隐藏敏感内容')).toBeNull();
+  });
+
+  it('opens image preview from an accessible thumbnail action', () => {
+    render(<ClipboardItem item={makeImageItem()} index={1} isSelected={false} />);
+
+    const previewButton = screen.getByRole('button', { name: '预览图片' });
+    fireEvent.click(previewButton);
+
+    expect(screen.getByText('图片预览')).toBeTruthy();
   });
 });

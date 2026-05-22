@@ -75,6 +75,7 @@ export function ImagePreview({
                 size="icon"
                 className="size-7"
                 onClick={handleDownload}
+                aria-label={t('imagePreview.download')}
                 title={t('imagePreview.download')}
               >
                 <Download className="h-3.5 w-3.5" />

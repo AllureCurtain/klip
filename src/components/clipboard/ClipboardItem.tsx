@@ -195,16 +195,19 @@ export function ClipboardItem({ item, index, isSelected, onSelect }: ClipboardIt
       case 'image':
         return (
           <div className="flex items-center gap-2 min-w-0">
-            <div
-              className="relative group/img cursor-pointer shrink-0"
+            <button
+              type="button"
+              className="relative group/img shrink-0 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
               onClick={handleImageClick}
+              aria-label={t('clipboard.previewImage')}
+              title={t('clipboard.previewImage')}
             >
               <img
                 src={item.content}
                 alt=""
                 className="h-8 w-8 object-cover rounded border border-border transition-colors group-hover/img:border-primary/40"
               />
-            </div>
+            </button>
             <div className="flex flex-col min-w-0">
               <span className="text-xs text-muted-foreground truncate">{item.preview}</span>
               {imageMeta && (
