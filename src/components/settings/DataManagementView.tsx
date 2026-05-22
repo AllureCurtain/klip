@@ -19,7 +19,7 @@ const DB_FILTER = [{ name: 'SQLite database', extensions: ['db', 'sqlite', 'sqli
 
 export function DataManagementView() {
   const { t } = useTranslation();
-  const { config, setSensitiveCapturePolicy } = useConfigStore();
+  const { config, setSensitiveCapturePolicy, setMaskSensitivePreviews } = useConfigStore();
   const {
     tags,
     createTag,
@@ -101,6 +101,19 @@ export function DataManagementView() {
         <Switch
           checked={config.sensitive_capture_policy === 'skip'}
           onCheckedChange={(checked) => setSensitiveCapturePolicy(checked ? 'skip' : 'flag')}
+        />
+      </div>
+
+      <div className="flex items-center justify-between gap-3">
+        <div className="space-y-0.5">
+          <Label className="text-xs">{t('settings.data.maskSensitivePreviews')}</Label>
+          <p className="text-[10px] text-muted-foreground">
+            {t('settings.data.maskSensitivePreviewsDesc')}
+          </p>
+        </div>
+        <Switch
+          checked={config.mask_sensitive_previews}
+          onCheckedChange={setMaskSensitivePreviews}
         />
       </div>
 

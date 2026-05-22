@@ -3,8 +3,8 @@ import { configApi, systemApi } from '@/lib/tauri';
 import type { AppConfig, DiagnosticsInfo, SystemInfo } from '@/types';
 import { getErrorMessage } from '@/types';
 
-function parseBoolean(value: string | null, defaultValue: boolean): boolean {
-  if (value === null) return defaultValue;
+function parseBoolean(value: string | null | undefined, defaultValue: boolean): boolean {
+  if (value == null) return defaultValue;
   return value === 'true';
 }
 
@@ -36,6 +36,7 @@ interface ConfigState {
   setSearchDebounceMs: (value: number) => void;
   setLanguage: (value: string) => void;
   setSensitiveCapturePolicy: (value: AppConfig['sensitive_capture_policy']) => void;
+  setMaskSensitivePreviews: (value: boolean) => void;
   saveChanges: () => Promise<void>;
   resetChanges: () => Promise<void>;
 }
@@ -52,6 +53,7 @@ const DEFAULT_CONFIG: AppConfig = {
   search_debounce_ms: 150,
   language: 'zh-CN',
   sensitive_capture_policy: 'flag',
+  mask_sensitive_previews: true,
 };
 
 export const useConfigStore = create<ConfigState>((set, get) => ({
@@ -79,6 +81,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
         language: allConfig['language'] || 'zh-CN',
         sensitive_capture_policy:
           allConfig['sensitive_capture_policy'] === 'skip' ? 'skip' : 'flag',
+        mask_sensitive_previews: parseBoolean(allConfig['mask_sensitive_previews'], true),
       };
       set({ config, loading: false, hasChanges: false });
     } catch (error) {
@@ -185,6 +188,13 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     }));
   },
 
+  setMaskSensitivePreviews: (value) => {
+    set((state) => ({
+      config: { ...state.config, mask_sensitive_previews: value },
+      hasChanges: true,
+    }));
+  },
+
   saveChanges: async () => {
     const { config } = get();
     set({ loading: true, error: null });
@@ -199,6 +209,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
       await configApi.set('search_debounce_ms', config.search_debounce_ms.toString());
       await configApi.set('language', config.language);
       await configApi.set('sensitive_capture_policy', config.sensitive_capture_policy);
+      await configApi.set('mask_sensitive_previews', config.mask_sensitive_previews.toString());
       set({ loading: false, hasChanges: false });
     } catch (error) {
       set({ error: getErrorMessage(error), loading: false });

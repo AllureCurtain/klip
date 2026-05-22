@@ -161,6 +161,7 @@ impl Database {
             ("search_debounce_ms", "150"),
             ("language", "zh-CN"),
             ("sensitive_capture_policy", "flag"),
+            ("mask_sensitive_previews", "true"),
             ("db_version", "2"),
         ];
 

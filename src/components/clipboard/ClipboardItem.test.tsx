@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ClipboardItem } from './ClipboardItem';
 import type { ClipboardItem as ClipboardItemType } from '@/types';
+import { useConfigStore } from '@/stores/configStore';
 
 const storeMocks = vi.hoisted(() => ({
   deleteItem: vi.fn(),
@@ -16,7 +17,7 @@ vi.mock('@/stores', () => ({
   useClipboardStore: () => storeMocks,
 }));
 
-function makeTextItem(): ClipboardItemType {
+function makeTextItem(overrides: Partial<ClipboardItemType> = {}): ClipboardItemType {
   return {
     id: 42,
     content_type: 'text',
@@ -31,12 +32,16 @@ function makeTextItem(): ClipboardItemType {
     tags: [],
     created_at: 1_714_000_000_000,
     last_used_at: 1_714_000_000_000,
+    ...overrides,
   };
 }
 
 describe('ClipboardItem', () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    useConfigStore.setState((state) => ({
+      config: { ...state.config, mask_sensitive_previews: true },
+    }));
   });
 
   afterEach(() => {
@@ -88,5 +93,45 @@ describe('ClipboardItem', () => {
     fireEvent.click(starBtn);
 
     expect(storeMocks.toggleFavorite).toHaveBeenCalledWith(42);
+  });
+
+  it('masks sensitive text previews by default', () => {
+    render(
+      <ClipboardItem
+        item={makeTextItem({
+          content: 'password=super-secret',
+          preview: 'password=super-secret',
+          is_sensitive: true,
+          sensitivity_reason: 'credential keyword',
+        })}
+        index={1}
+        isSelected={false}
+      />
+    );
+
+    expect(screen.getByText('已隐藏敏感内容')).toBeTruthy();
+    expect(screen.queryByText('password=super-secret')).toBeNull();
+  });
+
+  it('shows sensitive text previews when masking is disabled', () => {
+    useConfigStore.setState((state) => ({
+      config: { ...state.config, mask_sensitive_previews: false },
+    }));
+
+    render(
+      <ClipboardItem
+        item={makeTextItem({
+          content: 'password=super-secret',
+          preview: 'password=super-secret',
+          is_sensitive: true,
+          sensitivity_reason: 'credential keyword',
+        })}
+        index={1}
+        isSelected={false}
+      />
+    );
+
+    expect(screen.getByText('password=super-secret')).toBeTruthy();
+    expect(screen.queryByText('已隐藏敏感内容')).toBeNull();
   });
 });

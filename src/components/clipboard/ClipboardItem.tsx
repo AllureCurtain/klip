@@ -12,6 +12,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui';
 import { useClipboardStore } from '@/stores';
+import { useConfigStore } from '@/stores/configStore';
 import { formatTime, formatSize, truncate, cn } from '@/lib/utils';
 import type {
   ClipboardItem as ClipboardItemType,
@@ -89,6 +90,9 @@ export function ClipboardItem({ item, index, isSelected, onSelect }: ClipboardIt
   const { t } = useTranslation();
   const { deleteItem, copyItem, toggleFavorite, selectedIds, toggleSelected } =
     useClipboardStore();
+  const maskSensitivePreviews = useConfigStore(
+    (state) => state.config.mask_sensitive_previews
+  );
   const [copied, setCopied] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [imagePreviewOpen, setImagePreviewOpen] = useState(false);
@@ -147,6 +151,7 @@ export function ClipboardItem({ item, index, isSelected, onSelect }: ClipboardIt
 
   const fileShape = item.content_type === 'file' ? classifyFile(item) : null;
   const imageMeta = item.content_type === 'image' ? parseImageMetadata(item) : null;
+  const shouldMaskPreview = item.is_sensitive && maskSensitivePreviews;
 
   const renderIcon = () => {
     switch (item.content_type) {
@@ -172,6 +177,14 @@ export function ClipboardItem({ item, index, isSelected, onSelect }: ClipboardIt
   };
 
   const renderPreview = () => {
+    if (shouldMaskPreview) {
+      return (
+        <span className="text-xs text-muted-foreground truncate block">
+          {t('clipboard.sensitiveHidden')}
+        </span>
+      );
+    }
+
     switch (item.content_type) {
       case 'text':
         return (

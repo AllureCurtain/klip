@@ -79,6 +79,7 @@ export interface AppConfig {
   search_debounce_ms: number;
   language: string;
   sensitive_capture_policy: 'flag' | 'skip';
+  mask_sensitive_previews: boolean;
 }
 
 export interface SystemInfo {
