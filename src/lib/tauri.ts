@@ -6,6 +6,7 @@ import type {
   ClipboardQueryOptions,
   DiagnosticsInfo,
   ImportSummary,
+  RestoreSummary,
   SystemInfo,
   Tag,
 } from '@/types';
@@ -101,7 +102,7 @@ export const clipboardApi = {
     invoke<BackupSummary>('backup_database', { path }),
 
   restoreDatabase: (path: string) =>
-    invoke<BackupSummary>('restore_database', { path }),
+    invoke<RestoreSummary>('restore_database', { path }),
 
   clear: () => invoke('clear_clipboard_history'),
 };

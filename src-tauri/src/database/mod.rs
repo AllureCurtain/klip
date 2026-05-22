@@ -8,5 +8,5 @@ pub mod types;
 pub use connection::{get_db_path, init, Database};
 pub use types::{
     BackupSummary, ClipboardItem, ConfigEntry, ContentType, DiagnosticsInfo, ImportSummary,
-    NewClipboardItem, SystemInfo, Tag,
+    NewClipboardItem, RestoreSummary, SystemInfo, Tag,
 };

@@ -93,3 +93,11 @@ pub struct BackupSummary {
     pub path: String,
     pub size: u64,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RestoreSummary {
+    pub path: String,
+    pub size: u64,
+    pub pre_restore_backup_path: String,
+    pub pre_restore_backup_size: u64,
+}

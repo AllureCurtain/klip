@@ -1,4 +1,4 @@
-use crate::database::{self, BackupSummary, ClipboardItem, ImportSummary, Tag};
+use crate::database::{self, BackupSummary, ClipboardItem, ImportSummary, RestoreSummary, Tag};
 use crate::AppError;
 use tauri::Manager;
 use tauri::State;
@@ -141,7 +141,8 @@ pub fn backup_database(app: tauri::AppHandle, path: String) -> Result<BackupSumm
 }
 
 #[tauri::command]
-pub fn restore_database(app: tauri::AppHandle, path: String) -> Result<BackupSummary, AppError> {
+pub fn restore_database(app: tauri::AppHandle, path: String) -> Result<RestoreSummary, AppError> {
+    let db = app.state::<database::Database>();
     let db_path = database::get_db_path(&app)?;
-    database::data_portability::restore_database(&db_path, &path)
+    database::data_portability::restore_database(&db, &db_path, &path)
 }

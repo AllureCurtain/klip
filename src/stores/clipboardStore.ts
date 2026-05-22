@@ -4,6 +4,7 @@ import type {
   ClipboardItem,
   ClipboardQueryOptions,
   ImportSummary,
+  RestoreSummary,
   Tag,
 } from '@/types';
 import { getErrorMessage } from '@/types';
@@ -41,7 +42,7 @@ interface ClipboardStore {
   importJson: (path: string) => Promise<ImportSummary | null>;
   importCsv: (path: string) => Promise<ImportSummary | null>;
   backupDatabase: (path: string) => Promise<BackupSummary | null>;
-  restoreDatabase: (path: string) => Promise<BackupSummary | null>;
+  restoreDatabase: (path: string) => Promise<RestoreSummary | null>;
   toggleSelected: (id: number) => void;
   clearSelection: () => void;
   addItems: (items: ClipboardItem[]) => void;

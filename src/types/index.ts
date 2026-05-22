@@ -31,6 +31,13 @@ export interface BackupSummary {
   size: number;
 }
 
+export interface RestoreSummary {
+  path: string;
+  size: number;
+  pre_restore_backup_path: string;
+  pre_restore_backup_size: number;
+}
+
 export interface ClipboardQueryOptions {
   contentType?: ContentType | null;
   favoriteOnly?: boolean;

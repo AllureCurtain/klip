@@ -240,4 +240,24 @@ describe('clipboardStore', () => {
       expect(useClipboardStore.getState().items.every((item) => item.is_favorited)).toBe(true);
     });
   });
+
+  describe('restoreDatabase', () => {
+    it('returns the pre-restore backup path from the API summary', async () => {
+      vi.mocked(clipboardApi.restoreDatabase).mockResolvedValue({
+        path: 'C:\\Users\\you\\AppData\\Roaming\\com.klip.app\\klip.db',
+        size: 4096,
+        pre_restore_backup_path:
+          'C:\\Users\\you\\AppData\\Roaming\\com.klip.app\\klip.db.pre-restore.bak',
+        pre_restore_backup_size: 2048,
+      });
+
+      const { restoreDatabase } = useClipboardStore.getState();
+      const summary = await restoreDatabase('C:\\Users\\you\\Desktop\\klip.db');
+
+      expect(summary?.pre_restore_backup_path).toContain('pre-restore.bak');
+      expect(clipboardApi.restoreDatabase).toHaveBeenCalledWith(
+        'C:\\Users\\you\\Desktop\\klip.db'
+      );
+    });
+  });
 });
