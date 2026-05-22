@@ -173,6 +173,7 @@ export function DataManagementView() {
       <Separator />
 
       <PathActions
+        id="data-json-path"
         label={t('settings.data.json')}
         value={jsonPath}
         onChange={setJsonPath}
@@ -205,6 +206,7 @@ export function DataManagementView() {
       />
 
       <PathActions
+        id="data-csv-path"
         label={t('settings.data.csv')}
         value={csvPath}
         onChange={setCsvPath}
@@ -237,6 +239,7 @@ export function DataManagementView() {
       />
 
       <PathActions
+        id="data-backup-path"
         label={t('settings.data.backup')}
         value={backupPath}
         onChange={setBackupPath}
@@ -305,6 +308,7 @@ interface DialogFilter {
 }
 
 interface PathActionsProps {
+  id: string;
   label: string;
   value: string;
   onChange: (value: string) => void;
@@ -313,11 +317,12 @@ interface PathActionsProps {
   busyAction: string | null;
 }
 
-function PathActions({ label, value, onChange, placeholder, actions, busyAction }: PathActionsProps) {
+function PathActions({ id, label, value, onChange, placeholder, actions, busyAction }: PathActionsProps) {
   return (
     <div className="space-y-2">
-      <Label className="text-xs">{label}</Label>
+      <Label htmlFor={id} className="text-xs">{label}</Label>
       <Input
+        id={id}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}

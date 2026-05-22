@@ -179,4 +179,47 @@ describe('DataManagementView', () => {
     expect(storeMocks.fetchItems).toHaveBeenCalled();
     expect(storeMocks.fetchTags).toHaveBeenCalled();
   });
+
+  it('keeps destructive file actions disabled until a path is present', () => {
+    render(<DataManagementView />);
+
+    for (const button of screen.getAllByRole('button', { name: 'Export' })) {
+      expect((button as HTMLButtonElement).disabled).toBe(true);
+    }
+    for (const button of screen.getAllByRole('button', { name: 'Import' })) {
+      expect((button as HTMLButtonElement).disabled).toBe(true);
+    }
+
+    expect((screen.getByRole('button', { name: 'Backup' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Restore' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('labels file path inputs for assistive technology', () => {
+    render(<DataManagementView />);
+
+    expect(screen.getByLabelText('JSON import/export path')).toBeTruthy();
+    expect(screen.getByLabelText('CSV import/export path')).toBeTruthy();
+    expect(screen.getByLabelText('Database backup path')).toBeTruthy();
+  });
+
+  it('does not restore a selected backup when confirmation is cancelled', async () => {
+    vi.mocked(window.confirm).mockReturnValue(false);
+    render(<DataManagementView />);
+
+    dialogMocks.open.mockResolvedValueOnce('C:\\tmp\\chosen.db');
+    fireEvent.click(screen.getAllByRole('button', { name: 'Choose backup...' })[0]);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(window.confirm).toHaveBeenCalled();
+    expect(storeMocks.restoreDatabase).not.toHaveBeenCalled();
+    expect(storeMocks.fetchItems).not.toHaveBeenCalled();
+    expect(storeMocks.fetchTags).not.toHaveBeenCalled();
+  });
 });
