@@ -1,8 +1,12 @@
 use crate::AppError;
-use rusqlite::Connection;
-use std::sync::Mutex;
+use rusqlite::{Connection, OptionalExtension};
+use std::{
+    path::{Path, PathBuf},
+    sync::Mutex,
+};
 use tauri::Manager;
 
+const CURRENT_DB_VERSION: i64 = 2;
 const DEFAULT_TOGGLE_HOTKEY: &str = "Ctrl+Alt+K";
 const DEFAULT_QUICK_PASTE_PREFIX: &str = "Ctrl+Alt";
 const DEFAULT_AUTO_START: &str = "false";
@@ -12,7 +16,30 @@ pub struct Database {
 }
 
 impl Database {
-    pub fn new(path: &std::path::Path) -> Result<Self, AppError> {
+    pub fn new(path: &Path) -> Result<Self, AppError> {
+        match Self::open_initialized(path) {
+            Ok(db) => Ok(db),
+            Err(error) if path.exists() && is_recoverable_database_error(&error) => {
+                let backup_path = preserve_corrupt_database(path)?;
+                tracing::warn!(
+                    "Recovered from corrupt database at {}; preserved original at {}",
+                    path.display(),
+                    backup_path.display()
+                );
+                Self::open_initialized(path).map_err(|recovery_error| {
+                    AppError::Database(format!(
+                        "failed to recreate database after preserving corrupt database at {}: {}; original error: {}",
+                        backup_path.display(),
+                        recovery_error,
+                        error
+                    ))
+                })
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    fn open_initialized(path: &Path) -> Result<Self, AppError> {
         let conn = Connection::open(path)?;
 
         conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")?;
@@ -162,7 +189,6 @@ impl Database {
             ("language", "zh-CN"),
             ("sensitive_capture_policy", "flag"),
             ("mask_sensitive_previews", "true"),
-            ("db_version", "2"),
         ];
 
         for (key, value) in defaults {
@@ -172,8 +198,7 @@ impl Database {
             )?;
         }
 
-        normalize_legacy_hotkey_config(&conn, now)?;
-        migrate_window_size_defaults(&conn, now)?;
+        run_schema_migrations(&conn, now)?;
 
         Ok(())
     }
@@ -206,6 +231,40 @@ fn add_column_if_missing(
     }
 
     Ok(())
+}
+
+fn is_recoverable_database_error(error: &AppError) -> bool {
+    let AppError::Database(message) = error else {
+        return false;
+    };
+
+    message.contains("file is not a database")
+        || message.contains("database disk image is malformed")
+}
+
+fn preserve_corrupt_database(path: &Path) -> Result<PathBuf, AppError> {
+    let backup_path = next_corrupt_backup_path(path);
+    std::fs::rename(path, &backup_path).map_err(|e| {
+        AppError::System(format!(
+            "failed to preserve corrupt database at {}: {}",
+            backup_path.display(),
+            e
+        ))
+    })?;
+    Ok(backup_path)
+}
+
+fn next_corrupt_backup_path(path: &Path) -> PathBuf {
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("klip.db");
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+
+    path.with_file_name(format!("{}.corrupt-{}.bak", file_name, now))
 }
 
 pub fn get_db_path(app_handle: &tauri::AppHandle) -> Result<std::path::PathBuf, AppError> {
@@ -272,9 +331,69 @@ fn normalize_legacy_hotkey_config(conn: &Connection, now: i64) -> Result<(), App
     Ok(())
 }
 
+fn run_schema_migrations(conn: &Connection, now: i64) -> Result<(), AppError> {
+    let stored_version = read_schema_version(conn)?;
+    if stored_version > CURRENT_DB_VERSION {
+        return Err(AppError::Database(format!(
+            "newer database schema version {} is not supported by this app version",
+            stored_version
+        )));
+    }
+
+    if stored_version < 2 {
+        migrate_to_v2(conn, now)?;
+    }
+
+    write_schema_version(conn, now, CURRENT_DB_VERSION)
+}
+
+fn read_schema_version(conn: &Connection) -> Result<i64, AppError> {
+    let value: Option<String> = conn
+        .query_row(
+            "SELECT value FROM app_config WHERE key = 'db_version'",
+            [],
+            |row| row.get(0),
+        )
+        .optional()?;
+
+    value
+        .as_deref()
+        .unwrap_or("0")
+        .parse::<i64>()
+        .map_err(|e| AppError::Database(format!("invalid database schema version: {}", e)))
+}
+
+fn write_schema_version(conn: &Connection, now: i64, version: i64) -> Result<(), AppError> {
+    conn.execute(
+        "INSERT INTO app_config (key, value, updated_at)
+         VALUES ('db_version', ?1, ?2)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
+        rusqlite::params![version.to_string(), now],
+    )?;
+    Ok(())
+}
+
+fn migrate_to_v2(conn: &Connection, now: i64) -> Result<(), AppError> {
+    normalize_legacy_hotkey_config(conn, now)?;
+    migrate_window_size_defaults(conn, now)?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::Database;
+    use crate::AppError;
+    use std::path::PathBuf;
+
+    fn temp_dir(name: &str) -> PathBuf {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis();
+        let dir = std::env::temp_dir().join(format!("klip-connection-{}-{}", name, now));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
 
     #[test]
     fn default_hotkey_config_matches_runtime_contract() {
@@ -365,5 +484,91 @@ mod tests {
             .unwrap();
 
         assert_eq!(auto_start, "true");
+    }
+
+    #[test]
+    fn legacy_db_version_is_upgraded_to_current_schema_version() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "PRAGMA journal_mode=WAL;
+             PRAGMA foreign_keys=ON;
+             CREATE TABLE app_config (
+                 key TEXT PRIMARY KEY,
+                 value TEXT NOT NULL,
+                 updated_at INTEGER NOT NULL
+             );
+             INSERT INTO app_config (key, value, updated_at) VALUES
+                 ('db_version', '1', 1);",
+        )
+        .unwrap();
+
+        let db = Database::from_conn(conn);
+        db.init_schema().unwrap();
+
+        let version = crate::database::config::get(&db, "db_version")
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(version, "2");
+    }
+
+    #[test]
+    fn newer_db_version_is_rejected_instead_of_silently_downgrading() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "PRAGMA journal_mode=WAL;
+             PRAGMA foreign_keys=ON;
+             CREATE TABLE app_config (
+                 key TEXT PRIMARY KEY,
+                 value TEXT NOT NULL,
+                 updated_at INTEGER NOT NULL
+             );
+             INSERT INTO app_config (key, value, updated_at) VALUES
+                 ('db_version', '999', 1);",
+        )
+        .unwrap();
+
+        let db = Database::from_conn(conn);
+        let result = db.init_schema();
+
+        assert!(matches!(
+            result,
+            Err(AppError::Database(message)) if message.contains("newer database schema")
+        ));
+    }
+
+    #[test]
+    fn corrupt_database_file_is_preserved_and_replaced_with_empty_schema() {
+        let dir = temp_dir("corrupt-recovery");
+        let db_path = dir.join("klip.db");
+        std::fs::write(&db_path, b"not sqlite").unwrap();
+
+        let db = Database::new(&db_path).unwrap();
+
+        let version = crate::database::config::get(&db, "db_version")
+            .unwrap()
+            .unwrap();
+        assert_eq!(version, "2");
+        drop(db);
+
+        let backups = std::fs::read_dir(&dir)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .filter(|path| {
+                path.file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| {
+                        name.starts_with("klip.db.corrupt-") && name.ends_with(".bak")
+                    })
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(backups.len(), 1);
+        assert_eq!(std::fs::read(&backups[0]).unwrap(), b"not sqlite");
+        let item_count: i64 = rusqlite::Connection::open(&db_path)
+            .unwrap()
+            .query_row("SELECT COUNT(*) FROM clipboard_items", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(item_count, 0);
     }
 }
