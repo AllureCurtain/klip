@@ -76,6 +76,7 @@
 ```bash
 pnpm release:verify -SkipBundle
 pnpm release:verify
+pnpm release:smoke
 ```
 
 当前安装包尚未代码签名，Windows 可能显示 SmartScreen 或未知发布者提示。

@@ -15,6 +15,7 @@ Use this checklist for Windows-first release verification. The current public re
 - [ ] Run `pnpm release:verify` on Windows.
 - [ ] Confirm MSI exists at `src-tauri/target/release/bundle/msi/`.
 - [ ] Confirm NSIS installer exists at `src-tauri/target/release/bundle/nsis/`.
+- [ ] Run `pnpm release:smoke` and confirm local/GitHub installer assets are present.
 - [ ] Record installer filenames and file sizes in release notes.
 
 ## 3. Fresh Install Smoke Test
