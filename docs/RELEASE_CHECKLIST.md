@@ -66,6 +66,9 @@ Use this checklist for Windows-first release verification. The current public re
 - [ ] Import JSON/CSV into an isolated profile and confirm imported items appear.
 - [ ] Create a database backup and confirm the backup file is created.
 - [ ] Restore a valid database backup and confirm the previous database is saved as a pre-restore backup.
+- [ ] Open a pre-v2 database and confirm it upgrades to the current schema version without losing settings.
+- [ ] Replace the database with invalid bytes and confirm the app preserves the corrupt file and starts with a clean schema.
+- [ ] Attempt to restore a backup from a newer schema version and confirm restore is rejected.
 - [ ] Copy a password/API-key-like text and confirm it is flagged as sensitive.
 - [ ] Confirm sensitive item previews are masked by default.
 - [ ] Enable "Skip sensitive clipboard content" and confirm newly copied sensitive text is not saved.
