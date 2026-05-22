@@ -99,6 +99,7 @@ export function DataManagementView() {
           </p>
         </div>
         <Switch
+          aria-label={t('settings.data.skipSensitive')}
           checked={config.sensitive_capture_policy === 'skip'}
           onCheckedChange={(checked) => setSensitiveCapturePolicy(checked ? 'skip' : 'flag')}
         />
@@ -112,6 +113,7 @@ export function DataManagementView() {
           </p>
         </div>
         <Switch
+          aria-label={t('settings.data.maskSensitivePreviews')}
           checked={config.mask_sensitive_previews}
           onCheckedChange={setMaskSensitivePreviews}
         />
@@ -140,6 +142,7 @@ export function DataManagementView() {
             className="h-7"
             onClick={handleCreateTag}
             disabled={tagName.trim() === ''}
+            aria-label={t('settings.data.createTag')}
           >
             <Plus className="h-3 w-3" />
           </Button>
