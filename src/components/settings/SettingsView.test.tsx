@@ -52,6 +52,8 @@ vi.mock('react-i18next', () => ({
         'settings.general.historyCount': 'History size',
         'settings.general.maxItems': 'Max items',
         'settings.general.windowSize': 'Window size',
+        'settings.general.windowWidth': 'Window width',
+        'settings.general.windowHeight': 'Window height',
         'settings.general.searchDebounce': 'Search debounce',
         'settings.general.milliseconds': 'ms',
         'settings.general.language': 'Language',
@@ -219,5 +221,23 @@ describe('SettingsView', () => {
     expect(apiMocks.configSet).toHaveBeenCalledWith('hotkey_toggle_window', 'Ctrl+Alt+Z');
     expect(apiMocks.configSet).toHaveBeenCalledWith('hotkey_quick_paste_prefix', 'Ctrl+Alt');
     expect(callbacks.onBack).toHaveBeenCalled();
+  });
+
+  it('labels general and behavior controls for assistive technology', async () => {
+    render(<SettingsView onBack={callbacks.onBack} />);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.getByLabelText('History size')).toBeTruthy();
+    expect(screen.getByLabelText('Window width')).toBeTruthy();
+    expect(screen.getByLabelText('Window height')).toBeTruthy();
+    expect(screen.getByLabelText('Search debounce')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Behavior' }));
+
+    expect(screen.getByRole('switch', { name: 'Launch at startup' })).toBeTruthy();
+    expect(screen.getByRole('switch', { name: 'Close to tray' })).toBeTruthy();
   });
 });

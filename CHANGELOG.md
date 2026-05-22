@@ -4,11 +4,12 @@
 
 ### Added
 
-- Regression coverage for Data Management settings path actions, restore cancellation, and file path input labels.
+- Regression coverage for Data Management settings path actions, restore cancellation, file path input labels, and Settings general/behavior control labels.
 
 ### Changed
 
 - Data Management path inputs now expose accessible labels for assistive technology.
+- Settings window size inputs and behavior switches now expose accessible labels.
 
 ## [0.1.2] - 2026-05-22
 

@@ -145,7 +145,11 @@ export function SettingsView({ onBack }: SettingsViewProps) {
             <div className="space-y-2">
               <Label className="text-xs">{t('settings.general.windowSize')}</Label>
               <div className="flex items-center gap-2">
+                <Label htmlFor="window-width" className="sr-only">
+                  {t('settings.general.windowWidth')}
+                </Label>
                 <Input
+                  id="window-width"
                   type="number"
                   min={300}
                   max={1000}
@@ -154,7 +158,11 @@ export function SettingsView({ onBack }: SettingsViewProps) {
                   className="h-7 w-16 text-xs"
                 />
                 <span className="text-muted-foreground text-xs">x</span>
+                <Label htmlFor="window-height" className="sr-only">
+                  {t('settings.general.windowHeight')}
+                </Label>
                 <Input
+                  id="window-height"
                   type="number"
                   min={400}
                   max={1400}
@@ -261,6 +269,7 @@ export function SettingsView({ onBack }: SettingsViewProps) {
                 </p>
               </div>
               <Switch
+                aria-label={t('settings.behavior.autoStart')}
                 checked={config.auto_start}
                 onCheckedChange={setAutoStart}
               />
@@ -276,6 +285,7 @@ export function SettingsView({ onBack }: SettingsViewProps) {
                 </p>
               </div>
               <Switch
+                aria-label={t('settings.behavior.closeToTray')}
                 checked={config.close_to_tray}
                 onCheckedChange={setCloseToTray}
               />
