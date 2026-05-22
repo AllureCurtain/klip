@@ -89,7 +89,7 @@ vi.mock('react-i18next', () => ({
         'settings.data.sensitiveScanned': 'Sensitive content scan completed',
         'settings.save': 'Save',
         'settings.cancel': 'Cancel',
-        'language.zh-CN': '简体中文',
+        'language.zh-CN': 'Simplified Chinese',
         'language.en-US': 'English',
       };
       const label = dict[key] ?? key;
