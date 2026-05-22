@@ -1,7 +1,9 @@
 param(
   [string]$Version,
   [switch]$SkipGitHub,
-  [switch]$OutputJson
+  [switch]$OutputJson,
+  [switch]$PlanInstall,
+  [switch]$PlanUninstall
 )
 
 $ErrorActionPreference = 'Stop'
@@ -201,6 +203,36 @@ $manualChecks = @(
   'Uninstall and confirm the app process is gone and startup entry is removed.'
 )
 
+function Get-InstallPlans($Version, $LocalInstallers) {
+  $nsisPath = ($LocalInstallers | Where-Object { $_.kind -eq 'nsis' } | Select-Object -First 1).path
+  $msiPath = ($LocalInstallers | Where-Object { $_.kind -eq 'msi' } | Select-Object -First 1).path
+
+  [pscustomobject]@{
+    executes = $false
+    nsis = [pscustomobject]@{
+      command = "Start-Process -FilePath `"$nsisPath`" -Wait"
+      installerPath = $nsisPath
+    }
+    msi = [pscustomobject]@{
+      command = "Start-Process -FilePath `"msiexec.exe`" -ArgumentList @('/i', `"$msiPath`", '/qn', '/norestart') -Wait"
+      installerPath = $msiPath
+    }
+  }
+}
+
+function Get-UninstallPlan($Version, $InstalledEntries) {
+  [pscustomobject]@{
+    executes = $false
+    registryEntryCount = @($InstalledEntries).Count
+    registryEntries = @($InstalledEntries)
+    commands = @(
+      'Uninstall from Apps & features or Programs and Features.'
+      'If the installer writes an uninstall command, prefer that exact uninstall string.'
+      'After uninstall, confirm the process is gone and the startup entry is removed.'
+    )
+  }
+}
+
 $report = [pscustomobject]@{
   version = $Version
   versionSources = $versionSources
@@ -211,6 +243,14 @@ $report = [pscustomobject]@{
   manualChecks = $manualChecks
 }
 
+if ($PlanInstall) {
+  $report | Add-Member -NotePropertyName installPlan -NotePropertyValue (Get-InstallPlans $Version $localInstallers)
+}
+
+if ($PlanUninstall) {
+  $report | Add-Member -NotePropertyName uninstallPlan -NotePropertyValue (Get-UninstallPlan $Version $installedEntries)
+}
+
 if ($OutputJson) {
   $report | ConvertTo-Json -Depth 6
   exit 0
@@ -218,6 +258,7 @@ if ($OutputJson) {
 
 Step "Installer preflight for Klip $Version"
 Write-Host "Version metadata OK: $Version"
+Write-Host "Release smoke command: pnpm release:smoke"
 
 Step 'Local installer artifacts'
 foreach ($installer in $localInstallers) {
