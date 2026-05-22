@@ -78,6 +78,7 @@ export interface AppConfig {
   window_height: number;
   search_debounce_ms: number;
   language: string;
+  sensitive_capture_policy: 'flag' | 'skip';
 }
 
 export interface SystemInfo {

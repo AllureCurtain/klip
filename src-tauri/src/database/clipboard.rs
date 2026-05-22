@@ -192,6 +192,26 @@ mod tests {
         assert_eq!(reordered[0].id, older.id);
         assert_eq!(reordered[1].id, newer.id);
     }
+
+    #[test]
+    fn insert_skips_sensitive_text_when_policy_is_skip() {
+        let db = test_db();
+        crate::database::config::set(&db, "sensitive_capture_policy", "skip").unwrap();
+        let hash = format!("{:x}", sha2::Sha256::digest(b"password=super-secret"));
+        let item = crate::database::types::NewClipboardItem {
+            content_type: ContentType::Text,
+            data: b"password=super-secret".to_vec(),
+            preview: Some("password=super-secret".to_string()),
+            hash,
+            size: 21,
+            metadata: None,
+        };
+
+        let result = insert(&db, &item);
+
+        assert!(matches!(result, Err(AppError::InvalidInput(_))));
+        assert!(get_list(&db, 100, 0).unwrap().is_empty());
+    }
 }
 
 pub fn get_list(db: &Database, limit: i64, offset: i64) -> Result<Vec<ClipboardItem>, AppError> {
@@ -289,11 +309,12 @@ pub fn insert(
     db: &Database,
     item: &crate::database::types::NewClipboardItem,
 ) -> Result<ClipboardItem, AppError> {
-    let conn = db.get_connection()?;
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_millis() as i64;
+    let sensitive_capture_policy = crate::database::config::get(db, "sensitive_capture_policy")?
+        .unwrap_or_else(|| "flag".to_string());
 
     let content_str = match item.content_type {
         ContentType::Text => String::from_utf8_lossy(&item.data).to_string(),
@@ -305,6 +326,14 @@ pub fn insert(
     };
     let sensitivity =
         crate::database::productization::detect_sensitive(item.content_type.as_str(), &content_str);
+
+    if sensitivity.is_some() && sensitive_capture_policy == "skip" {
+        return Err(AppError::InvalidInput(
+            "sensitive clipboard content skipped by policy".into(),
+        ));
+    }
+
+    let conn = db.get_connection()?;
 
     conn.execute(
         "INSERT INTO clipboard_items

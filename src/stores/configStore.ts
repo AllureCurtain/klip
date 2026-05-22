@@ -35,6 +35,7 @@ interface ConfigState {
   setWindowHeight: (value: number) => void;
   setSearchDebounceMs: (value: number) => void;
   setLanguage: (value: string) => void;
+  setSensitiveCapturePolicy: (value: AppConfig['sensitive_capture_policy']) => void;
   saveChanges: () => Promise<void>;
   resetChanges: () => Promise<void>;
 }
@@ -50,6 +51,7 @@ const DEFAULT_CONFIG: AppConfig = {
   window_height: 720,
   search_debounce_ms: 150,
   language: 'zh-CN',
+  sensitive_capture_policy: 'flag',
 };
 
 export const useConfigStore = create<ConfigState>((set, get) => ({
@@ -75,6 +77,8 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
         window_height: parseNumber(allConfig['window_height'], 720),
         search_debounce_ms: parseNumber(allConfig['search_debounce_ms'], 150),
         language: allConfig['language'] || 'zh-CN',
+        sensitive_capture_policy:
+          allConfig['sensitive_capture_policy'] === 'skip' ? 'skip' : 'flag',
       };
       set({ config, loading: false, hasChanges: false });
     } catch (error) {
@@ -174,6 +178,13 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     }));
   },
 
+  setSensitiveCapturePolicy: (value) => {
+    set((state) => ({
+      config: { ...state.config, sensitive_capture_policy: value },
+      hasChanges: true,
+    }));
+  },
+
   saveChanges: async () => {
     const { config } = get();
     set({ loading: true, error: null });
@@ -187,6 +198,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
       await configApi.set('window_height', config.window_height.toString());
       await configApi.set('search_debounce_ms', config.search_debounce_ms.toString());
       await configApi.set('language', config.language);
+      await configApi.set('sensitive_capture_policy', config.sensitive_capture_policy);
       set({ loading: false, hasChanges: false });
     } catch (error) {
       set({ error: getErrorMessage(error), loading: false });

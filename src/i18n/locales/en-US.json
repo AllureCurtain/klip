@@ -107,6 +107,8 @@
     },
     "data": {
       "tags": "Tags and groups",
+      "skipSensitive": "Skip sensitive clipboard content",
+      "skipSensitiveDesc": "Do not save history when passwords, keys, or high-entropy tokens are detected",
       "tagName": "Tag name",
       "tagColor": "Tag color",
       "tagCreated": "Created tag {{name}}",

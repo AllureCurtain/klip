@@ -8,6 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { useClipboardStore } from '@/stores';
+import { useConfigStore } from '@/stores/configStore';
+import { Switch } from '@/components/ui/switch';
 
 const DEFAULT_TAG_COLOR = '#14b8a6';
 
@@ -17,6 +19,7 @@ const DB_FILTER = [{ name: 'SQLite database', extensions: ['db', 'sqlite', 'sqli
 
 export function DataManagementView() {
   const { t } = useTranslation();
+  const { config, setSensitiveCapturePolicy } = useConfigStore();
   const {
     tags,
     createTag,
@@ -88,6 +91,21 @@ export function DataManagementView() {
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="space-y-0.5">
+          <Label className="text-xs">{t('settings.data.skipSensitive')}</Label>
+          <p className="text-[10px] text-muted-foreground">
+            {t('settings.data.skipSensitiveDesc')}
+          </p>
+        </div>
+        <Switch
+          checked={config.sensitive_capture_policy === 'skip'}
+          onCheckedChange={(checked) => setSensitiveCapturePolicy(checked ? 'skip' : 'flag')}
+        />
+      </div>
+
+      <Separator />
+
       <div className="space-y-2">
         <Label className="text-xs">{t('settings.data.tags')}</Label>
         <div className="flex gap-2">

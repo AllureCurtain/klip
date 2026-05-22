@@ -160,6 +160,7 @@ impl Database {
             ("window_height", "720"),
             ("search_debounce_ms", "150"),
             ("language", "zh-CN"),
+            ("sensitive_capture_policy", "flag"),
             ("db_version", "2"),
         ];
 

@@ -103,6 +103,8 @@
     },
     "data": {
       "tags": "标签/分组",
+      "skipSensitive": "跳过敏感剪贴板内容",
+      "skipSensitiveDesc": "检测到密码、密钥或高熵 Token 时不保存历史记录",
       "tagName": "标签名称",
       "tagColor": "标签颜色",
       "tagCreated": "已创建标签 {{name}}",
