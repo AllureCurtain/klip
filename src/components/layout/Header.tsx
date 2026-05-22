@@ -122,6 +122,7 @@ export function Header({
             size="icon"
             className="size-7 shrink-0"
             onClick={toggleTheme}
+            aria-label={t('header.toggleTheme')}
             title={t('header.toggleTheme')}
           >
             {resolvedTheme === 'dark' ? (
@@ -135,6 +136,7 @@ export function Header({
             size="icon"
             className={cn('size-7 shrink-0')}
             onClick={() => onShowFavoritesChange(!showFavorites)}
+            aria-label={t('header.showFavorites')}
             title={t('header.showFavorites')}
           >
             <Star
@@ -149,6 +151,7 @@ export function Header({
             size="icon"
             className="size-7 shrink-0"
             onClick={() => setClearDialogOpen(true)}
+            aria-label={t('header.clearHistory')}
             title={t('header.clearHistory')}
           >
             <Trash2 className="h-3.5 w-3.5" />
@@ -158,6 +161,7 @@ export function Header({
             size="icon"
             className="size-7 shrink-0"
             onClick={onSettingsOpen}
+            aria-label={t('header.settings')}
             title={t('header.settings')}
           >
             <Settings className="h-3.5 w-3.5" />
@@ -226,6 +230,7 @@ export function Header({
               size="icon"
               className="size-6"
               onClick={() => setFavoriteForSelected(true)}
+              aria-label={t('header.favoriteSelected')}
               title={t('header.favoriteSelected')}
             >
               <Star className="h-3 w-3" />
@@ -253,6 +258,7 @@ export function Header({
               size="icon"
               className="size-6"
               onClick={deleteSelected}
+              aria-label={t('header.deleteSelected')}
               title={t('header.deleteSelected')}
             >
               <Trash2 className="h-3 w-3 text-destructive" />
@@ -262,6 +268,7 @@ export function Header({
               size="icon"
               className="size-6"
               onClick={clearSelection}
+              aria-label={t('header.clearSelection')}
               title={t('header.clearSelection')}
             >
               <X className="h-3 w-3" />

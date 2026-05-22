@@ -119,4 +119,26 @@ describe('Header', () => {
 
     expect(onSettingsOpen).toHaveBeenCalled();
   });
+
+  it('labels icon-only actions for assistive technology', () => {
+    render(
+      <Header
+        searchQuery=""
+        onSearchChange={vi.fn()}
+        contentType={null}
+        onContentTypeChange={vi.fn()}
+        showFavorites={false}
+        onShowFavoritesChange={vi.fn()}
+        tags={[]}
+        selectedTagId={null}
+        onSelectedTagChange={vi.fn()}
+        onSettingsOpen={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole('button', { name: '切换主题' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '仅显示收藏' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '清空历史' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '设置' })).toBeTruthy();
+  });
 });
