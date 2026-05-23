@@ -384,18 +384,18 @@ export function ClipboardItem({
         </div>
 
         {/* Actions */}
-        <div className="flex items-center gap-0 shrink-0">
+        <div
+          className={cn(
+            'absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-0 rounded-md bg-background/90 opacity-0 shadow-sm ring-1 ring-border/50 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100',
+            (item.is_favorited || confirmDelete) && 'opacity-100'
+          )}
+        >
           <Button
             variant="ghost"
             size="icon"
             aria-label={item.is_favorited ? t('clipboard.unfavorite') : t('clipboard.favorite')}
             title={item.is_favorited ? t('clipboard.unfavorite') : t('clipboard.favorite')}
-            className={cn(
-              'size-6 transition-opacity',
-              item.is_favorited
-                ? 'opacity-100'
-                : 'opacity-0 group-hover:opacity-100'
-            )}
+            className="size-6"
             onClick={handleToggleFavorite}
           >
             <Star
@@ -413,10 +413,8 @@ export function ClipboardItem({
             aria-label={t('clipboard.delete')}
             title={confirmDelete ? t('clipboard.confirmDelete') : t('clipboard.delete')}
             className={cn(
-              'size-6 transition-opacity',
-              confirmDelete
-                ? 'opacity-100 text-destructive'
-                : 'opacity-0 group-hover:opacity-100'
+              'size-6',
+              confirmDelete && 'text-destructive'
             )}
             onClick={handleDelete}
           >

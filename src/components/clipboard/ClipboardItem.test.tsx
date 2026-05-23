@@ -221,6 +221,18 @@ describe('ClipboardItem', () => {
     expect(row.className).not.toContain('bg-sky-500');
   });
 
+  it('floats item actions out of the default content layout', () => {
+    render(<ClipboardItem item={makeTextItem()} index={1} isSelected={false} />);
+
+    const starBtn = screen.getByRole('button', { name: '收藏' });
+    const actions = starBtn.parentElement as HTMLElement;
+
+    expect(actions.className).toContain('absolute');
+    expect(actions.className).toContain('right-2');
+    expect(actions.className).toContain('group-focus-within:opacity-100');
+    expect(actions.className).not.toContain('shrink-0');
+  });
+
   it('enables checkbox selection only inside selection mode', () => {
     storeMocks.selectedIds = [42];
 
