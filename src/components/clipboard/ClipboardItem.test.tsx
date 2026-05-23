@@ -220,6 +220,7 @@ describe('ClipboardItem', () => {
 
     expect(screen.queryByText('7')).toBeNull();
     expect(row.className).not.toContain('bg-sky-500');
+    expect(row.className).not.toContain('border-l-sky-500');
   });
 
   it('uses a neutral treatment for keyboard-selected rows', () => {
@@ -231,6 +232,7 @@ describe('ClipboardItem', () => {
 
     expect(row.className).toContain('bg-muted/40');
     expect(row.className).not.toContain('bg-sky-500/10');
+    expect(row.className).not.toContain('border-l-sky-500');
   });
 
   it('floats item actions out of the default content layout', () => {

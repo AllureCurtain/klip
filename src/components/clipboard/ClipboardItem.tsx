@@ -221,12 +221,14 @@ export function ClipboardItem({
   const clipKind = getClipKind(item, fileShape);
   const tone = CLIP_TONES[clipKind];
   const typeLabel = t(`clipboard.types.${clipKind}`);
+  const strongRowState = copied || (selectionMode && isBatchSelected);
   const rowStateClass =
-    copied || (selectionMode && isBatchSelected)
+    strongRowState
       ? tone.selected
       : isSelected
         ? 'bg-muted/40'
         : 'hover:bg-muted/60';
+  const rowBorderClass = strongRowState ? tone.border : 'border-l-transparent';
 
   const renderIcon = () => {
     const className = cn('h-3.5 w-3.5 shrink-0', tone.iconText);
@@ -363,7 +365,7 @@ export function ClipboardItem({
         onClick={handleClick}
         className={cn(
           'group relative flex h-14 cursor-pointer items-center gap-2 overflow-hidden border-l-2 px-2.5 transition-colors',
-          tone.border,
+          rowBorderClass,
           rowStateClass
         )}
       >
