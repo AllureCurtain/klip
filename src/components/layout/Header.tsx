@@ -8,11 +8,6 @@ import {
   FolderOpen,
   Sun,
   Moon,
-  MoreHorizontal,
-  ListChecks,
-  Star,
-  Trash2,
-  X,
 } from 'lucide-react';
 import { Input, Button } from '@/components/ui';
 import {
@@ -26,6 +21,8 @@ import {
 import { useThemeStore, useClipboardStore } from '@/stores';
 import { cn } from '@/lib/utils';
 import { onOpenSettings, onOpenAbout } from '@/lib/tauri';
+import { HeaderMoreMenu } from './HeaderMoreMenu';
+import { SelectionToolbar } from './SelectionToolbar';
 import type { Tag } from '@/types';
 
 interface HeaderProps {
@@ -67,7 +64,6 @@ export function Header({
     assignTagToSelected,
     setFavoriteForSelected,
   } = useClipboardStore();
-  const [moreOpen, setMoreOpen] = useState(false);
   const [clearDialogOpen, setClearDialogOpen] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
 
@@ -159,108 +155,16 @@ export function Header({
           >
             <Settings className="h-3.5 w-3.5" />
           </Button>
-          <div className="relative">
-            <Button
-              variant={moreOpen || selectionMode ? 'secondary' : 'ghost'}
-              size="icon"
-              className="size-7 shrink-0"
-              onClick={() => setMoreOpen((open) => !open)}
-              aria-label={t('header.moreActions')}
-              aria-expanded={moreOpen}
-              title={t('header.moreActions')}
-            >
-              <MoreHorizontal className="h-3.5 w-3.5" />
-            </Button>
-
-            {moreOpen && (
-              <div
-                className="absolute right-0 top-8 z-20 w-56 rounded-md border bg-popover p-1.5 text-popover-foreground shadow-lg"
-                role="region"
-                aria-label={t('header.moreActions')}
-              >
-                <button
-                  type="button"
-                  className={cn(
-                    'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs transition-colors hover:bg-muted',
-                    selectionMode && 'bg-accent text-accent-foreground'
-                  )}
-                  aria-pressed={selectionMode}
-                  onClick={handleSelectionModeChange}
-                >
-                  <ListChecks className="h-3.5 w-3.5" />
-                  <span>
-                    {selectionMode
-                      ? t('header.exitSelectionMode')
-                      : t('header.selectionMode')}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  className={cn(
-                    'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs transition-colors hover:bg-muted',
-                    showFavorites && 'bg-accent text-accent-foreground'
-                  )}
-                  aria-pressed={showFavorites}
-                  onClick={() => onShowFavoritesChange(!showFavorites)}
-                >
-                  <Star
-                    className={cn(
-                      'h-3.5 w-3.5',
-                      showFavorites && 'fill-amber-500 text-amber-500'
-                    )}
-                  />
-                  <span>{t('header.showFavorites')}</span>
-                </button>
-
-                {tags.length > 0 && (
-                  <div className="mt-1 border-t pt-1">
-                    <button
-                      type="button"
-                      className={cn(
-                        'flex w-full items-center rounded-sm px-2 py-1.5 text-left text-xs transition-colors hover:bg-muted',
-                        selectedTagId === null && 'bg-accent text-accent-foreground'
-                      )}
-                      aria-pressed={selectedTagId === null}
-                      onClick={() => onSelectedTagChange(null)}
-                    >
-                      {t('header.tags.all')}
-                    </button>
-                    {tags.map((tag) => (
-                      <button
-                        key={tag.id}
-                        type="button"
-                        className={cn(
-                          'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs transition-colors hover:bg-muted',
-                          selectedTagId === tag.id && 'bg-accent text-accent-foreground'
-                        )}
-                        aria-pressed={selectedTagId === tag.id}
-                        onClick={() => onSelectedTagChange(tag.id)}
-                      >
-                        {tag.color && (
-                          <span
-                            className="size-2 rounded-full"
-                            style={{ backgroundColor: tag.color }}
-                          />
-                        )}
-                        <span className="truncate">{tag.name}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                <div className="mt-1 border-t pt-1">
-                  <button
-                    type="button"
-                    className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs text-destructive transition-colors hover:bg-destructive/10"
-                    onClick={() => setClearDialogOpen(true)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    <span>{t('header.clearHistory')}</span>
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
+          <HeaderMoreMenu
+            showFavorites={showFavorites}
+            onShowFavoritesChange={onShowFavoritesChange}
+            tags={tags}
+            selectedTagId={selectedTagId}
+            onSelectedTagChange={onSelectedTagChange}
+            selectionMode={selectionMode}
+            onSelectionModeChange={handleSelectionModeChange}
+            onRequestClearHistory={() => setClearDialogOpen(true)}
+          />
         </div>
 
         <div className="flex items-center gap-0.5 px-2 pb-1.5">
@@ -283,65 +187,14 @@ export function Header({
         </div>
 
         {selectionMode && (
-          <div className="flex items-center gap-1 border-t border-border bg-muted/25 px-2 py-1">
-            <span className="mr-auto text-[10px] text-muted-foreground">
-              {selectedCount > 0
-                ? t('header.selectedCount', { count: selectedCount })
-                : t('header.selectItemsHint')}
-            </span>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-6"
-              onClick={() => setFavoriteForSelected(true)}
-              disabled={selectedCount === 0}
-              aria-label={t('header.favoriteSelected')}
-              title={t('header.favoriteSelected')}
-            >
-              <Star className="h-3 w-3" />
-            </Button>
-            {tags.slice(0, 4).map((tag) => (
-              <Button
-                key={tag.id}
-                variant="ghost"
-                size="sm"
-                className="h-6 max-w-20 px-1.5 text-[10px]"
-                onClick={() => assignTagToSelected(tag.id)}
-                disabled={selectedCount === 0}
-                aria-label={t('header.assignTagSelected', { name: tag.name })}
-                title={t('header.assignTagSelected', { name: tag.name })}
-              >
-                {tag.color && (
-                  <span
-                    className="size-1.5 rounded-full"
-                    style={{ backgroundColor: tag.color }}
-                  />
-                )}
-                <span className="truncate">{tag.name}</span>
-              </Button>
-            ))}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-6"
-              onClick={deleteSelected}
-              disabled={selectedCount === 0}
-              aria-label={t('header.deleteSelected')}
-              title={t('header.deleteSelected')}
-            >
-              <Trash2 className="h-3 w-3 text-destructive" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-6"
-              onClick={clearSelection}
-              aria-label={t('header.clearSelection')}
-              title={t('header.clearSelection')}
-            >
-              <X className="h-3 w-3" />
-            </Button>
-          </div>
+          <SelectionToolbar
+            selectedCount={selectedCount}
+            tags={tags}
+            onFavoriteSelected={() => setFavoriteForSelected(true)}
+            onAssignTagToSelected={assignTagToSelected}
+            onDeleteSelected={deleteSelected}
+            onClearSelection={clearSelection}
+          />
         )}
       </header>
 

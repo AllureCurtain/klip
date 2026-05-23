@@ -280,14 +280,128 @@ describe('Header', () => {
     fireEvent.click(screen.getByRole('button', { name: '仅显示收藏' }));
     expect(onShowFavoritesChange).toHaveBeenCalledWith(true);
 
+    fireEvent.click(screen.getByRole('button', { name: '更多操作' }));
     fireEvent.click(screen.getByRole('button', { name: 'Work' }));
     expect(onSelectedTagChange).toHaveBeenCalledWith(1);
 
+    fireEvent.click(screen.getByRole('button', { name: '更多操作' }));
     fireEvent.click(screen.getByRole('button', { name: '选择模式' }));
     expect(onSelectionModeChange).toHaveBeenCalledWith(true);
 
+    fireEvent.click(screen.getByRole('button', { name: '更多操作' }));
     fireEvent.click(screen.getByRole('button', { name: '清空历史' }));
     expect(screen.getByText('清空剪贴板历史')).toBeTruthy();
+  });
+
+  it('closes the more menu from escape and outside clicks', () => {
+    render(
+      <HeaderWithSelection
+        searchQuery=""
+        onSearchChange={vi.fn()}
+        contentType={null}
+        onContentTypeChange={vi.fn()}
+        showFavorites={false}
+        onShowFavoritesChange={vi.fn()}
+        tags={[{ id: 1, name: 'Work', color: '#2563eb', created_at: 0 }]}
+        selectedTagId={null}
+        onSelectedTagChange={vi.fn()}
+        selectionMode={false}
+        onSelectionModeChange={vi.fn()}
+        onSettingsOpen={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '更多操作' }));
+    expect(screen.getByRole('button', { name: '选择模式' })).toBeTruthy();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('button', { name: '选择模式' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: '更多操作' }));
+    expect(screen.getByRole('button', { name: '选择模式' })).toBeTruthy();
+
+    fireEvent.mouseDown(document.body);
+    expect(screen.queryByRole('button', { name: '选择模式' })).toBeNull();
+  });
+
+  it('closes the more menu after choosing menu actions', () => {
+    const onShowFavoritesChange = vi.fn();
+    const onSelectedTagChange = vi.fn();
+    const onSelectionModeChange = vi.fn();
+
+    render(
+      <HeaderWithSelection
+        searchQuery=""
+        onSearchChange={vi.fn()}
+        contentType={null}
+        onContentTypeChange={vi.fn()}
+        showFavorites={false}
+        onShowFavoritesChange={onShowFavoritesChange}
+        tags={[{ id: 1, name: 'Work', color: '#2563eb', created_at: 0 }]}
+        selectedTagId={null}
+        onSelectedTagChange={onSelectedTagChange}
+        selectionMode={false}
+        onSelectionModeChange={onSelectionModeChange}
+        onSettingsOpen={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '更多操作' }));
+    fireEvent.click(screen.getByRole('button', { name: '仅显示收藏' }));
+    expect(onShowFavoritesChange).toHaveBeenCalledWith(true);
+    expect(screen.queryByRole('button', { name: '选择模式' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: '更多操作' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Work' }));
+    expect(onSelectedTagChange).toHaveBeenCalledWith(1);
+    expect(screen.queryByRole('button', { name: '选择模式' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: '更多操作' }));
+    fireEvent.click(screen.getByRole('button', { name: '选择模式' }));
+    expect(onSelectionModeChange).toHaveBeenCalledWith(true);
+    expect(screen.queryByRole('button', { name: '选择模式' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: '更多操作' }));
+    fireEvent.click(screen.getByRole('button', { name: '清空历史' }));
+    expect(screen.queryByRole('button', { name: '选择模式' })).toBeNull();
+    expect(screen.getByText('清空剪贴板历史')).toBeTruthy();
+  });
+
+  it('disables batch actions until items are selected', () => {
+    render(
+      <HeaderWithSelection
+        searchQuery=""
+        onSearchChange={vi.fn()}
+        contentType={null}
+        onContentTypeChange={vi.fn()}
+        showFavorites={false}
+        onShowFavoritesChange={vi.fn()}
+        tags={[{ id: 1, name: 'Work', color: '#2563eb', created_at: 0 }]}
+        selectedTagId={null}
+        onSelectedTagChange={vi.fn()}
+        selectionMode
+        onSelectionModeChange={vi.fn()}
+        onSettingsOpen={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('选择要批量处理的条目')).toBeTruthy();
+    expect(
+      (screen.getByRole('button', { name: '收藏已选' }) as HTMLButtonElement)
+        .disabled
+    ).toBe(true);
+    expect(
+      (screen.getByRole('button', { name: '分配 Work' }) as HTMLButtonElement)
+        .disabled
+    ).toBe(true);
+    expect(
+      (screen.getByRole('button', { name: '删除已选' }) as HTMLButtonElement)
+        .disabled
+    ).toBe(true);
+    expect(
+      (screen.getByRole('button', { name: '清除选择' }) as HTMLButtonElement)
+        .disabled
+    ).toBe(false);
   });
 
   it('shows batch actions only after selection mode is enabled', () => {
