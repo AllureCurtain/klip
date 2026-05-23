@@ -132,12 +132,19 @@ function App() {
       />
       <main className="flex-1 overflow-hidden">
         {loading ? (
-          <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-            {t('app.loading')}
+          <div
+            role="status"
+            className="flex flex-col items-start px-3 py-4 text-muted-foreground"
+          >
+            <p className="text-xs font-medium">{t('app.loading')}</p>
           </div>
         ) : error ? (
-          <div className="flex items-center justify-center h-full text-destructive text-sm">
-            {t('app.errorLabel')}: {error}
+          <div
+            role="alert"
+            className="flex flex-col items-start px-3 py-4 text-destructive"
+          >
+            <p className="text-xs font-medium">{t('app.errorLabel')}</p>
+            <p className="mt-1 text-[11px] text-destructive/80">{error}</p>
           </div>
         ) : items.length === 0 ? (
           <EmptyState showFavorites={showFavorites} />

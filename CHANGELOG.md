@@ -16,6 +16,7 @@
 - Regression coverage for floating clipboard item actions.
 - Regression coverage for low-noise clipboard item metadata.
 - Regression coverage for compact EmptyState rendering.
+- Regression coverage for compact App loading and error states.
 - Regression coverage for localized dialog close actions.
 - Regression coverage for Settings tab semantics.
 - Regression coverage for image thumbnail preview and image preview download action labels.
@@ -33,6 +34,7 @@
 - Clipboard item actions now float on hover/focus instead of occupying the default row layout.
 - Clipboard item type, time, sensitivity, and tag metadata now render as a quieter inline scan line.
 - Empty states now render as lightweight operational notes instead of centered instructional panels.
+- App loading and error states now use lightweight operational notes instead of centered full-panel messages.
 - Header search now exposes an explicit accessible label.
 - Clipboard entries now use distinct text, image, file, and folder treatments for faster scanning.
 - Data Management import, export, backup, and restore controls now live behind an advanced disclosure.
