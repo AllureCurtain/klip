@@ -228,6 +228,30 @@ describe('Header', () => {
     ).toBe('false');
   });
 
+  it('uses a quiet neutral treatment for active content filters', () => {
+    render(
+      <Header
+        searchQuery=""
+        onSearchChange={vi.fn()}
+        contentType={null}
+        onContentTypeChange={vi.fn()}
+        showFavorites={false}
+        onShowFavoritesChange={vi.fn()}
+        tags={[]}
+        selectedTagId={null}
+        onSelectedTagChange={vi.fn()}
+        onSettingsOpen={vi.fn()}
+      />
+    );
+
+    const activeFilter = screen.getByRole('button', { name: '全部' });
+
+    expect(activeFilter.className).toContain('bg-muted/70');
+    expect(activeFilter.className).toContain('text-foreground');
+    expect(activeFilter.className).not.toContain('bg-accent');
+    expect(activeFilter.className).not.toContain('text-accent-foreground');
+  });
+
   it('does not expose clear history as a default header action', () => {
     render(
       <Header

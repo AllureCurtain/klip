@@ -174,7 +174,7 @@ export function Header({
               className={cn(
                 'flex items-center gap-1 h-6 px-2 rounded-md text-[11px] font-medium transition-colors',
                 contentType === filter.value
-                  ? 'bg-accent text-accent-foreground'
+                  ? 'bg-muted/70 text-foreground'
                   : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
               )}
               aria-pressed={contentType === filter.value}

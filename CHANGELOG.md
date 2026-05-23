@@ -20,6 +20,7 @@
 - Regression coverage for quiet SelectionToolbar rendering.
 - Regression coverage for neutral keyboard-selected clipboard rows.
 - Regression coverage for neutral default clipboard row borders.
+- Regression coverage for quiet active Header content filters.
 - Regression coverage for localized dialog close actions.
 - Regression coverage for Settings tab semantics.
 - Regression coverage for image thumbnail preview and image preview download action labels.
@@ -41,6 +42,7 @@
 - Selection mode actions now render as a quieter inline utility row.
 - Keyboard-selected clipboard rows now use a neutral treatment instead of a content-type wash.
 - Default and keyboard-selected clipboard rows no longer expose persistent content-type left rails.
+- Active Header content filters now use a neutral treatment instead of filled accent chrome.
 - Header search now exposes an explicit accessible label.
 - Clipboard entries now use distinct text, image, file, and folder treatments for faster scanning.
 - Data Management import, export, backup, and restore controls now live behind an advanced disclosure.
