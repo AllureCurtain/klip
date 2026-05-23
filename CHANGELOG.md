@@ -18,6 +18,7 @@
 - Regression coverage for compact EmptyState rendering.
 - Regression coverage for compact App loading and error states.
 - Regression coverage for quiet SelectionToolbar rendering.
+- Regression coverage for neutral keyboard-selected clipboard rows.
 - Regression coverage for localized dialog close actions.
 - Regression coverage for Settings tab semantics.
 - Regression coverage for image thumbnail preview and image preview download action labels.
@@ -37,6 +38,7 @@
 - Empty states now render as lightweight operational notes instead of centered instructional panels.
 - App loading and error states now use lightweight operational notes instead of centered full-panel messages.
 - Selection mode actions now render as a quieter inline utility row.
+- Keyboard-selected clipboard rows now use a neutral treatment instead of a content-type wash.
 - Header search now exposes an explicit accessible label.
 - Clipboard entries now use distinct text, image, file, and folder treatments for faster scanning.
 - Data Management import, export, backup, and restore controls now live behind an advanced disclosure.

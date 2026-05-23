@@ -96,6 +96,7 @@ function makeFolderItem(overrides: Partial<ClipboardItemType> = {}): ClipboardIt
 
 describe('ClipboardItem', () => {
   beforeEach(() => {
+    Element.prototype.scrollIntoView = vi.fn();
     useConfigStore.setState((state) => ({
       config: { ...state.config, mask_sensitive_previews: true },
     }));
@@ -219,6 +220,17 @@ describe('ClipboardItem', () => {
 
     expect(screen.queryByText('7')).toBeNull();
     expect(row.className).not.toContain('bg-sky-500');
+  });
+
+  it('uses a neutral treatment for keyboard-selected rows', () => {
+    const { container } = render(
+      <ClipboardItem item={makeTextItem()} index={1} isSelected />
+    );
+
+    const row = container.firstElementChild as HTMLElement;
+
+    expect(row.className).toContain('bg-muted/40');
+    expect(row.className).not.toContain('bg-sky-500/10');
   });
 
   it('floats item actions out of the default content layout', () => {
