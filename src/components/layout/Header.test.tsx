@@ -141,4 +141,25 @@ describe('Header', () => {
     expect(screen.getByRole('button', { name: '清空历史' })).toBeTruthy();
     expect(screen.getByRole('button', { name: '设置' })).toBeTruthy();
   });
+
+  it('labels selected-item tag assignment actions for assistive technology', () => {
+    storeMocks.selectedIds = [42];
+
+    render(
+      <Header
+        searchQuery=""
+        onSearchChange={vi.fn()}
+        contentType={null}
+        onContentTypeChange={vi.fn()}
+        showFavorites={false}
+        onShowFavoritesChange={vi.fn()}
+        tags={[{ id: 1, name: 'Work', color: '#2563eb', created_at: 0 }]}
+        selectedTagId={null}
+        onSelectedTagChange={vi.fn()}
+        onSettingsOpen={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole('button', { name: '分配 Work' })).toBeTruthy();
+  });
 });

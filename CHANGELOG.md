@@ -6,6 +6,7 @@
 
 - Regression coverage for Data Management settings path actions, restore cancellation, file path input labels, and Settings general/behavior control labels.
 - Regression coverage for Header icon-only actions.
+- Regression coverage for Header selected-item tag assignment action labels.
 - Regression coverage for image thumbnail preview and image preview download action labels.
 
 ### Changed
@@ -13,6 +14,7 @@
 - Data Management path inputs now expose accessible labels for assistive technology.
 - Settings window size inputs and behavior switches now expose accessible labels.
 - Header icon-only actions now expose accessible labels.
+- Header selected-item tag assignment actions now expose localized accessible labels.
 - Image thumbnails and image preview downloads now expose explicit accessible actions.
 
 ## [0.1.2] - 2026-05-22

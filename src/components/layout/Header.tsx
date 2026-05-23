@@ -242,6 +242,7 @@ export function Header({
                 size="sm"
                 className="h-6 max-w-20 px-1.5 text-[10px]"
                 onClick={() => assignTagToSelected(tag.id)}
+                aria-label={t('header.assignTagSelected', { name: tag.name })}
                 title={t('header.assignTagSelected', { name: tag.name })}
               >
                 {tag.color && (
