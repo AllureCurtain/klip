@@ -82,7 +82,7 @@ export function ClipboardList({ items, selectionMode = false }: ClipboardListPro
   selectedIndexRef.current = selectedIndex;
 
   const HEADER_HEIGHT = 28;
-  const ITEM_HEIGHT = 64;
+  const ITEM_HEIGHT = 56;
 
   const virtualizer = useVirtualizer({
     count: rows.length,

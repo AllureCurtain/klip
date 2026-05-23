@@ -1,0 +1,62 @@
+/** @vitest-environment jsdom */
+import { render } from '@testing-library/react';
+import type { ClipboardItem as ClipboardItemType } from '@/types';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ClipboardList } from './ClipboardList';
+
+const storeMocks = vi.hoisted(() => ({
+  copyItem: vi.fn(),
+  toggleSelected: vi.fn(),
+  hasMore: false,
+  loadMore: vi.fn(),
+  loadingMore: false,
+}));
+
+vi.mock('@/stores', () => ({
+  useClipboardStore: () => storeMocks,
+}));
+
+vi.mock('./ClipboardItem', () => ({
+  ClipboardItem: ({ item }: { item: ClipboardItemType }) => (
+    <div data-testid="clipboard-item">{item.preview}</div>
+  ),
+}));
+
+function makeTextItem(overrides: Partial<ClipboardItemType> = {}): ClipboardItemType {
+  return {
+    id: 42,
+    content_type: 'text',
+    content: 'hello',
+    preview: 'hello',
+    hash: 'hash-42',
+    size: 5,
+    metadata: null,
+    is_favorited: false,
+    is_sensitive: false,
+    sensitivity_reason: null,
+    tags: [],
+    created_at: Date.now(),
+    last_used_at: Date.now(),
+    ...overrides,
+  };
+}
+
+describe('ClipboardList', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    storeMocks.copyItem.mockReset();
+    storeMocks.toggleSelected.mockReset();
+    storeMocks.loadMore.mockReset();
+    storeMocks.hasMore = false;
+    storeMocks.loadingMore = false;
+  });
+
+  it('uses compact virtual rows for clipboard entries', () => {
+    const { container } = render(<ClipboardList items={[makeTextItem()]} />);
+
+    const scroller = container.firstElementChild as HTMLElement;
+    const virtualCanvas = scroller.firstElementChild as HTMLElement;
+
+    expect(virtualCanvas.style.height).toBe('84px');
+  });
+});

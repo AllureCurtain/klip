@@ -66,7 +66,6 @@ const CLIP_TONES: Record<
   ClipKind,
   {
     border: string;
-    surface: string;
     selected: string;
     iconBg: string;
     iconText: string;
@@ -75,7 +74,6 @@ const CLIP_TONES: Record<
 > = {
   text: {
     border: 'border-l-sky-500',
-    surface: 'bg-sky-500/[0.025]',
     selected: 'bg-sky-500/10',
     iconBg: 'bg-sky-500/10',
     iconText: 'text-sky-600 dark:text-sky-400',
@@ -83,7 +81,6 @@ const CLIP_TONES: Record<
   },
   image: {
     border: 'border-l-emerald-500',
-    surface: 'bg-emerald-500/[0.025]',
     selected: 'bg-emerald-500/10',
     iconBg: 'bg-emerald-500/10',
     iconText: 'text-emerald-600 dark:text-emerald-400',
@@ -91,7 +88,6 @@ const CLIP_TONES: Record<
   },
   file: {
     border: 'border-l-blue-500',
-    surface: 'bg-blue-500/[0.025]',
     selected: 'bg-blue-500/10',
     iconBg: 'bg-blue-500/10',
     iconText: 'text-blue-600 dark:text-blue-400',
@@ -99,7 +95,6 @@ const CLIP_TONES: Record<
   },
   folder: {
     border: 'border-l-amber-500',
-    surface: 'bg-amber-500/[0.025]',
     selected: 'bg-amber-500/10',
     iconBg: 'bg-amber-500/10',
     iconText: 'text-amber-600 dark:text-amber-400',
@@ -150,7 +145,6 @@ function classifyFile(item: ClipboardItemType): FileShape {
 
 export function ClipboardItem({
   item,
-  index,
   isSelected,
   selectionMode = false,
   onSelect,
@@ -311,9 +305,8 @@ export function ClipboardItem({
         ref={itemRef}
         onClick={handleClick}
         className={cn(
-          'group relative flex h-16 cursor-pointer items-center gap-2 overflow-hidden border-l-2 px-2.5 transition-colors',
+          'group relative flex h-14 cursor-pointer items-center gap-2 overflow-hidden border-l-2 px-2.5 transition-colors',
           tone.border,
-          tone.surface,
           highlighted ? tone.selected : 'hover:bg-muted/60'
         )}
       >
@@ -328,14 +321,9 @@ export function ClipboardItem({
           />
         )}
 
-        {/* Index badge */}
-        <span className="w-5 text-right text-[10px] font-mono tabular-nums text-muted-foreground/60 shrink-0 select-none">
-          {index}
-        </span>
-
         <span
           className={cn(
-            'flex size-8 shrink-0 items-center justify-center rounded-md',
+            'flex size-7 shrink-0 items-center justify-center rounded-md',
             tone.iconBg
           )}
           aria-hidden="true"

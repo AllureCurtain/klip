@@ -210,6 +210,17 @@ describe('ClipboardItem', () => {
     expect(screen.queryByRole('checkbox', { name: '选择条目' })).toBeNull();
   });
 
+  it('keeps default text rows neutral and free of numeric index chrome', () => {
+    const { container } = render(
+      <ClipboardItem item={makeTextItem()} index={7} isSelected={false} />
+    );
+
+    const row = container.firstElementChild as HTMLElement;
+
+    expect(screen.queryByText('7')).toBeNull();
+    expect(row.className).not.toContain('bg-sky-500');
+  });
+
   it('enables checkbox selection only inside selection mode', () => {
     storeMocks.selectedIds = [42];
 
