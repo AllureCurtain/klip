@@ -233,6 +233,31 @@ describe('ClipboardItem', () => {
     expect(actions.className).not.toContain('shrink-0');
   });
 
+  it('renders item metadata as a low-noise inline scan line', () => {
+    render(
+      <ClipboardItem
+        item={makeTextItem({
+          is_sensitive: true,
+          sensitivity_reason: 'credential keyword',
+          tags: [{ id: 1, name: 'Work', color: '#2563eb', created_at: 0 }],
+        })}
+        index={1}
+        isSelected={false}
+      />
+    );
+
+    const typeMeta = screen.getByText('文本').parentElement as HTMLElement;
+    const sensitiveMeta = screen.getByText('敏感') as HTMLElement;
+    const tagMeta = screen.getByText('Work').parentElement as HTMLElement;
+
+    expect(typeMeta.className).toContain('text-muted-foreground');
+    expect(typeMeta.className).not.toContain('bg-sky-500');
+    expect(typeMeta.className).not.toContain('rounded-sm');
+    expect(sensitiveMeta.className).toContain('text-muted-foreground');
+    expect(sensitiveMeta.className).not.toContain('text-destructive');
+    expect(tagMeta.className).not.toContain('bg-muted');
+  });
+
   it('enables checkbox selection only inside selection mode', () => {
     storeMocks.selectedIds = [42];
 

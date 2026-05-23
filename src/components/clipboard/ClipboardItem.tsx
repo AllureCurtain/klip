@@ -69,7 +69,7 @@ const CLIP_TONES: Record<
     selected: string;
     iconBg: string;
     iconText: string;
-    badge: string;
+    dot: string;
   }
 > = {
   text: {
@@ -77,28 +77,28 @@ const CLIP_TONES: Record<
     selected: 'bg-sky-500/10',
     iconBg: 'bg-sky-500/10',
     iconText: 'text-sky-600 dark:text-sky-400',
-    badge: 'bg-sky-500/10 text-sky-700 dark:text-sky-300',
+    dot: 'bg-sky-500',
   },
   image: {
     border: 'border-l-emerald-500',
     selected: 'bg-emerald-500/10',
     iconBg: 'bg-emerald-500/10',
     iconText: 'text-emerald-600 dark:text-emerald-400',
-    badge: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+    dot: 'bg-emerald-500',
   },
   file: {
     border: 'border-l-blue-500',
     selected: 'bg-blue-500/10',
     iconBg: 'bg-blue-500/10',
     iconText: 'text-blue-600 dark:text-blue-400',
-    badge: 'bg-blue-500/10 text-blue-700 dark:text-blue-300',
+    dot: 'bg-blue-500',
   },
   folder: {
     border: 'border-l-amber-500',
     selected: 'bg-amber-500/10',
     iconBg: 'bg-amber-500/10',
     iconText: 'text-amber-600 dark:text-amber-400',
-    badge: 'bg-amber-500/10 text-amber-700 dark:text-amber-300',
+    dot: 'bg-amber-500',
   },
 };
 
@@ -280,11 +280,6 @@ export function ClipboardItem({
             </button>
             <div className="flex flex-col min-w-0">
               <span className="text-xs text-muted-foreground truncate">{item.preview}</span>
-              {imageMeta && (
-                <span className="text-[10px] text-muted-foreground/60">
-                  {imageMeta.width}x{imageMeta.height} · {imageMeta.format}
-                </span>
-              )}
             </div>
           </div>
         );
@@ -297,6 +292,63 @@ export function ClipboardItem({
       default:
         return null;
     }
+  };
+
+  const renderMetaLine = () => {
+    const imageDetails = imageMeta
+      ? `${imageMeta.width}x${imageMeta.height} ${imageMeta.format}`
+      : null;
+
+    return (
+      <div className="mt-0.5 flex min-w-0 items-center gap-1.5 overflow-hidden text-[10px] text-muted-foreground/70">
+        <span className="inline-flex shrink-0 items-center gap-1 text-muted-foreground">
+          <span className={cn('size-1.5 rounded-full', tone.dot)} />
+          <span>{typeLabel}</span>
+        </span>
+        <span className="shrink-0 text-muted-foreground/40" aria-hidden="true">
+          ·
+        </span>
+        <span className="shrink-0">{formatTime(item.created_at)}</span>
+        {imageDetails && (
+          <>
+            <span className="shrink-0 text-muted-foreground/40" aria-hidden="true">
+              ·
+            </span>
+            <span className="shrink-0">{imageDetails}</span>
+          </>
+        )}
+        {copied && (
+          <span className="inline-flex shrink-0 items-center gap-0.5 font-medium text-primary">
+            <Check className="h-2.5 w-2.5" />
+            {t('clipboard.copied')}
+          </span>
+        )}
+        {item.is_sensitive && (
+          <span
+            className="inline-flex shrink-0 items-center gap-0.5 text-muted-foreground"
+            title={item.sensitivity_reason ?? t('clipboard.sensitive')}
+          >
+            <ShieldAlert className="h-2.5 w-2.5" />
+            {t('clipboard.sensitive')}
+          </span>
+        )}
+        {item.tags.slice(0, 2).map((tag) => (
+          <span
+            key={tag.id}
+            className="inline-flex min-w-0 max-w-20 items-center gap-1 text-muted-foreground"
+            title={tag.name}
+          >
+            {tag.color && (
+              <span
+                className="size-1.5 shrink-0 rounded-full"
+                style={{ backgroundColor: tag.color }}
+              />
+            )}
+            <span className="truncate">{tag.name}</span>
+          </span>
+        ))}
+      </div>
+    );
   };
 
   return (
@@ -333,54 +385,8 @@ export function ClipboardItem({
 
         {/* Content */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 mb-0.5">
-            <span
-              className={cn(
-                'rounded-sm px-1.5 py-0.5 text-[10px] font-medium leading-none',
-                tone.badge
-              )}
-            >
-              {typeLabel}
-            </span>
-            <span className="text-[10px] text-muted-foreground/70">
-              {formatTime(item.created_at)}
-            </span>
-            {copied && (
-              <span className="flex items-center gap-0.5 text-[10px] font-medium text-primary">
-                <Check className="h-2.5 w-2.5" />
-                {t('clipboard.copied')}
-              </span>
-            )}
-            {item.is_sensitive && (
-              <span
-                className="flex items-center gap-0.5 text-[10px] font-medium text-destructive"
-                title={item.sensitivity_reason ?? t('clipboard.sensitive')}
-              >
-                <ShieldAlert className="h-2.5 w-2.5" />
-                {t('clipboard.sensitive')}
-              </span>
-            )}
-          </div>
           {renderPreview()}
-          {item.tags.length > 0 && (
-            <div className="mt-0.5 flex gap-1 overflow-hidden">
-              {item.tags.slice(0, 3).map((tag) => (
-                <span
-                  key={tag.id}
-                  className="inline-flex max-w-20 items-center gap-1 rounded-sm bg-muted px-1.5 py-0.5 text-[9px] text-muted-foreground"
-                  title={tag.name}
-                >
-                  {tag.color && (
-                    <span
-                      className="size-1.5 shrink-0 rounded-full"
-                      style={{ backgroundColor: tag.color }}
-                    />
-                  )}
-                  <span className="truncate">{tag.name}</span>
-                </span>
-              ))}
-            </div>
-          )}
+          {renderMetaLine()}
         </div>
 
         {/* Actions */}
@@ -482,22 +488,20 @@ function renderFilePreview(
       const moreCount =
         shape.fileCount + shape.dirCount - shape.sampleNames.length;
       return (
-        <div className="min-w-0">
-          <div className="flex items-baseline gap-2">
-            <span className="text-xs font-medium text-foreground">
-              {summary}
+        <div className="flex items-baseline gap-2 min-w-0">
+          <span className="text-xs font-medium text-foreground shrink-0">
+            {summary}
+          </span>
+          {shape.totalSize > 0 && (
+            <span className="text-[10px] text-muted-foreground shrink-0">
+              {formatSize(shape.totalSize)}
             </span>
-            {shape.totalSize > 0 && (
-              <span className="text-[10px] text-muted-foreground">
-                {formatSize(shape.totalSize)}
-              </span>
-            )}
-          </div>
+          )}
           {sampleLine && (
-            <div className="text-[10px] text-muted-foreground/70 truncate mt-0.5">
+            <span className="text-[10px] text-muted-foreground/70 truncate">
               {sampleLine}
               {moreCount > 0 ? t('clipboard.moreItems', { count: moreCount }) : ''}
-            </div>
+            </span>
           )}
         </div>
       );

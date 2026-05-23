@@ -14,6 +14,7 @@
 - Regression coverage for Header more-actions menu dismissal and disabled empty batch actions.
 - Regression coverage for compact, neutral clipboard list rows.
 - Regression coverage for floating clipboard item actions.
+- Regression coverage for low-noise clipboard item metadata.
 - Regression coverage for localized dialog close actions.
 - Regression coverage for Settings tab semantics.
 - Regression coverage for image thumbnail preview and image preview download action labels.
@@ -29,6 +30,7 @@
 - The Header more-actions menu now closes on Escape, outside click, and completed menu actions.
 - Clipboard list rows are more compact and no longer show default numeric index chrome or tinted row washes.
 - Clipboard item actions now float on hover/focus instead of occupying the default row layout.
+- Clipboard item type, time, sensitivity, and tag metadata now render as a quieter inline scan line.
 - Header search now exposes an explicit accessible label.
 - Clipboard entries now use distinct text, image, file, and folder treatments for faster scanning.
 - Data Management import, export, backup, and restore controls now live behind an advanced disclosure.
