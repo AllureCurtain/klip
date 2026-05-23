@@ -121,7 +121,7 @@ describe('Header', () => {
     expect(onSettingsOpen).toHaveBeenCalled();
   });
 
-  it('labels icon-only actions for assistive technology', () => {
+  it('labels the lightweight header actions for assistive technology', () => {
     render(
       <Header
         searchQuery=""
@@ -138,9 +138,9 @@ describe('Header', () => {
     );
 
     expect(screen.getByRole('button', { name: '切换主题' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: '仅显示收藏' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: '清空历史' })).toBeTruthy();
     expect(screen.getByRole('button', { name: '设置' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: '仅显示收藏' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '清空历史' })).toBeNull();
   });
 
   it('labels the search input for assistive technology', () => {
@@ -164,7 +164,7 @@ describe('Header', () => {
     ).toBeTruthy();
   });
 
-  it('labels selected-item tag assignment actions for assistive technology', () => {
+  it('keeps batch and tag controls out of the lightweight header', () => {
     storeMocks.selectedIds = [42];
 
     render(
@@ -182,10 +182,12 @@ describe('Header', () => {
       />
     );
 
-    expect(screen.getByRole('button', { name: '分配 Work' })).toBeTruthy();
+    expect(screen.queryByText('已选择 1 项')).toBeNull();
+    expect(screen.queryByRole('button', { name: '分配 Work' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Work' })).toBeNull();
   });
 
-  it('exposes pressed state for favorites, content, and tag filters', () => {
+  it('exposes pressed state for content filters', () => {
     render(
       <Header
         searchQuery=""
@@ -205,11 +207,6 @@ describe('Header', () => {
     );
 
     expect(
-      screen
-        .getByRole('button', { name: '仅显示收藏' })
-        .getAttribute('aria-pressed')
-    ).toBe('true');
-    expect(
       screen.getByRole('button', { name: '全部' }).getAttribute('aria-pressed')
     ).toBe('false');
     expect(
@@ -221,18 +218,9 @@ describe('Header', () => {
     expect(
       screen.getByRole('button', { name: '文件' }).getAttribute('aria-pressed')
     ).toBe('false');
-    expect(
-      screen.getByRole('button', { name: '全部标签' }).getAttribute('aria-pressed')
-    ).toBe('false');
-    expect(
-      screen.getByRole('button', { name: 'Work' }).getAttribute('aria-pressed')
-    ).toBe('false');
-    expect(
-      screen.getByRole('button', { name: 'Personal' }).getAttribute('aria-pressed')
-    ).toBe('true');
   });
 
-  it('labels the clear-history dialog close action with the active language', () => {
+  it('does not expose clear history as a default header action', () => {
     render(
       <Header
         searchQuery=""
@@ -248,10 +236,8 @@ describe('Header', () => {
       />
     );
 
-    act(() => {
-      screen.getByRole('button', { name: '清空历史' }).click();
-    });
+    const clearHistoryButton = screen.queryByRole('button', { name: '清空历史' });
 
-    expect(screen.getByRole('button', { name: '关闭' })).toBeTruthy();
+    expect(clearHistoryButton).toBeNull();
   });
 });

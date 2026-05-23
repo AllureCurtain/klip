@@ -59,6 +59,67 @@ type FileShape =
     }
   | { kind: 'unknown'; preview: string };
 
+type ClipKind = 'text' | 'image' | 'file' | 'folder';
+
+const CLIP_TONES: Record<
+  ClipKind,
+  {
+    border: string;
+    surface: string;
+    selected: string;
+    iconBg: string;
+    iconText: string;
+    badge: string;
+  }
+> = {
+  text: {
+    border: 'border-l-sky-500',
+    surface: 'bg-sky-500/[0.025]',
+    selected: 'bg-sky-500/10',
+    iconBg: 'bg-sky-500/10',
+    iconText: 'text-sky-600 dark:text-sky-400',
+    badge: 'bg-sky-500/10 text-sky-700 dark:text-sky-300',
+  },
+  image: {
+    border: 'border-l-emerald-500',
+    surface: 'bg-emerald-500/[0.025]',
+    selected: 'bg-emerald-500/10',
+    iconBg: 'bg-emerald-500/10',
+    iconText: 'text-emerald-600 dark:text-emerald-400',
+    badge: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+  },
+  file: {
+    border: 'border-l-blue-500',
+    surface: 'bg-blue-500/[0.025]',
+    selected: 'bg-blue-500/10',
+    iconBg: 'bg-blue-500/10',
+    iconText: 'text-blue-600 dark:text-blue-400',
+    badge: 'bg-blue-500/10 text-blue-700 dark:text-blue-300',
+  },
+  folder: {
+    border: 'border-l-amber-500',
+    surface: 'bg-amber-500/[0.025]',
+    selected: 'bg-amber-500/10',
+    iconBg: 'bg-amber-500/10',
+    iconText: 'text-amber-600 dark:text-amber-400',
+    badge: 'bg-amber-500/10 text-amber-700 dark:text-amber-300',
+  },
+};
+
+function getClipKind(item: ClipboardItemType, fileShape: FileShape | null): ClipKind {
+  if (item.content_type === 'text') return 'text';
+  if (item.content_type === 'image') return 'image';
+  if (fileShape?.kind === 'single-folder') return 'folder';
+  if (
+    fileShape?.kind === 'multi' &&
+    fileShape.dirCount > 0 &&
+    fileShape.fileCount === 0
+  ) {
+    return 'folder';
+  }
+  return 'file';
+}
+
 function classifyFile(item: ClipboardItemType): FileShape {
   const meta = parseFileMetadata(item);
   if (!meta) {
@@ -88,8 +149,7 @@ function classifyFile(item: ClipboardItemType): FileShape {
 
 export function ClipboardItem({ item, index, isSelected, onSelect }: ClipboardItemProps) {
   const { t } = useTranslation();
-  const { deleteItem, copyItem, toggleFavorite, selectedIds, toggleSelected } =
-    useClipboardStore();
+  const { deleteItem, copyItem, toggleFavorite } = useClipboardStore();
   const maskSensitivePreviews = useConfigStore(
     (state) => state.config.mask_sensitive_previews
   );
@@ -97,7 +157,6 @@ export function ClipboardItem({ item, index, isSelected, onSelect }: ClipboardIt
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [imagePreviewOpen, setImagePreviewOpen] = useState(false);
   const confirmTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const isBatchSelected = selectedIds.includes(item.id);
 
   const handleCopy = useCallback(() => {
     copyItem(item.id);
@@ -127,11 +186,6 @@ export function ClipboardItem({ item, index, isSelected, onSelect }: ClipboardIt
     toggleFavorite(item.id);
   };
 
-  const handleToggleSelected = (e: React.MouseEvent<HTMLInputElement>) => {
-    e.stopPropagation();
-    toggleSelected(item.id);
-  };
-
   const handleImageClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     setImagePreviewOpen(true);
@@ -152,27 +206,30 @@ export function ClipboardItem({ item, index, isSelected, onSelect }: ClipboardIt
   const fileShape = item.content_type === 'file' ? classifyFile(item) : null;
   const imageMeta = item.content_type === 'image' ? parseImageMetadata(item) : null;
   const shouldMaskPreview = item.is_sensitive && maskSensitivePreviews;
+  const clipKind = getClipKind(item, fileShape);
+  const tone = CLIP_TONES[clipKind];
+  const typeLabel = t(`clipboard.types.${clipKind}`);
 
   const renderIcon = () => {
-    switch (item.content_type) {
+    const className = cn('h-3.5 w-3.5 shrink-0', tone.iconText);
+    switch (clipKind) {
       case 'text':
-        return <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />;
+        return <FileText className={className} />;
       case 'image':
-        return <Image className="h-3.5 w-3.5 text-primary shrink-0" />;
-      case 'file': {
-        if (!fileShape) return <File className="h-3.5 w-3.5 text-primary/70 shrink-0" />;
+        return <Image className={className} />;
+      case 'folder':
+        return <Folder className={className} />;
+      case 'file':
+        if (!fileShape) return <File className={className} />;
         switch (fileShape.kind) {
-          case 'single-folder':
-            return <Folder className="h-3.5 w-3.5 text-amber-500 shrink-0" />;
           case 'single-file':
           case 'multi':
+            return <Files className={className} />;
           case 'unknown':
-            return <Files className="h-3.5 w-3.5 text-primary/70 shrink-0" />;
+            return <File className={className} />;
+          case 'single-folder':
+            return <Folder className={className} />;
         }
-        return <File className="h-3.5 w-3.5 text-primary/70 shrink-0" />;
-      }
-      default:
-        return null;
     }
   };
 
@@ -235,32 +292,41 @@ export function ClipboardItem({ item, index, isSelected, onSelect }: ClipboardIt
         ref={itemRef}
         onClick={handleClick}
         className={cn(
-          'group relative flex h-16 cursor-pointer items-center gap-2 overflow-hidden px-2.5 transition-colors',
+          'group relative flex h-16 cursor-pointer items-center gap-2 overflow-hidden border-l-2 px-2.5 transition-colors',
+          tone.border,
+          tone.surface,
           isSelected
-            ? 'bg-accent'
+            ? tone.selected
             : 'hover:bg-muted/60',
-          isBatchSelected && 'bg-primary/5',
-          copied && 'bg-primary/5'
+          copied && tone.selected
         )}
       >
-        <input
-          type="checkbox"
-          checked={isBatchSelected}
-          onClick={handleToggleSelected}
-          onChange={() => undefined}
-          aria-label={t('clipboard.select')}
-          className="size-3.5 shrink-0 accent-primary"
-        />
-
         {/* Index badge */}
         <span className="w-5 text-right text-[10px] font-mono tabular-nums text-muted-foreground/60 shrink-0 select-none">
           {index}
         </span>
 
+        <span
+          className={cn(
+            'flex size-8 shrink-0 items-center justify-center rounded-md',
+            tone.iconBg
+          )}
+          aria-hidden="true"
+        >
+          {renderIcon()}
+        </span>
+
         {/* Content */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 mb-0.5">
-            {renderIcon()}
+            <span
+              className={cn(
+                'rounded-sm px-1.5 py-0.5 text-[10px] font-medium leading-none',
+                tone.badge
+              )}
+            >
+              {typeLabel}
+            </span>
             <span className="text-[10px] text-muted-foreground/70">
               {formatTime(item.created_at)}
             </span>
@@ -371,12 +437,9 @@ function renderFilePreview(
   switch (shape.kind) {
     case 'single-folder':
       return (
-        <div className="flex items-baseline gap-2 min-w-0">
+        <div className="flex items-baseline min-w-0">
           <span className="text-xs font-medium text-foreground truncate">
             {shape.name}
-          </span>
-          <span className="text-[10px] text-amber-600 dark:text-amber-400 shrink-0">
-            {t('clipboard.folder')}
           </span>
         </div>
       );

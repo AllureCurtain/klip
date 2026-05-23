@@ -52,6 +52,12 @@
     "confirmDelete": "Click again to confirm",
     "file": "File",
     "folder": "Folder",
+    "types": {
+      "text": "Text",
+      "image": "Image",
+      "file": "File",
+      "folder": "Folder"
+    },
     "fileCount_one": "{{count}} file",
     "fileCount_other": "{{count}} files",
     "folderCount_one": "{{count}} folder",
@@ -118,6 +124,9 @@
       "tagColor": "Tag color",
       "tagCreated": "Created tag {{name}}",
       "deleteTag": "Delete {{name}}",
+      "portability": "Import, export, and backups",
+      "portabilityDesc": "Advanced file operations stay here so the everyday clipboard flow stays light.",
+      "openAdvanced": "Open",
       "json": "JSON import/export path",
       "csv": "CSV import/export path",
       "backup": "Database backup path",

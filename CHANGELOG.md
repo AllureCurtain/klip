@@ -9,6 +9,7 @@
 - Regression coverage for Header filter pressed states.
 - Regression coverage for Header selected-item tag assignment action labels.
 - Regression coverage for Header search input labeling.
+- Regression coverage for the lightweight Header default actions, clipboard type treatments, and advanced Data Management disclosure.
 - Regression coverage for localized dialog close actions.
 - Regression coverage for Settings tab semantics.
 - Regression coverage for image thumbnail preview and image preview download action labels.
@@ -18,7 +19,10 @@
 - Data Management path inputs now expose accessible labels for assistive technology.
 - Dialog close actions now use the active interface language.
 - Header favorites, content-type, and tag filters now expose their pressed state.
+- Header heavy actions are kept out of the default flow so the main clipboard surface stays lighter.
 - Header search now exposes an explicit accessible label.
+- Clipboard entries now use distinct text, image, file, and folder treatments for faster scanning.
+- Data Management import, export, backup, and restore controls now live behind an advanced disclosure.
 - Settings window size inputs and behavior switches now expose accessible labels.
 - Settings navigation now exposes tablist, tab, and tabpanel semantics.
 - Header icon-only actions now expose accessible labels.

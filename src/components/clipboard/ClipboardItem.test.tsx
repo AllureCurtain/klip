@@ -53,6 +53,40 @@ function makeImageItem(overrides: Partial<ClipboardItemType> = {}): ClipboardIte
   };
 }
 
+function makeFileItem(overrides: Partial<ClipboardItemType> = {}): ClipboardItemType {
+  return {
+    ...makeTextItem(),
+    id: 126,
+    content_type: 'file',
+    content: JSON.stringify(['C:\\Users\\you\\Desktop\\report.pdf']),
+    preview: 'report.pdf',
+    size: 2048,
+    metadata: JSON.stringify({
+      file_count: 1,
+      dir_count: 0,
+      total_size: 2048,
+      items: [{ name: 'report.pdf', is_dir: false, size: 2048 }],
+    }),
+    ...overrides,
+  };
+}
+
+function makeFolderItem(overrides: Partial<ClipboardItemType> = {}): ClipboardItemType {
+  return makeFileItem({
+    id: 168,
+    content: JSON.stringify(['C:\\Users\\you\\Desktop\\Project']),
+    preview: 'Project',
+    size: 0,
+    metadata: JSON.stringify({
+      file_count: 0,
+      dir_count: 1,
+      total_size: 0,
+      items: [{ name: 'Project', is_dir: true, size: 0 }],
+    }),
+    ...overrides,
+  });
+}
+
 describe('ClipboardItem', () => {
   beforeEach(() => {
     useConfigStore.setState((state) => ({
@@ -159,5 +193,32 @@ describe('ClipboardItem', () => {
     fireEvent.click(previewButton);
 
     expect(screen.getByText('图片预览')).toBeTruthy();
+  });
+
+  it('keeps batch selection out of the default item surface', () => {
+    render(<ClipboardItem item={makeTextItem()} index={1} isSelected={false} />);
+
+    expect(screen.queryByRole('checkbox', { name: '选择条目' })).toBeNull();
+  });
+
+  it('renders distinct type treatments for text, image, file, and folder entries', () => {
+    const { rerender } = render(
+      <ClipboardItem item={makeTextItem()} index={1} isSelected={false} />
+    );
+
+    expect(screen.getByText('文本')).toBeTruthy();
+    expect(screen.getByText('hello')).toBeTruthy();
+
+    rerender(<ClipboardItem item={makeImageItem()} index={1} isSelected={false} />);
+    expect(screen.getByText('图片')).toBeTruthy();
+    expect(screen.getByText('Image 24x24')).toBeTruthy();
+
+    rerender(<ClipboardItem item={makeFileItem()} index={1} isSelected={false} />);
+    expect(screen.getByText('文件')).toBeTruthy();
+    expect(screen.getByText('report.pdf')).toBeTruthy();
+
+    rerender(<ClipboardItem item={makeFolderItem()} index={1} isSelected={false} />);
+    expect(screen.getByText('文件夹')).toBeTruthy();
+    expect(screen.getByText('Project')).toBeTruthy();
   });
 });

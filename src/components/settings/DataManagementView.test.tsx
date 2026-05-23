@@ -46,6 +46,10 @@ vi.mock('react-i18next', () => ({
         'settings.data.tagColor': 'Tag color',
         'settings.data.createTag': 'Create tag',
         'settings.data.deleteTag': 'Delete {{name}}',
+        'settings.data.portability': 'Import, export, and backups',
+        'settings.data.portabilityDesc': 'Advanced file operations are kept out of the everyday clipboard flow.',
+        'settings.data.openAdvanced': 'Open',
+        'common.close': 'Close',
         'settings.data.json': 'JSON import/export path',
         'settings.data.csv': 'CSV import/export path',
         'settings.data.backup': 'Database backup path',
@@ -112,6 +116,10 @@ describe('DataManagementView', () => {
     vi.restoreAllMocks();
   });
 
+  const openPortability = () => {
+    fireEvent.click(screen.getByText('Import, export, and backups'));
+  };
+
   it('toggles sensitive content switches through the config store', () => {
     render(<DataManagementView />);
 
@@ -146,6 +154,7 @@ describe('DataManagementView', () => {
 
   it('chooses export paths and restores after confirmation', async () => {
     render(<DataManagementView />);
+    openPortability();
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Save to...' })[0]);
     await act(async () => {
@@ -182,6 +191,7 @@ describe('DataManagementView', () => {
 
   it('keeps destructive file actions disabled until a path is present', () => {
     render(<DataManagementView />);
+    openPortability();
 
     for (const button of screen.getAllByRole('button', { name: 'Export' })) {
       expect((button as HTMLButtonElement).disabled).toBe(true);
@@ -196,6 +206,7 @@ describe('DataManagementView', () => {
 
   it('labels file path inputs for assistive technology', () => {
     render(<DataManagementView />);
+    openPortability();
 
     expect(screen.getByLabelText('JSON import/export path')).toBeTruthy();
     expect(screen.getByLabelText('CSV import/export path')).toBeTruthy();
@@ -205,6 +216,7 @@ describe('DataManagementView', () => {
   it('does not restore a selected backup when confirmation is cancelled', async () => {
     vi.mocked(window.confirm).mockReturnValue(false);
     render(<DataManagementView />);
+    openPortability();
 
     dialogMocks.open.mockResolvedValueOnce('C:\\tmp\\chosen.db');
     fireEvent.click(screen.getAllByRole('button', { name: 'Choose backup...' })[0]);
@@ -221,5 +233,20 @@ describe('DataManagementView', () => {
     expect(storeMocks.restoreDatabase).not.toHaveBeenCalled();
     expect(storeMocks.fetchItems).not.toHaveBeenCalled();
     expect(storeMocks.fetchTags).not.toHaveBeenCalled();
+  });
+
+  it('keeps import, export, and backup controls inside an advanced disclosure', () => {
+    render(<DataManagementView />);
+
+    expect(screen.getByText('Import, export, and backups')).toBeTruthy();
+    expect(screen.queryByLabelText('JSON import/export path')).toBeNull();
+    expect(screen.queryByLabelText('CSV import/export path')).toBeNull();
+    expect(screen.queryByLabelText('Database backup path')).toBeNull();
+
+    openPortability();
+
+    expect(screen.getByLabelText('JSON import/export path')).toBeTruthy();
+    expect(screen.getByLabelText('CSV import/export path')).toBeTruthy();
+    expect(screen.getByLabelText('Database backup path')).toBeTruthy();
   });
 });

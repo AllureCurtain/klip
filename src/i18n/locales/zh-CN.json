@@ -51,6 +51,12 @@
     "confirmDelete": "再次点击确认删除",
     "file": "文件",
     "folder": "文件夹",
+    "types": {
+      "text": "文本",
+      "image": "图片",
+      "file": "文件",
+      "folder": "文件夹"
+    },
     "fileCount": "{{count}} 个文件",
     "folderCount": "{{count}} 个文件夹",
     "moreItems": " 等 {{count}} 项",
@@ -114,6 +120,9 @@
       "tagColor": "标签颜色",
       "tagCreated": "已创建标签 {{name}}",
       "deleteTag": "删除 {{name}}",
+      "portability": "导入、导出与备份",
+      "portabilityDesc": "高级文件操作收在这里，日常剪贴板流程保持轻量。",
+      "openAdvanced": "展开",
       "json": "JSON 导入/导出路径",
       "csv": "CSV 导入/导出路径",
       "backup": "数据库备份路径",
