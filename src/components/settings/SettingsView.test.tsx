@@ -161,7 +161,7 @@ describe('SettingsView', () => {
       await Promise.resolve();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'About' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'About' }));
 
     expect(screen.getByText('Data directory')).toBeTruthy();
     expect(screen.getByText('Database')).toBeTruthy();
@@ -185,7 +185,7 @@ describe('SettingsView', () => {
       await Promise.resolve();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Shortcuts' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Shortcuts' }));
 
     fireEvent.change(screen.getByLabelText('Toggle window'), {
       target: { value: 'Ctrl+Alt+Z' },
@@ -207,7 +207,7 @@ describe('SettingsView', () => {
       await Promise.resolve();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Shortcuts' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Shortcuts' }));
     fireEvent.change(screen.getByLabelText('Toggle window'), {
       target: { value: 'Ctrl+Alt+Z' },
     });
@@ -235,9 +235,25 @@ describe('SettingsView', () => {
     expect(screen.getByLabelText('Window height')).toBeTruthy();
     expect(screen.getByLabelText('Search debounce')).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Behavior' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Behavior' }));
 
     expect(screen.getByRole('switch', { name: 'Launch at startup' })).toBeTruthy();
     expect(screen.getByRole('switch', { name: 'Close to tray' })).toBeTruthy();
+  });
+
+  it('exposes settings navigation as tabs for assistive technology', async () => {
+    render(<SettingsView onBack={callbacks.onBack} />);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole('tablist', { name: 'Settings' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'General', selected: true })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'About' }));
+
+    expect(screen.getByRole('tab', { name: 'About', selected: true })).toBeTruthy();
+    expect(screen.getByRole('tabpanel', { name: 'About' })).toBeTruthy();
   });
 });

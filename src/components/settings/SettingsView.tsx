@@ -100,10 +100,19 @@ export function SettingsView({ onBack }: SettingsViewProps) {
       </div>
 
       {/* Tab row */}
-      <div className="flex items-center gap-0.5 px-2 pb-1.5 border-b border-border">
+      <div
+        role="tablist"
+        aria-label={t('settings.title')}
+        className="flex items-center gap-0.5 px-2 pb-1.5 border-b border-border"
+      >
         {tabItems.map((tab) => (
           <button
             key={tab.value}
+            id={`settings-tab-${tab.value}`}
+            role="tab"
+            type="button"
+            aria-selected={activeTab === tab.value}
+            aria-controls={`settings-panel-${tab.value}`}
             className={cn(
               'flex items-center gap-1 h-6 px-2 rounded-md text-[11px] font-medium transition-colors',
               activeTab === tab.value
@@ -119,7 +128,12 @@ export function SettingsView({ onBack }: SettingsViewProps) {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto px-3 py-3 scrollbar-thin">
+      <div
+        id={`settings-panel-${activeTab}`}
+        role="tabpanel"
+        aria-labelledby={`settings-tab-${activeTab}`}
+        className="flex-1 overflow-y-auto px-3 py-3 scrollbar-thin"
+      >
         {activeTab === 'general' && (
           <div className="space-y-4">
             <div className="space-y-2">

@@ -1,16 +1,16 @@
 # Klip v0.1.2 Release Validation
 
-> Last updated: 2026-05-23 07:53 Asia/Shanghai
+> Last updated: 2026-05-23 08:35 Asia/Shanghai
 > Scope: Windows-first post-release validation
 
 ## Repository State Checked Before This Batch
 
 - Local branch: `main`
-- Local HEAD: `7fed05a69b86a1d9a100725105dcffcaef650271`
-- Remote HEAD: `origin/main` at `7fed05a69b86a1d9a100725105dcffcaef650271`
+- Local HEAD: `0fb25af1e6616a36ec61979e1ab1f90d79dbb35b`
+- Remote HEAD: `origin/main` at `0fb25af1e6616a36ec61979e1ab1f90d79dbb35b`
 - Open GitHub PRs: none
 - Latest GitHub CI on `main`: success
-- CI run: <https://github.com/AllureCurtain/klip/actions/runs/26294575848>
+- CI run: <https://github.com/AllureCurtain/klip/actions/runs/26318073832>
 
 ## Public Release
 
@@ -51,6 +51,15 @@ Machine state observed by the preflight script:
 - Running `klip.exe` processes: 0
 - Installed Klip registry entries: 0
 
+Additional environment assessment on 2026-05-23 08:28 Asia/Shanghai:
+
+- Windows desktop session: interactive console.
+- Running `klip.exe` processes: 0.
+- Installed Klip registry entries: 0.
+- `smoke-installers.ps1 -PlanInstall -PlanUninstall -OutputJson` only produced
+  install/uninstall plans with `executes: false`.
+- No installer or uninstaller was executed.
+
 ## Installed-Build Validation Status
 
 No NSIS or MSI installer was executed in this environment during this validation pass.
@@ -78,3 +87,5 @@ the existing accessibility hardening path:
 - Header selected-item tag assignment buttons now expose the localized accessible
   action name, such as `分配 Work`.
 - Added a regression test for the selected-item tag assignment accessible label.
+- Settings navigation now exposes `tablist`, `tab`, and `tabpanel` semantics.
+- Added a regression test for Settings tab semantics.
