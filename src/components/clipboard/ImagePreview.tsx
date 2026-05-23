@@ -55,10 +55,10 @@ export function ImagePreview({
         className="max-w-[440px] max-h-[90vh] overflow-hidden p-0"
         closeLabel={t('common.close')}
       >
-        <DialogHeader className="flex-shrink-0 px-4 pt-4">
+        <DialogHeader className="flex-shrink-0 px-4 pt-4 pr-10">
           <div className="flex items-center justify-between">
             <DialogTitle className="text-sm">{t('imagePreview.title')}</DialogTitle>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               {metadata && (
                 <>
                   {metadata.width && metadata.height && (

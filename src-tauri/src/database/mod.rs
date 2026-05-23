@@ -5,7 +5,7 @@ pub mod data_portability;
 pub mod productization;
 pub mod types;
 
-pub const CURRENT_DB_VERSION: i64 = 2;
+pub const CURRENT_DB_VERSION: i64 = 3;
 
 pub use connection::{get_db_path, init, Database};
 pub use types::{

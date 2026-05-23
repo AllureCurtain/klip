@@ -182,8 +182,8 @@ impl Database {
             ("auto_start", DEFAULT_AUTO_START),
             ("close_to_tray", "true"),
             ("show_in_tray", "true"),
-            ("window_width", "480"),
-            ("window_height", "720"),
+            ("window_width", "560"),
+            ("window_height", "760"),
             ("search_debounce_ms", "150"),
             ("language", "zh-CN"),
             ("sensitive_capture_policy", "flag"),
@@ -295,15 +295,15 @@ pub fn init(app_handle: tauri::AppHandle) -> Result<(), AppError> {
 fn migrate_window_size_defaults(conn: &Connection, now: i64) -> Result<(), AppError> {
     conn.execute(
         "UPDATE app_config
-         SET value = '480', updated_at = ?1
-         WHERE key = 'window_width' AND value = '400'",
+         SET value = '560', updated_at = ?1
+         WHERE key = 'window_width' AND value IN ('400', '480')",
         [&now.to_string()],
     )?;
 
     conn.execute(
         "UPDATE app_config
-         SET value = '720', updated_at = ?1
-         WHERE key = 'window_height' AND value = '600'",
+         SET value = '760', updated_at = ?1
+         WHERE key = 'window_height' AND value IN ('600', '720')",
         [&now.to_string()],
     )?;
 
@@ -343,6 +343,10 @@ fn run_schema_migrations(conn: &Connection, now: i64) -> Result<(), AppError> {
         migrate_to_v2(conn, now)?;
     }
 
+    if stored_version < 3 {
+        migrate_to_v3(conn, now)?;
+    }
+
     write_schema_version(conn, now, crate::database::CURRENT_DB_VERSION)
 }
 
@@ -375,6 +379,20 @@ fn write_schema_version(conn: &Connection, now: i64, version: i64) -> Result<(),
 fn migrate_to_v2(conn: &Connection, now: i64) -> Result<(), AppError> {
     normalize_legacy_hotkey_config(conn, now)?;
     migrate_window_size_defaults(conn, now)?;
+    Ok(())
+}
+
+fn migrate_to_v3(conn: &Connection, now: i64) -> Result<(), AppError> {
+    conn.execute(
+        "UPDATE app_config SET value = '560', updated_at = ?1
+         WHERE key = 'window_width' AND CAST(value AS INTEGER) <= 480",
+        [&now.to_string()],
+    )?;
+    conn.execute(
+        "UPDATE app_config SET value = '760', updated_at = ?1
+         WHERE key = 'window_height' AND CAST(value AS INTEGER) <= 720",
+        [&now.to_string()],
+    )?;
     Ok(())
 }
 
@@ -508,7 +526,7 @@ mod tests {
             .unwrap()
             .unwrap();
 
-        assert_eq!(version, "2");
+        assert_eq!(version, "3");
     }
 
     #[test]
@@ -539,8 +557,8 @@ mod tests {
             .unwrap()
             .unwrap();
 
-        assert_eq!(width, "480");
-        assert_eq!(height, "720");
+        assert_eq!(width, "560");
+        assert_eq!(height, "760");
     }
 
     #[test]
@@ -579,7 +597,7 @@ mod tests {
         let version = crate::database::config::get(&db, "db_version")
             .unwrap()
             .unwrap();
-        assert_eq!(version, "2");
+        assert_eq!(version, "3");
         drop(db);
 
         let backups = std::fs::read_dir(&dir)

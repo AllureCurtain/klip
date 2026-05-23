@@ -2,12 +2,9 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Search,
-  Settings,
   FileText,
   Image,
   FolderOpen,
-  Sun,
-  Moon,
 } from 'lucide-react';
 import { Input, Button } from '@/components/ui';
 import {
@@ -114,13 +111,13 @@ export function Header({
 
   return (
     <>
-      <header className="flex flex-col border-b border-border">
+      <header className="flex flex-col border-b border-border/60">
         <div
           data-tauri-drag-region
-          className="flex items-center gap-1.5 px-2 pt-1.5 pb-1"
+          className="flex items-center gap-1.5 px-2.5 pt-2 pb-1.5"
         >
           <div className="relative flex-1 min-w-0">
-            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
             <Input
               type="text"
               placeholder={t('header.searchPlaceholder')}
@@ -128,33 +125,9 @@ export function Header({
               autoFocus
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
-              className="h-7 pl-7 pr-2 text-xs"
+              className="h-7 pl-8 pr-3 text-xs"
             />
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-7 shrink-0"
-            onClick={toggleTheme}
-            aria-label={t('header.toggleTheme')}
-            title={t('header.toggleTheme')}
-          >
-            {resolvedTheme === 'dark' ? (
-              <Sun className="h-3.5 w-3.5" />
-            ) : (
-              <Moon className="h-3.5 w-3.5" />
-            )}
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-7 shrink-0"
-            onClick={onSettingsOpen}
-            aria-label={t('header.settings')}
-            title={t('header.settings')}
-          >
-            <Settings className="h-3.5 w-3.5" />
-          </Button>
           <HeaderMoreMenu
             showFavorites={showFavorites}
             onShowFavoritesChange={onShowFavoritesChange}
@@ -164,18 +137,21 @@ export function Header({
             selectionMode={selectionMode}
             onSelectionModeChange={handleSelectionModeChange}
             onRequestClearHistory={() => setClearDialogOpen(true)}
+            onSettingsOpen={onSettingsOpen}
+            onToggleTheme={toggleTheme}
+            resolvedTheme={resolvedTheme}
           />
         </div>
 
-        <div className="flex items-center gap-0.5 px-2 pb-1.5">
+        <div className="flex items-center gap-1 px-2.5 pb-2">
           {contentFilters.map((filter) => (
             <button
               key={filter.value ?? 'all'}
               className={cn(
-                'flex items-center gap-1 h-6 px-2 rounded-md text-[11px] font-medium transition-colors',
+                'flex items-center gap-1 h-6 px-2.5 rounded-full text-[11px] font-medium transition-all duration-200',
                 contentType === filter.value
-                  ? 'bg-muted/70 text-foreground'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+                  ? 'bg-accent text-accent-foreground shadow-[var(--shadow-ring)]'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/70'
               )}
               aria-pressed={contentType === filter.value}
               onClick={() => onContentTypeChange(filter.value)}

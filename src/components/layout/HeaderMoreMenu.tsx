@@ -3,7 +3,10 @@ import { useTranslation } from 'react-i18next';
 import {
   ListChecks,
   MoreHorizontal,
+  Moon,
+  Settings,
   Star,
+  Sun,
   Trash2,
 } from 'lucide-react';
 import { Button } from '@/components/ui';
@@ -19,6 +22,9 @@ interface HeaderMoreMenuProps {
   selectionMode: boolean;
   onSelectionModeChange: () => void;
   onRequestClearHistory: () => void;
+  onSettingsOpen: () => void;
+  onToggleTheme: () => void;
+  resolvedTheme: 'light' | 'dark';
 }
 
 export function HeaderMoreMenu({
@@ -30,6 +36,9 @@ export function HeaderMoreMenu({
   selectionMode,
   onSelectionModeChange,
   onRequestClearHistory,
+  onSettingsOpen,
+  onToggleTheme,
+  resolvedTheme,
 }: HeaderMoreMenuProps) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
@@ -80,14 +89,14 @@ export function HeaderMoreMenu({
 
       {open && (
         <div
-          className="absolute right-0 top-8 z-20 w-56 rounded-md border bg-popover p-1.5 text-popover-foreground shadow-lg"
+          className="absolute right-0 top-8 z-20 w-56 rounded-2xl border border-border/50 bg-popover/95 p-1.5 text-popover-foreground shadow-[var(--shadow-pop)] backdrop-blur-md"
           role="region"
           aria-label={t('header.moreActions')}
         >
           <button
             type="button"
             className={cn(
-              'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs transition-colors hover:bg-muted',
+              'flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-muted',
               selectionMode && 'bg-accent text-accent-foreground'
             )}
             aria-pressed={selectionMode}
@@ -103,7 +112,7 @@ export function HeaderMoreMenu({
           <button
             type="button"
             className={cn(
-              'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs transition-colors hover:bg-muted',
+              'flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-muted',
               showFavorites && 'bg-accent text-accent-foreground'
             )}
             aria-pressed={showFavorites}
@@ -121,11 +130,11 @@ export function HeaderMoreMenu({
           </button>
 
           {tags.length > 0 && (
-            <div className="mt-1 border-t pt-1">
+            <div className="mt-1 border-t border-border/50 pt-1">
               <button
                 type="button"
                 className={cn(
-                  'flex w-full items-center rounded-sm px-2 py-1.5 text-left text-xs transition-colors hover:bg-muted',
+                  'flex w-full items-center rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-muted',
                   selectedTagId === null && 'bg-accent text-accent-foreground'
                 )}
                 aria-pressed={selectedTagId === null}
@@ -138,7 +147,7 @@ export function HeaderMoreMenu({
                   key={tag.id}
                   type="button"
                   className={cn(
-                    'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs transition-colors hover:bg-muted',
+                    'flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-muted',
                     selectedTagId === tag.id && 'bg-accent text-accent-foreground'
                   )}
                   aria-pressed={selectedTagId === tag.id}
@@ -156,10 +165,33 @@ export function HeaderMoreMenu({
             </div>
           )}
 
-          <div className="mt-1 border-t pt-1">
+          <div className="mt-1 border-t border-border/50 pt-1">
             <button
               type="button"
-              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs text-destructive transition-colors hover:bg-destructive/10"
+              className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-muted"
+              onClick={() => runAndClose(onToggleTheme)}
+            >
+              {resolvedTheme === 'dark' ? (
+                <Sun className="h-3.5 w-3.5" />
+              ) : (
+                <Moon className="h-3.5 w-3.5" />
+              )}
+              <span>{t('header.toggleTheme')}</span>
+            </button>
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-muted"
+              onClick={() => runAndClose(onSettingsOpen)}
+            >
+              <Settings className="h-3.5 w-3.5" />
+              <span>{t('header.settings')}</span>
+            </button>
+          </div>
+
+          <div className="mt-1 border-t border-border/50 pt-1">
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs text-destructive transition-colors hover:bg-destructive/10"
               onClick={() => runAndClose(onRequestClearHistory)}
             >
               <Trash2 className="h-3.5 w-3.5" />

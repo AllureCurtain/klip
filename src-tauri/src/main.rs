@@ -64,12 +64,12 @@ fn main() {
                     .ok()
                     .flatten()
                     .and_then(|v| v.parse().ok())
-                    .unwrap_or(480);
+                    .unwrap_or(560);
                 let window_height: u32 = klip::database::config::get(&db, "window_height")
                     .ok()
                     .flatten()
                     .and_then(|v| v.parse().ok())
-                    .unwrap_or(720);
+                    .unwrap_or(760);
 
                 if let Err(e) = window.set_size(tauri::Size::Physical(tauri::PhysicalSize {
                     width: window_width,

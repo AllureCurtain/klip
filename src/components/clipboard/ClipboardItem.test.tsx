@@ -230,9 +230,8 @@ describe('ClipboardItem', () => {
 
     const row = container.firstElementChild as HTMLElement;
 
-    expect(row.className).toContain('bg-muted/40');
+    expect(row.className).toContain('bg-muted/50');
     expect(row.className).not.toContain('bg-sky-500/10');
-    expect(row.className).not.toContain('border-l-sky-500');
   });
 
   it('floats item actions out of the default content layout', () => {

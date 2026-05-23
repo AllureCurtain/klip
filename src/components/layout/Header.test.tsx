@@ -145,8 +145,7 @@ describe('Header', () => {
       />
     );
 
-    expect(screen.getByRole('button', { name: '切换主题' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: '设置' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '更多操作' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: '仅显示收藏' })).toBeNull();
     expect(screen.queryByRole('button', { name: '清空历史' })).toBeNull();
   });
@@ -246,10 +245,9 @@ describe('Header', () => {
 
     const activeFilter = screen.getByRole('button', { name: '全部' });
 
-    expect(activeFilter.className).toContain('bg-muted/70');
-    expect(activeFilter.className).toContain('text-foreground');
-    expect(activeFilter.className).not.toContain('bg-accent');
-    expect(activeFilter.className).not.toContain('text-accent-foreground');
+    expect(activeFilter.className).toContain('bg-accent');
+    expect(activeFilter.className).toContain('text-accent-foreground');
+    expect(activeFilter.className).not.toContain('bg-muted/70');
   });
 
   it('does not expose clear history as a default header action', () => {

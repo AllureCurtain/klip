@@ -9,6 +9,7 @@ import {
   Check,
   ShieldAlert,
 } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui';
 import { useClipboardStore } from '@/stores';
@@ -226,9 +227,8 @@ export function ClipboardItem({
     strongRowState
       ? tone.selected
       : isSelected
-        ? 'bg-muted/40'
-        : 'hover:bg-muted/60';
-  const rowBorderClass = strongRowState ? tone.border : 'border-l-transparent';
+        ? 'bg-muted/50'
+        : 'hover:bg-muted/40';
 
   const renderIcon = () => {
     const className = cn('h-3.5 w-3.5 shrink-0', tone.iconText);
@@ -360,12 +360,15 @@ export function ClipboardItem({
 
   return (
     <>
-      <div
+      <motion.div
         ref={itemRef}
         onClick={handleClick}
+        initial={{ opacity: 0, y: 4 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.2, ease: 'easeOut' }}
+        whileHover={{ y: -1, boxShadow: '0 2px 8px -2px rgba(0,0,0,0.08)' }}
         className={cn(
-          'group relative flex h-14 cursor-pointer items-center gap-2 overflow-hidden border-l-2 px-2.5 transition-colors',
-          rowBorderClass,
+          'group relative flex h-14 cursor-pointer items-center gap-2 overflow-hidden rounded-xl mx-1.5 px-2.5 transition-[background-color,border-color] duration-200',
           rowStateClass
         )}
       >
@@ -382,7 +385,7 @@ export function ClipboardItem({
 
         <span
           className={cn(
-            'flex size-7 shrink-0 items-center justify-center rounded-md',
+            'flex size-7 shrink-0 items-center justify-center rounded-lg',
             tone.iconBg
           )}
           aria-hidden="true"
@@ -399,7 +402,7 @@ export function ClipboardItem({
         {/* Actions */}
         <div
           className={cn(
-            'absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-0 rounded-md bg-background/90 opacity-0 shadow-sm ring-1 ring-border/50 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100',
+            'absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-0 rounded-full bg-card/90 backdrop-blur-sm opacity-0 shadow-[var(--shadow-raised)] transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100',
             (item.is_favorited || confirmDelete) && 'opacity-100'
           )}
         >
@@ -437,7 +440,7 @@ export function ClipboardItem({
             )} />
           </Button>
         </div>
-      </div>
+      </motion.div>
 
       {item.content_type === 'image' && (
         <ImagePreview
