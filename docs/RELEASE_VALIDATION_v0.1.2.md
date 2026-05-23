@@ -1,16 +1,16 @@
 # Klip v0.1.2 Release Validation
 
-> Last updated: 2026-05-23 09:44 Asia/Shanghai
+> Last updated: 2026-05-23 10:17 Asia/Shanghai
 > Scope: Windows-first post-release validation
 
 ## Repository State Checked Before This Batch
 
 - Local branch: `main`
-- Local HEAD: `24d6e02503aa588db647965bd343efe61335202a`
-- Remote HEAD: `origin/main` at `24d6e02503aa588db647965bd343efe61335202a`
+- Local HEAD: `c7f595ed0f7351bf05797b80e010af9bcdf1e452`
+- Remote HEAD: `origin/main` at `c7f595ed0f7351bf05797b80e010af9bcdf1e452`
 - Open GitHub PRs: none
 - Latest GitHub CI on `main`: success
-- CI run: <https://github.com/AllureCurtain/klip/actions/runs/26319629192>
+- CI run: <https://github.com/AllureCurtain/klip/actions/runs/26320203494>
 
 ## Public Release
 
@@ -95,10 +95,19 @@ the existing accessibility hardening path:
 - Header favorites, content-type, and tag filters now expose `aria-pressed`
   for their current selected state.
 - Added a regression test for Header filter pressed states.
+- Header search now exposes an explicit accessible label.
+- Added a regression test for Header search input labeling.
 
 Verification for the localized dialog close action batch:
 
 - `pnpm test -- --run src/components/clipboard/ImagePreview.test.tsx src/components/layout/Header.test.tsx`: passed.
+- `pnpm release:smoke`: passed; no installer or uninstaller was executed.
+- `pnpm verify`: passed.
+- `pnpm e2e`: passed.
+
+Verification for the Header search input labeling batch:
+
+- `pnpm test -- --run src/components/layout/Header.test.tsx`: passed.
 - `pnpm release:smoke`: passed; no installer or uninstaller was executed.
 - `pnpm verify`: passed.
 - `pnpm e2e`: passed.

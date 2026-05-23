@@ -8,6 +8,7 @@
 - Regression coverage for Header icon-only actions.
 - Regression coverage for Header filter pressed states.
 - Regression coverage for Header selected-item tag assignment action labels.
+- Regression coverage for Header search input labeling.
 - Regression coverage for localized dialog close actions.
 - Regression coverage for Settings tab semantics.
 - Regression coverage for image thumbnail preview and image preview download action labels.
@@ -17,6 +18,7 @@
 - Data Management path inputs now expose accessible labels for assistive technology.
 - Dialog close actions now use the active interface language.
 - Header favorites, content-type, and tag filters now expose their pressed state.
+- Header search now exposes an explicit accessible label.
 - Settings window size inputs and behavior switches now expose accessible labels.
 - Settings navigation now exposes tablist, tab, and tabpanel semantics.
 - Header icon-only actions now expose accessible labels.

@@ -111,6 +111,7 @@ export function Header({
             <Input
               type="text"
               placeholder={t('header.searchPlaceholder')}
+              aria-label={t('header.searchPlaceholder')}
               autoFocus
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}

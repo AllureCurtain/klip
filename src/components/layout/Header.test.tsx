@@ -143,6 +143,27 @@ describe('Header', () => {
     expect(screen.getByRole('button', { name: '设置' })).toBeTruthy();
   });
 
+  it('labels the search input for assistive technology', () => {
+    render(
+      <Header
+        searchQuery=""
+        onSearchChange={vi.fn()}
+        contentType={null}
+        onContentTypeChange={vi.fn()}
+        showFavorites={false}
+        onShowFavoritesChange={vi.fn()}
+        tags={[]}
+        selectedTagId={null}
+        onSelectedTagChange={vi.fn()}
+        onSettingsOpen={vi.fn()}
+      />
+    );
+
+    expect(
+      screen.getByRole('textbox', { name: '搜索剪贴板历史...' })
+    ).toBeTruthy();
+  });
+
   it('labels selected-item tag assignment actions for assistive technology', () => {
     storeMocks.selectedIds = [42];
 
