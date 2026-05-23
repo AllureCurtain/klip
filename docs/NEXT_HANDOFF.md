@@ -1,50 +1,39 @@
 # Klip Next Handoff
 
-> Last updated: 2026-05-23 15:05 Asia/Shanghai
+> Last updated: 2026-05-23 15:46 Asia/Shanghai
 > Repository: `D:\Study\cc\klip`
 > Branch: `main`
-> Latest commit at handoff: `1e79ac1bfaf3be0178f133c49b55766355fb291b`
+> Latest UI code commit: `4741290 refactor: quiet active header filters`
 
-## Current Repository State
+## Current Direction
 
-- Local branch: `main`
-- Remote branch: `origin/main`
-- Latest commit: `1e79ac1 refactor: quiet clipboard row rails`
-- Local worktree was clean at this handoff.
-- Current public release remains `v0.1.2`; today commits are under `CHANGELOG.md` `[Unreleased]`.
-- Latest GitHub CI checked for `main`: success.
-  - Run: `https://github.com/AllureCurtain/klip/actions/runs/26326279630`
-  - Head SHA: `1e79ac1bfaf3be0178f133c49b55766355fb291b`
-
-## Current Product Direction
-
-The active thread shifted from release hardening to UI weight reduction after comparing Klip with:
+The current UI pass is a lightweight convergence after comparing Klip with:
 
 ```text
 https://github.com/hu-qi-jia/copy-creator
 ```
 
-The key conclusion is that `copy-creator` feels lighter because its clipboard surface keeps the primary workflow exposed:
+The important takeaway is not that `copy-creator` has fewer features. It has clipboard history, phrases, translation, settings, theme controls, startup behavior, and storage controls. It feels lighter because the default clipboard surface keeps only the primary workflow in front:
 
 - search
-- type/category filters
-- content list
+- content/type filters
+- clipboard list
 
-It is not light because it has fewer features. It also has side navigation, settings, phrases, translation, theme controls, and management actions. The difference is that management controls are secondary, while the default clipboard surface stays operational and low-explanation.
+Keep Klip aligned with that:
 
-Keep this direction:
-
-- Do not add dashboard-style summary panels to the main clipboard window.
-- Do not bring batch actions, favorites management, tags, import/export, or clear-history back into the default flow.
-- Keep the main first screen focused on search, filters, and list scanning.
+- Do not add dashboard panels or explanatory first-screen content.
+- Do not bring batch actions, tags, import/export, clear history, or other management controls back into the default clipboard flow.
+- Keep management actions behind secondary menus, settings, or explicit modes.
 - Prefer quiet inline states over large centered instructional panels.
-- Treat icons, type dots, and hover-only actions as enough affordance when the action is not part of the primary scan path.
+- Treat hover-only row actions, low-noise metadata, and small type affordances as enough for non-primary actions.
 
-## Recent Work Completed
+## Work Completed In This UI Pass
 
-Recent commits on `main` focused on making the main window closer to the `copy-creator` lightweight direction:
+Recent commits on `main` reduced default visual weight in the clipboard window:
 
 ```text
+4741290 refactor: quiet active header filters
+bd1ebb0 docs: refresh lightweight ui handoff
 1e79ac1 refactor: quiet clipboard row rails
 64c977b refactor: neutralize selected clipboard rows
 f40b50e refactor: quiet selection toolbar
@@ -56,57 +45,56 @@ ca0d6e0 refactor: float clipboard item actions
 5893b2f refactor: polish header more actions
 58a846f feat: add opt-in clipboard selection mode
 8ec2087 feat: streamline clipboard main view
-7142c05 test: label header search input
 ```
 
-### UI Behavior Now
+Current main-window behavior:
 
 - Header default flow is search, content-type filters, theme, settings, and a more-actions menu.
-- Heavy actions live behind secondary surfaces:
-  - favorites filter
-  - tags
-  - clear history
-  - selection mode
-  - Data Management advanced import/export/backup/restore controls
-- Batch selection is opt-in and no longer shown on every item by default.
-- Clipboard rows are compact and no longer show numeric index chrome.
-- Default rows no longer use persistent content-type tinted row washes or left rails.
-- Keyboard-selected rows use a neutral treatment instead of a type-colored wash.
-- Clipboard item actions float on hover/focus rather than occupying the default row layout.
-- Metadata is a low-noise inline scan line.
-- Empty, loading, error, and selection toolbar states are lightweight operational notes.
+- Favorites, tags, clear history, selection mode, and data import/export remain secondary.
+- Batch selection is opt-in instead of visible on every row.
+- Clipboard rows are compact and no longer show index chrome, persistent type rails, or type-colored selected-row washes.
+- Row actions float on hover/focus instead of occupying default layout space.
+- Metadata, empty states, loading states, error states, and selection toolbar are quieter.
+- Active Header content filters now use a neutral treatment instead of filled accent chrome.
 
 ## Visual Evidence
 
 Latest real Tauri/Selenium screenshot:
 
 ```text
-e2e/.tmp/visual-20260523-144821/main-window.png
+e2e/.tmp/visual-20260523-153904/main-window.png
 ```
 
 Observed result:
 
-- Header/search/type filters are acceptable and close to the lightweight target.
-- The earlier blue selected-row wash is gone.
-- The earlier continuous blue left rail from text rows is gone.
-- The main remaining visible weight is the active `All` filter chip, which is acceptable but can be tuned if more polish is needed.
+- The active `全部` filter chip is now neutral and no longer the strongest default element.
+- The clipboard surface reads as search, filters, and list.
+- Search has a focus ring in the screenshot because Selenium focused the input while preparing the view; that is not a regression from the chip change.
 
-Previous screenshots in `e2e/.tmp/visual-*` are ignored by Git and can be deleted at any time.
+Previous screenshot for comparison:
 
-## Verification Already Completed
+```text
+e2e/.tmp/visual-20260523-144821/main-window.png
+```
 
-For `1e79ac1 refactor: quiet clipboard row rails`:
+The `e2e/.tmp/visual-*` directories are ignored by Git and can be deleted when no longer needed.
+
+## Verification Completed For `4741290`
+
+Targeted tests:
 
 ```powershell
-pnpm test -- --run src/components/clipboard/ClipboardItem.test.tsx src/components/clipboard/ClipboardList.test.tsx
+pnpm test -- --run src/components/layout/Header.test.tsx src/App.test.tsx
 ```
 
 Observed result:
 
 ```text
 2 test files passed
-15 tests passed
+16 tests passed
 ```
+
+Whitespace check:
 
 ```powershell
 git diff --check
@@ -115,8 +103,10 @@ git diff --check
 Observed result:
 
 ```text
-no whitespace errors
+exit 0; only existing LF-to-CRLF working-copy warnings were printed
 ```
+
+Full project verification:
 
 ```powershell
 pnpm verify
@@ -126,12 +116,14 @@ Observed result:
 
 ```text
 eslint passed
-Vitest: 11 files passed, 63 tests passed
+Vitest: 11 files passed, 64 tests passed
 vite build passed
 cargo fmt -- --check passed
 cargo clippy -- -D warnings passed
 cargo test passed
 ```
+
+Desktop E2E:
 
 ```powershell
 pnpm e2e
@@ -144,89 +136,33 @@ clipboard capture, search, and paste flow
 1 passing
 ```
 
-Pre-push hook:
+## Recommended Next Step
 
-```text
-git push origin main
-```
+Stop changing the main clipboard UI by default. It is now close to the intended lightweight operational surface.
 
-Observed result:
+If the next session continues UI work, make it a separate decision:
 
-```text
-pre-push ran pnpm verify and passed before pushing 1e79ac1
-```
+- **Recommended:** review Settings density as its own slice.
+- **Defer:** more Header compression, sidebar redesign, dashboard-style panels, or landing-page-like presentation.
+- **Alternative:** switch from UI polish to release/reliability work for the next `v0.1.x` release.
 
-GitHub CI:
-
-```text
-https://github.com/AllureCurtain/klip/actions/runs/26326279630
-conclusion: success
-```
-
-## Important Technical Note
-
-`eslint.config.js` now ignores:
-
-```text
-e2e/.tmp/**
-```
-
-Reason: visual/E2E runs can generate temporary app data under `e2e/.tmp/`. A screenshot run once caused Corepack/pnpm cache files to appear under that directory, and `pnpm verify` failed because ESLint scanned generated tool files. This ignore aligns ESLint with `.gitignore`.
-
-When creating visual screenshots, prefer using a system temp directory for `APPDATA`, `LOCALAPPDATA`, and `COREPACK_HOME`, while saving only the final screenshot under `e2e/.tmp/visual-*`.
-
-## Recommended Next Steps
-
-1. Do not continue compressing Header by default.
-
-The latest screenshot shows the Header is already close to the desired tool-like surface. More compression risks hurting discoverability without much visual gain.
-
-2. If continuing UI polish, compare these options:
-
-- **Recommended:** tune active filter chip weight.
-  - Current active `All` chip is the strongest remaining default control.
-  - Keep pressed-state tests.
-  - A small change could use a quieter neutral active style rather than a filled accent chip.
-- **Secondary:** review Settings visual density.
-  - Settings still reads more like a control console than the main clipboard surface.
-  - Any work here should be separate from clipboard main-view polish.
-- **Defer:** sidebar/navigation redesign or marketing-style layouts.
-  - Those are outside the current lightweight clipboard-window objective.
-
-3. Keep TDD for any UI behavior/class change:
+For any UI class or behavior change, keep using TDD:
 
 ```powershell
 pnpm test -- --run <target-test-file>
-```
-
-Then run:
-
-```powershell
 git diff --check
 pnpm verify
 pnpm e2e
 ```
 
-Push only after verification. Confirm GitHub CI afterward:
+After pushing, confirm GitHub Actions:
 
 ```powershell
-gh run list --branch main --limit 5 --json databaseId,status,conclusion,headSha,displayTitle,url,createdAt
+gh run list --branch main --limit 5 --json databaseId,status,conclusion,headSha,displayTitle,url,createdAt,workflowName
 ```
 
-## Suggested Prompt For Next Session
+## Suggested Prompt For New Conversation
 
 ```text
-请读取 docs/NEXT_HANDOFF.md、CHANGELOG.md，并查看最新截图 e2e/.tmp/visual-20260523-144821/main-window.png。继续 Klip 主窗口轻量化收敛，但不要默认继续压 Header。优先判断 active filter chip 是否还过重；如果要改，用 TDD，跑 pnpm verify、pnpm e2e，并确认 GitHub CI。
-```
-
-## Quick Commands
-
-```powershell
-git status --short --branch
-git log --oneline -12
-gh run list --branch main --limit 5 --json databaseId,status,conclusion,headSha,displayTitle,url,createdAt
-pnpm test -- --run src/components/clipboard/ClipboardItem.test.tsx src/components/layout/Header.test.tsx
-git diff --check
-pnpm verify
-pnpm e2e
+请读取 docs/NEXT_HANDOFF.md、CHANGELOG.md，并查看截图 e2e/.tmp/visual-20260523-153904/main-window.png。Klip 主窗口轻量化已经基本收敛，不要默认继续压 Header 或加 dashboard。下一步请先判断：是单独 review Settings 密度，还是转向 release/reliability 工作。
 ```
