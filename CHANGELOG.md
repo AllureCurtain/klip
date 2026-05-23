@@ -10,6 +10,7 @@
 - Regression coverage for Header selected-item tag assignment action labels.
 - Regression coverage for Header search input labeling.
 - Regression coverage for the lightweight Header default actions, clipboard type treatments, and advanced Data Management disclosure.
+- Regression coverage for the opt-in selection mode and hidden heavy Header actions.
 - Regression coverage for localized dialog close actions.
 - Regression coverage for Settings tab semantics.
 - Regression coverage for image thumbnail preview and image preview download action labels.
@@ -20,6 +21,8 @@
 - Dialog close actions now use the active interface language.
 - Header favorites, content-type, and tag filters now expose their pressed state.
 - Header heavy actions are kept out of the default flow so the main clipboard surface stays lighter.
+- Batch selection is now an explicit selection mode instead of a default item/header surface.
+- Favorites, tag filters, and clear-history now live behind the Header more-actions menu.
 - Header search now exposes an explicit accessible label.
 - Clipboard entries now use distinct text, image, file, and folder treatments for faster scanning.
 - Data Management import, export, backup, and restore controls now live behind an advanced disclosure.

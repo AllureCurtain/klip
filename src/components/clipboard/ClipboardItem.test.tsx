@@ -1,5 +1,6 @@
 /** @vitest-environment jsdom */
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import type { ComponentProps, ComponentType } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ClipboardItem } from './ClipboardItem';
 import type { ClipboardItem as ClipboardItemType } from '@/types';
@@ -16,6 +17,12 @@ const storeMocks = vi.hoisted(() => ({
 vi.mock('@/stores', () => ({
   useClipboardStore: () => storeMocks,
 }));
+
+type ClipboardItemWithSelectionProps = ComponentProps<typeof ClipboardItem> & {
+  selectionMode?: boolean;
+};
+
+const ClipboardItemWithSelection = ClipboardItem as ComponentType<ClipboardItemWithSelectionProps>;
 
 function makeTextItem(overrides: Partial<ClipboardItemType> = {}): ClipboardItemType {
   return {
@@ -101,6 +108,8 @@ describe('ClipboardItem', () => {
     storeMocks.deleteItem.mockReset();
     storeMocks.copyItem.mockReset();
     storeMocks.toggleFavorite.mockReset();
+    storeMocks.toggleSelected.mockReset();
+    storeMocks.selectedIds = [];
   });
 
   it('requires two clicks to delete (confirmation pattern)', () => {
@@ -199,6 +208,43 @@ describe('ClipboardItem', () => {
     render(<ClipboardItem item={makeTextItem()} index={1} isSelected={false} />);
 
     expect(screen.queryByRole('checkbox', { name: '选择条目' })).toBeNull();
+  });
+
+  it('enables checkbox selection only inside selection mode', () => {
+    storeMocks.selectedIds = [42];
+
+    render(
+      <ClipboardItemWithSelection
+        item={makeTextItem()}
+        index={1}
+        isSelected={false}
+        selectionMode
+      />
+    );
+
+    const checkbox = screen.getByRole('checkbox', { name: '选择条目' });
+    expect((checkbox as HTMLInputElement).checked).toBe(true);
+
+    fireEvent.click(checkbox);
+
+    expect(storeMocks.toggleSelected).toHaveBeenCalledWith(42);
+    expect(storeMocks.copyItem).not.toHaveBeenCalled();
+  });
+
+  it('uses item clicks for selection instead of copying in selection mode', () => {
+    render(
+      <ClipboardItemWithSelection
+        item={makeTextItem()}
+        index={1}
+        isSelected={false}
+        selectionMode
+      />
+    );
+
+    fireEvent.click(screen.getByText('hello'));
+
+    expect(storeMocks.toggleSelected).toHaveBeenCalledWith(42);
+    expect(storeMocks.copyItem).not.toHaveBeenCalled();
   });
 
   it('renders distinct type treatments for text, image, file, and folder entries', () => {

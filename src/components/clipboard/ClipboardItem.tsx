@@ -26,6 +26,7 @@ interface ClipboardItemProps {
   item: ClipboardItemType;
   index: number;
   isSelected: boolean;
+  selectionMode?: boolean;
   onSelect?: () => void;
 }
 
@@ -147,9 +148,16 @@ function classifyFile(item: ClipboardItemType): FileShape {
   };
 }
 
-export function ClipboardItem({ item, index, isSelected, onSelect }: ClipboardItemProps) {
+export function ClipboardItem({
+  item,
+  index,
+  isSelected,
+  selectionMode = false,
+  onSelect,
+}: ClipboardItemProps) {
   const { t } = useTranslation();
-  const { deleteItem, copyItem, toggleFavorite } = useClipboardStore();
+  const { deleteItem, copyItem, toggleFavorite, selectedIds, toggleSelected } =
+    useClipboardStore();
   const maskSensitivePreviews = useConfigStore(
     (state) => state.config.mask_sensitive_previews
   );
@@ -157,6 +165,7 @@ export function ClipboardItem({ item, index, isSelected, onSelect }: ClipboardIt
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [imagePreviewOpen, setImagePreviewOpen] = useState(false);
   const confirmTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const isBatchSelected = selectedIds.includes(item.id);
 
   const handleCopy = useCallback(() => {
     copyItem(item.id);
@@ -166,8 +175,12 @@ export function ClipboardItem({ item, index, isSelected, onSelect }: ClipboardIt
 
   const handleClick = useCallback(() => {
     onSelect?.();
+    if (selectionMode) {
+      toggleSelected(item.id);
+      return;
+    }
     handleCopy();
-  }, [onSelect, handleCopy]);
+  }, [handleCopy, item.id, onSelect, selectionMode, toggleSelected]);
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -184,6 +197,11 @@ export function ClipboardItem({ item, index, isSelected, onSelect }: ClipboardIt
   const handleToggleFavorite = (e: React.MouseEvent) => {
     e.stopPropagation();
     toggleFavorite(item.id);
+  };
+
+  const handleToggleSelected = (e: React.MouseEvent<HTMLInputElement>) => {
+    e.stopPropagation();
+    toggleSelected(item.id);
   };
 
   const handleImageClick = (e: React.MouseEvent) => {
@@ -209,6 +227,7 @@ export function ClipboardItem({ item, index, isSelected, onSelect }: ClipboardIt
   const clipKind = getClipKind(item, fileShape);
   const tone = CLIP_TONES[clipKind];
   const typeLabel = t(`clipboard.types.${clipKind}`);
+  const highlighted = isSelected || (selectionMode && isBatchSelected) || copied;
 
   const renderIcon = () => {
     const className = cn('h-3.5 w-3.5 shrink-0', tone.iconText);
@@ -295,12 +314,20 @@ export function ClipboardItem({ item, index, isSelected, onSelect }: ClipboardIt
           'group relative flex h-16 cursor-pointer items-center gap-2 overflow-hidden border-l-2 px-2.5 transition-colors',
           tone.border,
           tone.surface,
-          isSelected
-            ? tone.selected
-            : 'hover:bg-muted/60',
-          copied && tone.selected
+          highlighted ? tone.selected : 'hover:bg-muted/60'
         )}
       >
+        {selectionMode && (
+          <input
+            type="checkbox"
+            checked={isBatchSelected}
+            onClick={handleToggleSelected}
+            onChange={() => undefined}
+            aria-label={t('clipboard.select')}
+            className="size-3.5 shrink-0 accent-primary"
+          />
+        )}
+
         {/* Index badge */}
         <span className="w-5 text-right text-[10px] font-mono tabular-nums text-muted-foreground/60 shrink-0 select-none">
           {index}

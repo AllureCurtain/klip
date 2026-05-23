@@ -1,5 +1,6 @@
 /** @vitest-environment jsdom */
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import type { ComponentProps, ComponentType } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Header } from './Header';
 
@@ -46,6 +47,13 @@ vi.mock('@/lib/tauri', () => ({
   onOpenSettings: eventMocks.onOpenSettings,
   onOpenAbout: eventMocks.onOpenAbout,
 }));
+
+type HeaderWithSelectionProps = ComponentProps<typeof Header> & {
+  selectionMode?: boolean;
+  onSelectionModeChange?: (enabled: boolean) => void;
+};
+
+const HeaderWithSelection = Header as ComponentType<HeaderWithSelectionProps>;
 
 describe('Header', () => {
   afterEach(() => {
@@ -239,5 +247,101 @@ describe('Header', () => {
     const clearHistoryButton = screen.queryByRole('button', { name: '清空历史' });
 
     expect(clearHistoryButton).toBeNull();
+  });
+
+  it('keeps heavy filters and destructive actions behind the more menu', () => {
+    const onShowFavoritesChange = vi.fn();
+    const onSelectedTagChange = vi.fn();
+    const onSelectionModeChange = vi.fn();
+
+    render(
+      <HeaderWithSelection
+        searchQuery=""
+        onSearchChange={vi.fn()}
+        contentType={null}
+        onContentTypeChange={vi.fn()}
+        showFavorites={false}
+        onShowFavoritesChange={onShowFavoritesChange}
+        tags={[{ id: 1, name: 'Work', color: '#2563eb', created_at: 0 }]}
+        selectedTagId={null}
+        onSelectedTagChange={onSelectedTagChange}
+        selectionMode={false}
+        onSelectionModeChange={onSelectionModeChange}
+        onSettingsOpen={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByRole('button', { name: '选择模式' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '仅显示收藏' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '清空历史' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: '更多操作' }));
+
+    fireEvent.click(screen.getByRole('button', { name: '仅显示收藏' }));
+    expect(onShowFavoritesChange).toHaveBeenCalledWith(true);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Work' }));
+    expect(onSelectedTagChange).toHaveBeenCalledWith(1);
+
+    fireEvent.click(screen.getByRole('button', { name: '选择模式' }));
+    expect(onSelectionModeChange).toHaveBeenCalledWith(true);
+
+    fireEvent.click(screen.getByRole('button', { name: '清空历史' }));
+    expect(screen.getByText('清空剪贴板历史')).toBeTruthy();
+  });
+
+  it('shows batch actions only after selection mode is enabled', () => {
+    storeMocks.selectedIds = [42];
+
+    const { rerender } = render(
+      <HeaderWithSelection
+        searchQuery=""
+        onSearchChange={vi.fn()}
+        contentType={null}
+        onContentTypeChange={vi.fn()}
+        showFavorites={false}
+        onShowFavoritesChange={vi.fn()}
+        tags={[{ id: 1, name: 'Work', color: '#2563eb', created_at: 0 }]}
+        selectedTagId={null}
+        onSelectedTagChange={vi.fn()}
+        selectionMode={false}
+        onSelectionModeChange={vi.fn()}
+        onSettingsOpen={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByText('已选择 1 项')).toBeNull();
+    expect(screen.queryByRole('button', { name: '分配 Work' })).toBeNull();
+
+    rerender(
+      <HeaderWithSelection
+        searchQuery=""
+        onSearchChange={vi.fn()}
+        contentType={null}
+        onContentTypeChange={vi.fn()}
+        showFavorites={false}
+        onShowFavoritesChange={vi.fn()}
+        tags={[{ id: 1, name: 'Work', color: '#2563eb', created_at: 0 }]}
+        selectedTagId={null}
+        onSelectedTagChange={vi.fn()}
+        selectionMode
+        onSelectionModeChange={vi.fn()}
+        onSettingsOpen={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('已选择 1 项')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: '收藏已选' }));
+    expect(storeMocks.setFavoriteForSelected).toHaveBeenCalledWith(true);
+
+    fireEvent.click(screen.getByRole('button', { name: '分配 Work' }));
+    expect(storeMocks.assignTagToSelected).toHaveBeenCalledWith(1);
+
+    fireEvent.click(screen.getByRole('button', { name: '删除已选' }));
+    expect(storeMocks.deleteSelected).toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: '清除选择' }));
+    expect(storeMocks.clearSelection).toHaveBeenCalled();
   });
 });

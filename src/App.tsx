@@ -16,12 +16,24 @@ type AppView = 'clipboard' | 'settings';
 
 function App() {
   const { t } = useTranslation();
-  const { items, tags, loading, error, fetchItems, searchItems, addItems, setItems, fetchTags } =
+  const {
+    items,
+    tags,
+    loading,
+    error,
+    fetchItems,
+    searchItems,
+    addItems,
+    setItems,
+    fetchTags,
+    clearSelection,
+  } =
     useClipboardStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [contentType, setContentType] = useState<string | null>(null);
   const [showFavorites, setShowFavorites] = useState(false);
   const [selectedTagId, setSelectedTagId] = useState<number | null>(null);
+  const [selectionMode, setSelectionMode] = useState(false);
   const [searchDebounceMs, setSearchDebounceMs] = useState(DEFAULT_SEARCH_DEBOUNCE_MS);
   const [view, setView] = useState<AppView>('clipboard');
 
@@ -88,6 +100,12 @@ function App() {
     return () => window.clearTimeout(handle);
   }, [searchQuery, contentType, showFavorites, selectedTagId, fetchItems, searchItems, searchDebounceMs]);
 
+  useEffect(() => {
+    if (!selectionMode) {
+      clearSelection();
+    }
+  }, [clearSelection, selectionMode]);
+
   if (view === 'settings') {
     return (
       <SettingsView
@@ -108,6 +126,8 @@ function App() {
         tags={tags}
         selectedTagId={selectedTagId}
         onSelectedTagChange={setSelectedTagId}
+        selectionMode={selectionMode}
+        onSelectionModeChange={setSelectionMode}
         onSettingsOpen={() => setView('settings')}
       />
       <main className="flex-1 overflow-hidden">
@@ -122,7 +142,7 @@ function App() {
         ) : items.length === 0 ? (
           <EmptyState showFavorites={showFavorites} />
         ) : (
-          <ClipboardList items={items} />
+          <ClipboardList items={items} selectionMode={selectionMode} />
         )}
       </main>
     </div>

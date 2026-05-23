@@ -7,6 +7,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 
 interface ClipboardListProps {
   items: ClipboardItemType[];
+  selectionMode?: boolean;
 }
 
 interface GroupHeader {
@@ -40,9 +41,10 @@ function getTimeGroupLabel(
   return date.toLocaleDateString(locale, { month: 'short', day: 'numeric' });
 }
 
-export function ClipboardList({ items }: ClipboardListProps) {
+export function ClipboardList({ items, selectionMode = false }: ClipboardListProps) {
   const { t, i18n } = useTranslation();
-  const { copyItem, hasMore, loadMore, loadingMore } = useClipboardStore();
+  const { copyItem, toggleSelected, hasMore, loadMore, loadingMore } =
+    useClipboardStore();
   const [selectedIndex, setSelectedIndex] = useState(0);
   const selectedIndexRef = useRef(0);
   const parentRef = useRef<HTMLDivElement>(null);
@@ -116,13 +118,17 @@ export function ClipboardList({ items }: ClipboardListProps) {
           const idx = selectedIndexRef.current;
           const item = items[idx];
           if (item) {
-            copyItem(item.id);
+            if (selectionMode) {
+              toggleSelected(item.id);
+            } else {
+              copyItem(item.id);
+            }
           }
           break;
         }
       }
     },
-    [items, copyItem]
+    [copyItem, items, selectionMode, toggleSelected]
   );
 
   useEffect(() => {
@@ -190,6 +196,7 @@ export function ClipboardList({ items }: ClipboardListProps) {
                 item={row.item}
                 index={row.index}
                 isSelected={selectedIndex === row.index - 1}
+                selectionMode={selectionMode}
                 onSelect={() => setSelectedIndex(row.index - 1)}
               />
             </div>
