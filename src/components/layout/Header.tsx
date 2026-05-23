@@ -137,6 +137,7 @@ export function Header({
             className={cn('size-7 shrink-0')}
             onClick={() => onShowFavoritesChange(!showFavorites)}
             aria-label={t('header.showFavorites')}
+            aria-pressed={showFavorites}
             title={t('header.showFavorites')}
           >
             <Star
@@ -178,6 +179,7 @@ export function Header({
                   ? 'bg-accent text-accent-foreground'
                   : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
               )}
+              aria-pressed={contentType === filter.value}
               onClick={() => onContentTypeChange(filter.value)}
             >
               {filter.icon}
@@ -194,6 +196,7 @@ export function Header({
                   ? 'bg-accent text-accent-foreground'
                   : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
               )}
+              aria-pressed={selectedTagId === null}
               onClick={() => onSelectedTagChange(null)}
             >
               {t('header.tags.all')}
@@ -207,6 +210,7 @@ export function Header({
                     ? 'bg-accent text-accent-foreground'
                     : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
                 )}
+                aria-pressed={selectedTagId === tag.id}
                 onClick={() => onSelectedTagChange(tag.id)}
               >
                 {tag.color && (

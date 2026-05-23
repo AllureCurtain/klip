@@ -51,6 +51,7 @@ describe('Header', () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+    storeMocks.selectedIds = [];
     eventMocks.openSettings = undefined;
     eventMocks.openAbout = undefined;
   });
@@ -161,6 +162,53 @@ describe('Header', () => {
     );
 
     expect(screen.getByRole('button', { name: '分配 Work' })).toBeTruthy();
+  });
+
+  it('exposes pressed state for favorites, content, and tag filters', () => {
+    render(
+      <Header
+        searchQuery=""
+        onSearchChange={vi.fn()}
+        contentType="image"
+        onContentTypeChange={vi.fn()}
+        showFavorites
+        onShowFavoritesChange={vi.fn()}
+        tags={[
+          { id: 1, name: 'Work', color: '#2563eb', created_at: 0 },
+          { id: 2, name: 'Personal', color: '#16a34a', created_at: 0 },
+        ]}
+        selectedTagId={2}
+        onSelectedTagChange={vi.fn()}
+        onSettingsOpen={vi.fn()}
+      />
+    );
+
+    expect(
+      screen
+        .getByRole('button', { name: '仅显示收藏' })
+        .getAttribute('aria-pressed')
+    ).toBe('true');
+    expect(
+      screen.getByRole('button', { name: '全部' }).getAttribute('aria-pressed')
+    ).toBe('false');
+    expect(
+      screen.getByRole('button', { name: '文本' }).getAttribute('aria-pressed')
+    ).toBe('false');
+    expect(
+      screen.getByRole('button', { name: '图片' }).getAttribute('aria-pressed')
+    ).toBe('true');
+    expect(
+      screen.getByRole('button', { name: '文件' }).getAttribute('aria-pressed')
+    ).toBe('false');
+    expect(
+      screen.getByRole('button', { name: '全部标签' }).getAttribute('aria-pressed')
+    ).toBe('false');
+    expect(
+      screen.getByRole('button', { name: 'Work' }).getAttribute('aria-pressed')
+    ).toBe('false');
+    expect(
+      screen.getByRole('button', { name: 'Personal' }).getAttribute('aria-pressed')
+    ).toBe('true');
   });
 
   it('labels the clear-history dialog close action with the active language', () => {

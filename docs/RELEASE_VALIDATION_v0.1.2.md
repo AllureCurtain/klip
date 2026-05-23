@@ -1,16 +1,16 @@
 # Klip v0.1.2 Release Validation
 
-> Last updated: 2026-05-23 09:17 Asia/Shanghai
+> Last updated: 2026-05-23 09:44 Asia/Shanghai
 > Scope: Windows-first post-release validation
 
 ## Repository State Checked Before This Batch
 
 - Local branch: `main`
-- Local HEAD: `3dccc63018989b5165a5831f656f79aa3144b46e`
-- Remote HEAD: `origin/main` at `3dccc63018989b5165a5831f656f79aa3144b46e`
+- Local HEAD: `24d6e02503aa588db647965bd343efe61335202a`
+- Remote HEAD: `origin/main` at `24d6e02503aa588db647965bd343efe61335202a`
 - Open GitHub PRs: none
 - Latest GitHub CI on `main`: success
-- CI run: <https://github.com/AllureCurtain/klip/actions/runs/26318963901>
+- CI run: <https://github.com/AllureCurtain/klip/actions/runs/26319629192>
 
 ## Public Release
 
@@ -92,10 +92,20 @@ the existing accessibility hardening path:
 - Dialog close actions now use the active interface language.
 - Added regression tests for localized dialog close actions in the image preview
   and clear-history dialogs.
+- Header favorites, content-type, and tag filters now expose `aria-pressed`
+  for their current selected state.
+- Added a regression test for Header filter pressed states.
 
 Verification for the localized dialog close action batch:
 
 - `pnpm test -- --run src/components/clipboard/ImagePreview.test.tsx src/components/layout/Header.test.tsx`: passed.
+- `pnpm release:smoke`: passed; no installer or uninstaller was executed.
+- `pnpm verify`: passed.
+- `pnpm e2e`: passed.
+
+Verification for the Header filter pressed-state batch:
+
+- `pnpm test -- --run src/components/layout/Header.test.tsx`: passed.
 - `pnpm release:smoke`: passed; no installer or uninstaller was executed.
 - `pnpm verify`: passed.
 - `pnpm e2e`: passed.
