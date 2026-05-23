@@ -24,7 +24,7 @@ export function SelectionToolbar({
   const hasSelection = selectedCount > 0;
 
   return (
-    <div className="flex items-center gap-1 border-t border-border bg-muted/25 px-2 py-1">
+    <div className="flex items-center gap-1 px-2 pb-1 pt-0.5 text-muted-foreground">
       <span className="mr-auto text-[10px] text-muted-foreground">
         {hasSelection
           ? t('header.selectedCount', { count: selectedCount })
@@ -33,7 +33,7 @@ export function SelectionToolbar({
       <Button
         variant="ghost"
         size="icon"
-        className="size-6"
+        className="size-5"
         onClick={onFavoriteSelected}
         disabled={!hasSelection}
         aria-label={t('header.favoriteSelected')}
@@ -46,7 +46,7 @@ export function SelectionToolbar({
           key={tag.id}
           variant="ghost"
           size="sm"
-          className="h-6 max-w-20 px-1.5 text-[10px]"
+          className="h-5 max-w-16 gap-1 px-1.5 text-[10px]"
           onClick={() => onAssignTagToSelected(tag.id)}
           disabled={!hasSelection}
           aria-label={t('header.assignTagSelected', { name: tag.name })}
@@ -64,7 +64,7 @@ export function SelectionToolbar({
       <Button
         variant="ghost"
         size="icon"
-        className="size-6"
+        className="size-5"
         onClick={onDeleteSelected}
         disabled={!hasSelection}
         aria-label={t('header.deleteSelected')}
@@ -75,7 +75,7 @@ export function SelectionToolbar({
       <Button
         variant="ghost"
         size="icon"
-        className="size-6"
+        className="size-5"
         onClick={onClearSelection}
         aria-label={t('header.clearSelection')}
         title={t('header.clearSelection')}
