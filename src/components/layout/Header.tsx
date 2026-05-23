@@ -279,7 +279,7 @@ export function Header({
       </header>
 
       <Dialog open={clearDialogOpen} onOpenChange={setClearDialogOpen}>
-        <DialogContent className="sm:max-w-sm">
+        <DialogContent className="sm:max-w-sm" closeLabel={t('common.close')}>
           <DialogHeader>
             <DialogTitle>{t('header.clearDialog.title')}</DialogTitle>
             <DialogDescription>

@@ -162,4 +162,27 @@ describe('Header', () => {
 
     expect(screen.getByRole('button', { name: '分配 Work' })).toBeTruthy();
   });
+
+  it('labels the clear-history dialog close action with the active language', () => {
+    render(
+      <Header
+        searchQuery=""
+        onSearchChange={vi.fn()}
+        contentType={null}
+        onContentTypeChange={vi.fn()}
+        showFavorites={false}
+        onShowFavoritesChange={vi.fn()}
+        tags={[]}
+        selectedTagId={null}
+        onSelectedTagChange={vi.fn()}
+        onSettingsOpen={vi.fn()}
+      />
+    );
+
+    act(() => {
+      screen.getByRole('button', { name: '清空历史' }).click();
+    });
+
+    expect(screen.getByRole('button', { name: '关闭' })).toBeTruthy();
+  });
 });

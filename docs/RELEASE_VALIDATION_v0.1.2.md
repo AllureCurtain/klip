@@ -1,16 +1,16 @@
 # Klip v0.1.2 Release Validation
 
-> Last updated: 2026-05-23 08:35 Asia/Shanghai
+> Last updated: 2026-05-23 09:17 Asia/Shanghai
 > Scope: Windows-first post-release validation
 
 ## Repository State Checked Before This Batch
 
 - Local branch: `main`
-- Local HEAD: `0fb25af1e6616a36ec61979e1ab1f90d79dbb35b`
-- Remote HEAD: `origin/main` at `0fb25af1e6616a36ec61979e1ab1f90d79dbb35b`
+- Local HEAD: `3dccc63018989b5165a5831f656f79aa3144b46e`
+- Remote HEAD: `origin/main` at `3dccc63018989b5165a5831f656f79aa3144b46e`
 - Open GitHub PRs: none
 - Latest GitHub CI on `main`: success
-- CI run: <https://github.com/AllureCurtain/klip/actions/runs/26318073832>
+- CI run: <https://github.com/AllureCurtain/klip/actions/runs/26318963901>
 
 ## Public Release
 
@@ -89,3 +89,13 @@ the existing accessibility hardening path:
 - Added a regression test for the selected-item tag assignment accessible label.
 - Settings navigation now exposes `tablist`, `tab`, and `tabpanel` semantics.
 - Added a regression test for Settings tab semantics.
+- Dialog close actions now use the active interface language.
+- Added regression tests for localized dialog close actions in the image preview
+  and clear-history dialogs.
+
+Verification for the localized dialog close action batch:
+
+- `pnpm test -- --run src/components/clipboard/ImagePreview.test.tsx src/components/layout/Header.test.tsx`: passed.
+- `pnpm release:smoke`: passed; no installer or uninstaller was executed.
+- `pnpm verify`: passed.
+- `pnpm e2e`: passed.

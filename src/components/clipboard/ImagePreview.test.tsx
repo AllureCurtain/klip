@@ -23,4 +23,18 @@ describe('ImagePreview', () => {
       screen.getByRole('button', { name: '下载图片' }).getAttribute('aria-label')
     ).toBe('下载图片');
   });
+
+  it('labels the close action with the active language', () => {
+    render(
+      <ImagePreview
+        src="data:image/png;base64,iVBORw0KGgo="
+        alt=""
+        metadata={{ width: 24, height: 24, format: 'png' }}
+        open
+        onOpenChange={() => undefined}
+      />
+    );
+
+    expect(screen.getByRole('button', { name: '关闭' })).toBeTruthy();
+  });
 });

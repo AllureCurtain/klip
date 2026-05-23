@@ -7,12 +7,14 @@
 - Regression coverage for Data Management settings path actions, restore cancellation, file path input labels, and Settings general/behavior control labels.
 - Regression coverage for Header icon-only actions.
 - Regression coverage for Header selected-item tag assignment action labels.
+- Regression coverage for localized dialog close actions.
 - Regression coverage for Settings tab semantics.
 - Regression coverage for image thumbnail preview and image preview download action labels.
 
 ### Changed
 
 - Data Management path inputs now expose accessible labels for assistive technology.
+- Dialog close actions now use the active interface language.
 - Settings window size inputs and behavior switches now expose accessible labels.
 - Settings navigation now exposes tablist, tab, and tabpanel semantics.
 - Header icon-only actions now expose accessible labels.

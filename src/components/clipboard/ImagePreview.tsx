@@ -51,7 +51,10 @@ export function ImagePreview({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[440px] max-h-[90vh] overflow-hidden p-0">
+      <DialogContent
+        className="max-w-[440px] max-h-[90vh] overflow-hidden p-0"
+        closeLabel={t('common.close')}
+      >
         <DialogHeader className="flex-shrink-0 px-4 pt-4">
           <div className="flex items-center justify-between">
             <DialogTitle className="text-sm">{t('imagePreview.title')}</DialogTitle>
