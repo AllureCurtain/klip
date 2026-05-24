@@ -1,6 +1,11 @@
 import { create } from 'zustand';
 import { configApi, systemApi } from '@/lib/tauri';
-import { DEFAULT_WINDOW_HEIGHT, DEFAULT_WINDOW_WIDTH } from '@/lib/constants';
+import {
+  DEFAULT_WINDOW_HEIGHT,
+  DEFAULT_WINDOW_WIDTH,
+  MIN_WINDOW_HEIGHT,
+  MIN_WINDOW_WIDTH,
+} from '@/lib/constants';
 import type { AppConfig, DiagnosticsInfo, SystemInfo } from '@/types';
 import { getErrorMessage } from '@/types';
 
@@ -13,6 +18,14 @@ function parseNumber(value: string | null, defaultValue: number): number {
   if (value === null) return defaultValue;
   const parsed = parseInt(value, 10);
   return isNaN(parsed) ? defaultValue : parsed;
+}
+
+function clampWindowWidth(value: number): number {
+  return Math.max(MIN_WINDOW_WIDTH, value);
+}
+
+function clampWindowHeight(value: number): number {
+  return Math.max(MIN_WINDOW_HEIGHT, value);
 }
 
 interface ConfigState {
@@ -31,7 +44,6 @@ interface ConfigState {
   setHotkeyQuickPastePrefix: (value: string) => void;
   setAutoStart: (value: boolean) => Promise<void>;
   setCloseToTray: (value: boolean) => void;
-  setShowInTray: (value: boolean) => void;
   setWindowWidth: (value: number) => void;
   setWindowHeight: (value: number) => void;
   setSearchDebounceMs: (value: number) => void;
@@ -48,7 +60,6 @@ const DEFAULT_CONFIG: AppConfig = {
   hotkey_quick_paste_prefix: 'Ctrl+Alt',
   auto_start: false,
   close_to_tray: true,
-  show_in_tray: true,
   window_width: DEFAULT_WINDOW_WIDTH,
   window_height: DEFAULT_WINDOW_HEIGHT,
   search_debounce_ms: 150,
@@ -75,9 +86,8 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
         hotkey_quick_paste_prefix: allConfig['hotkey_quick_paste_prefix'] || 'Ctrl+Alt',
         auto_start: parseBoolean(allConfig['auto_start'], false),
         close_to_tray: parseBoolean(allConfig['close_to_tray'], true),
-        show_in_tray: parseBoolean(allConfig['show_in_tray'], true),
-        window_width: parseNumber(allConfig['window_width'], DEFAULT_WINDOW_WIDTH),
-        window_height: parseNumber(allConfig['window_height'], DEFAULT_WINDOW_HEIGHT),
+        window_width: clampWindowWidth(parseNumber(allConfig['window_width'], DEFAULT_WINDOW_WIDTH)),
+        window_height: clampWindowHeight(parseNumber(allConfig['window_height'], DEFAULT_WINDOW_HEIGHT)),
         search_debounce_ms: parseNumber(allConfig['search_debounce_ms'], 150),
         language: allConfig['language'] || 'zh-CN',
         sensitive_capture_policy:
@@ -147,23 +157,16 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     }));
   },
 
-  setShowInTray: (value) => {
-    set((state) => ({
-      config: { ...state.config, show_in_tray: value },
-      hasChanges: true,
-    }));
-  },
-
   setWindowWidth: (value) => {
     set((state) => ({
-      config: { ...state.config, window_width: value },
+      config: { ...state.config, window_width: clampWindowWidth(value) },
       hasChanges: true,
     }));
   },
 
   setWindowHeight: (value) => {
     set((state) => ({
-      config: { ...state.config, window_height: value },
+      config: { ...state.config, window_height: clampWindowHeight(value) },
       hasChanges: true,
     }));
   },
@@ -204,7 +207,6 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
       await configApi.set('hotkey_toggle_window', config.hotkey_toggle_window);
       await configApi.set('hotkey_quick_paste_prefix', config.hotkey_quick_paste_prefix);
       await configApi.set('close_to_tray', config.close_to_tray.toString());
-      await configApi.set('show_in_tray', config.show_in_tray.toString());
       await configApi.set('window_width', config.window_width.toString());
       await configApi.set('window_height', config.window_height.toString());
       await configApi.set('search_debounce_ms', config.search_debounce_ms.toString());

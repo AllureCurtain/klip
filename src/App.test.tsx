@@ -18,6 +18,8 @@ const storeState = vi.hoisted(() => ({
 
 const tauriMocks = vi.hoisted(() => ({
   clipboardUpdated: undefined as undefined | ((event: { payload: unknown }) => void),
+  openSettings: undefined as undefined | (() => void),
+  openAbout: undefined as undefined | (() => void),
   listen: vi.fn((event: string, callback: (event: { payload: unknown }) => void) => {
     if (event === 'clipboard-updated') {
       tauriMocks.clipboardUpdated = callback;
@@ -26,6 +28,14 @@ const tauriMocks = vi.hoisted(() => ({
   }),
   onClipboardCleared: vi.fn(() => Promise.resolve(vi.fn())),
   onConfigChanged: vi.fn(() => Promise.resolve(vi.fn())),
+  onOpenSettings: vi.fn((callback: () => void) => {
+    tauriMocks.openSettings = callback;
+    return Promise.resolve(vi.fn());
+  }),
+  onOpenAbout: vi.fn((callback: () => void) => {
+    tauriMocks.openAbout = callback;
+    return Promise.resolve(vi.fn());
+  }),
   configGet: vi.fn(() => Promise.resolve(null)),
 }));
 
@@ -45,6 +55,8 @@ vi.mock('@/lib/tauri', () => ({
   },
   onClipboardCleared: tauriMocks.onClipboardCleared,
   onConfigChanged: tauriMocks.onConfigChanged,
+  onOpenSettings: tauriMocks.onOpenSettings,
+  onOpenAbout: tauriMocks.onOpenAbout,
 }));
 
 vi.mock('./stores/clipboardStore', () => ({
@@ -63,7 +75,9 @@ vi.mock('./components/clipboard/ClipboardList', () => ({
 }));
 
 vi.mock('./components/settings/SettingsView', () => ({
-  SettingsView: () => <div data-testid="settings-view" />,
+  SettingsView: (props: { initialTab?: string }) => (
+    <div data-testid="settings-view" data-initial-tab={props.initialTab} />
+  ),
 }));
 
 describe('App status states', () => {
@@ -75,6 +89,8 @@ describe('App status states', () => {
     storeState.loading = false;
     storeState.error = null;
     tauriMocks.clipboardUpdated = undefined;
+    tauriMocks.openSettings = undefined;
+    tauriMocks.openAbout = undefined;
     headerMocks.props = undefined;
   });
 
@@ -134,5 +150,33 @@ describe('App status states', () => {
     });
 
     expect(storeState.addItems).not.toHaveBeenCalled();
+  });
+
+  it('opens the About tab from the tray about event', async () => {
+    render(<App />);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    act(() => {
+      tauriMocks.openAbout?.();
+    });
+
+    expect(screen.getByTestId('settings-view').dataset.initialTab).toBe('about');
+  });
+
+  it('opens the general settings tab from the tray settings event', async () => {
+    render(<App />);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    act(() => {
+      tauriMocks.openSettings?.();
+    });
+
+    expect(screen.getByTestId('settings-view').dataset.initialTab).toBe('general');
   });
 });

@@ -608,7 +608,6 @@ interface AppConfig {
   hotkey_quick_paste_prefix: string;
   auto_start: boolean; // 启动时会与系统层面的自启状态同步
   close_to_tray: boolean;
-  show_in_tray: boolean;
   window_width: number;
   window_height: number;
   search_debounce_ms: number;

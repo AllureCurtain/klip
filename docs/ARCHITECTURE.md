@@ -275,7 +275,6 @@ interface AppConfig {
   hotkey_quick_paste_prefix: string;
   auto_start: boolean;
   close_to_tray: boolean;
-  show_in_tray: boolean;
   window_width: number;
   window_height: number;
   search_debounce_ms: number;
@@ -340,10 +339,13 @@ interface AppConfig {
 
 ### 6.3 运行时配置约定
 
-- 当前后端实际消费的配置键包括 `hotkey_toggle_window`、`hotkey_quick_paste_prefix`、`auto_start`、`sensitive_capture_policy`
-- `set_config` 修改这两个键后，后端会立即注销旧热键并重新注册
+- 当前后端实际消费的配置键包括 `hotkey_toggle_window`、`hotkey_quick_paste_prefix`、`auto_start`、`close_to_tray`、`window_width`、`window_height`、`sensitive_capture_policy`
+- `set_config` 修改热键键后，后端会立即注销旧热键并重新注册
 - `set_auto_start` 会调用系统自启动管理器，并将 `auto_start` 持久化到数据库
+- `close_to_tray=true` 时关闭主窗口会隐藏到托盘；`false` 时关闭主窗口会退出应用
+- `window_width`、`window_height` 会夹取到打包窗口最小尺寸并立即应用到主窗口
 - `mask_sensitive_previews` 由前端列表渲染消费，默认开启
+- `show_in_tray` 是旧数据库键，当前运行时不消费，前端也不再保存它
 - 其他配置键当前主要承担持久化职责，不保证在运行中立即产生副作用
 
 ---
@@ -413,7 +415,7 @@ interface AppConfig {
 ### 9.1 数据安全
 
 - 所有数据存储在用户本地目录
-- 数据库文件权限设置为用户独享
+- 数据库位于操作系统用户数据目录；当前版本未额外实现跨平台文件权限加固
 - 不上传任何用户数据
 
 ### 9.2 后续安全特性

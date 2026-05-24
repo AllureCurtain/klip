@@ -59,6 +59,20 @@ pub fn tray_click_guard_ms() -> u64 {
     TRAY_CLICK_GUARD_MS
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum WindowCloseDecision {
+    HideToTray,
+    Quit,
+}
+
+pub fn window_close_decision(close_to_tray: bool) -> WindowCloseDecision {
+    if close_to_tray {
+        WindowCloseDecision::HideToTray
+    } else {
+        WindowCloseDecision::Quit
+    }
+}
+
 /// Returns current time in ms since epoch (for the focus-lost guard).
 pub fn now_millis() -> u64 {
     now_ms()
@@ -153,4 +167,19 @@ pub fn restore_previous_foreground() -> bool {
 #[cfg(not(target_os = "windows"))]
 pub fn restore_previous_foreground() -> bool {
     false
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn close_request_respects_close_to_tray_config() {
+        assert_eq!(
+            super::window_close_decision(true),
+            super::WindowCloseDecision::HideToTray
+        );
+        assert_eq!(
+            super::window_close_decision(false),
+            super::WindowCloseDecision::Quit
+        );
+    }
 }

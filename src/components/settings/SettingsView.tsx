@@ -20,17 +20,23 @@ import {
 import { cn } from '@/lib/utils';
 import { SUPPORTED_LANGUAGES } from '@/i18n';
 import { DataManagementView } from './DataManagementView';
-import { DEFAULT_WINDOW_HEIGHT, DEFAULT_WINDOW_WIDTH } from '@/lib/constants';
+import {
+  DEFAULT_WINDOW_HEIGHT,
+  DEFAULT_WINDOW_WIDTH,
+  MIN_WINDOW_HEIGHT,
+  MIN_WINDOW_WIDTH,
+} from '@/lib/constants';
 
 export type SettingsTab = 'general' | 'shortcuts' | 'behavior' | 'data' | 'about';
 
 interface SettingsViewProps {
   onBack: () => void;
+  initialTab?: SettingsTab;
 }
 
-export function SettingsView({ onBack }: SettingsViewProps) {
+export function SettingsView({ onBack, initialTab = 'general' }: SettingsViewProps) {
   const { t } = useTranslation();
-  const [activeTab, setActiveTab] = useState<SettingsTab>('general');
+  const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
   const {
     config,
     systemInfo,
@@ -67,6 +73,10 @@ export function SettingsView({ onBack }: SettingsViewProps) {
     fetchSystemInfo();
     fetchDiagnosticsInfo();
   }, [fetchConfig, fetchSystemInfo, fetchDiagnosticsInfo]);
+
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
 
   const handleSave = async () => {
     const saved = await saveChanges();
@@ -168,7 +178,7 @@ export function SettingsView({ onBack }: SettingsViewProps) {
                 <Input
                   id="window-width"
                   type="number"
-                  min={300}
+                  min={MIN_WINDOW_WIDTH}
                   max={1000}
                   value={config.window_width}
                   onChange={(e) => setWindowWidth(parseInt(e.target.value, 10) || DEFAULT_WINDOW_WIDTH)}
@@ -181,7 +191,7 @@ export function SettingsView({ onBack }: SettingsViewProps) {
                 <Input
                   id="window-height"
                   type="number"
-                  min={400}
+                  min={MIN_WINDOW_HEIGHT}
                   max={1400}
                   value={config.window_height}
                   onChange={(e) => setWindowHeight(parseInt(e.target.value, 10) || DEFAULT_WINDOW_HEIGHT)}

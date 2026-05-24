@@ -9,7 +9,6 @@ const TEST_CONFIG: AppConfig = {
   hotkey_quick_paste_prefix: 'Ctrl+Alt',
   auto_start: false,
   close_to_tray: true,
-  show_in_tray: true,
   window_width: 560,
   window_height: 760,
   search_debounce_ms: 150,
@@ -60,6 +59,14 @@ describe('configStore', () => {
     expect(useConfigStore.getState().config.window_height).toBe(760);
   });
 
+  it('clamps window size edits to the packaged minimums', () => {
+    useConfigStore.getState().setWindowWidth(300);
+    useConfigStore.getState().setWindowHeight(400);
+
+    expect(useConfigStore.getState().config.window_width).toBe(360);
+    expect(useConfigStore.getState().config.window_height).toBe(480);
+  });
+
   it('persists sensitive preview masking with other config changes', async () => {
     useConfigStore.getState().setMaskSensitivePreviews(false);
     vi.mocked(configApi.set).mockResolvedValue(undefined);
@@ -67,5 +74,13 @@ describe('configStore', () => {
     await useConfigStore.getState().saveChanges();
 
     expect(configApi.set).toHaveBeenCalledWith('mask_sensitive_previews', 'false');
+  });
+
+  it('does not persist the legacy tray visibility key as a runtime setting', async () => {
+    vi.mocked(configApi.set).mockResolvedValue(undefined);
+
+    await useConfigStore.getState().saveChanges();
+
+    expect(configApi.set).not.toHaveBeenCalledWith('show_in_tray', expect.any(String));
   });
 });

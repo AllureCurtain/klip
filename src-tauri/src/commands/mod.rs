@@ -147,6 +147,7 @@ pub fn set_config(
     key: String,
     value: String,
 ) -> Result<(), AppError> {
+    let value = normalize_config_value(&key, value)?;
     let previous_value = if key == "hotkey_toggle_window" || key == "hotkey_quick_paste_prefix" {
         crate::hotkey::manager::validate_config_value(&key, &value)?;
         database::config::get(&db, &key)?
@@ -204,16 +205,34 @@ pub fn set_config(
     Ok(())
 }
 
+fn normalize_config_value(key: &str, value: String) -> Result<String, AppError> {
+    match key {
+        "window_width" => value
+            .parse::<u32>()
+            .map(crate::config::clamp_window_width)
+            .map(|value| value.to_string())
+            .map_err(|_| AppError::InvalidInput("window_width must be a number".to_string())),
+        "window_height" => value
+            .parse::<u32>()
+            .map(crate::config::clamp_window_height)
+            .map(|value| value.to_string())
+            .map_err(|_| AppError::InvalidInput("window_height must be a number".to_string())),
+        _ => Ok(value),
+    }
+}
+
 fn apply_window_size_from_config(
     app: &tauri::AppHandle,
     db: &database::Database,
 ) -> Result<(), AppError> {
     let width: u32 = database::config::get(db, "window_width")?
         .and_then(|v| v.parse().ok())
-        .unwrap_or(560);
+        .map(crate::config::clamp_window_width)
+        .unwrap_or(crate::config::DEFAULT_WINDOW_WIDTH);
     let height: u32 = database::config::get(db, "window_height")?
         .and_then(|v| v.parse().ok())
-        .unwrap_or(760);
+        .map(crate::config::clamp_window_height)
+        .unwrap_or(crate::config::DEFAULT_WINDOW_HEIGHT);
 
     if let Some(window) = app.get_webview_window("main") {
         window
@@ -410,5 +429,21 @@ mod tests {
             platform_name(),
             "windows" | "macos" | "linux" | "unknown"
         ));
+    }
+
+    #[test]
+    fn normalizes_window_size_config_to_packaged_minimums() {
+        assert_eq!(
+            normalize_config_value("window_width", "300".to_string()).unwrap(),
+            "360"
+        );
+        assert_eq!(
+            normalize_config_value("window_height", "400".to_string()).unwrap(),
+            "480"
+        );
+        assert_eq!(
+            normalize_config_value("window_width", "640".to_string()).unwrap(),
+            "640"
+        );
     }
 }

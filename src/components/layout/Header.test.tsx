@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { ComponentProps, ComponentType } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Header } from './Header';
@@ -13,19 +13,6 @@ const storeMocks = vi.hoisted(() => ({
   setFavoriteForSelected: vi.fn(),
   resolvedTheme: 'light' as const,
   setTheme: vi.fn(),
-}));
-
-const eventMocks = vi.hoisted(() => ({
-  openSettings: undefined as undefined | (() => void),
-  openAbout: undefined as undefined | (() => void),
-  onOpenSettings: vi.fn((callback: () => void) => {
-    eventMocks.openSettings = callback;
-    return Promise.resolve(vi.fn());
-  }),
-  onOpenAbout: vi.fn((callback: () => void) => {
-    eventMocks.openAbout = callback;
-    return Promise.resolve(vi.fn());
-  }),
 }));
 
 vi.mock('@/stores', () => ({
@@ -43,11 +30,6 @@ vi.mock('@/stores', () => ({
   }),
 }));
 
-vi.mock('@/lib/tauri', () => ({
-  onOpenSettings: eventMocks.onOpenSettings,
-  onOpenAbout: eventMocks.onOpenAbout,
-}));
-
 type HeaderWithSelectionProps = ComponentProps<typeof Header> & {
   selectionMode?: boolean;
   onSelectionModeChange?: (enabled: boolean) => void;
@@ -60,8 +42,6 @@ describe('Header', () => {
     cleanup();
     vi.clearAllMocks();
     storeMocks.selectedIds = [];
-    eventMocks.openSettings = undefined;
-    eventMocks.openAbout = undefined;
   });
 
   it('focuses the search input on render', () => {
@@ -83,50 +63,6 @@ describe('Header', () => {
     expect(document.activeElement).toBe(
       screen.getByPlaceholderText('搜索剪贴板历史...')
     );
-  });
-
-  it('calls onSettingsOpen from the tray settings event', () => {
-    const onSettingsOpen = vi.fn();
-    render(
-      <Header
-        searchQuery=""
-        onSearchChange={vi.fn()}
-        contentType={null}
-        onContentTypeChange={vi.fn()}
-        showFavorites={false}
-        onShowFavoritesChange={vi.fn()}
-        tags={[]}
-        selectedTagId={null}
-        onSelectedTagChange={vi.fn()}
-        onSettingsOpen={onSettingsOpen}
-      />
-    );
-
-    act(() => eventMocks.openSettings?.());
-
-    expect(onSettingsOpen).toHaveBeenCalled();
-  });
-
-  it('calls onSettingsOpen from the tray about event', () => {
-    const onSettingsOpen = vi.fn();
-    render(
-      <Header
-        searchQuery=""
-        onSearchChange={vi.fn()}
-        contentType={null}
-        onContentTypeChange={vi.fn()}
-        showFavorites={false}
-        onShowFavoritesChange={vi.fn()}
-        tags={[]}
-        selectedTagId={null}
-        onSelectedTagChange={vi.fn()}
-        onSettingsOpen={onSettingsOpen}
-      />
-    );
-
-    act(() => eventMocks.openAbout?.());
-
-    expect(onSettingsOpen).toHaveBeenCalled();
   });
 
   it('labels the lightweight header actions for assistive technology', () => {

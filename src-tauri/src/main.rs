@@ -64,12 +64,14 @@ fn main() {
                     .ok()
                     .flatten()
                     .and_then(|v| v.parse().ok())
-                    .unwrap_or(560);
+                    .map(klip::config::clamp_window_width)
+                    .unwrap_or(klip::config::DEFAULT_WINDOW_WIDTH);
                 let window_height: u32 = klip::database::config::get(&db, "window_height")
                     .ok()
                     .flatten()
                     .and_then(|v| v.parse().ok())
-                    .unwrap_or(760);
+                    .map(klip::config::clamp_window_height)
+                    .unwrap_or(klip::config::DEFAULT_WINDOW_HEIGHT);
 
                 if let Err(e) = window.set_size(tauri::Size::Physical(tauri::PhysicalSize {
                     width: window_width,
@@ -88,7 +90,29 @@ fn main() {
                 let guard_ts = tray_click_guard.clone();
                 let guard_duration = guard_ms;
                 window.on_window_event(move |event| {
-                    if let tauri::WindowEvent::Focused(false) = event {
+                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                        let db = app_handle.state::<klip::database::Database>();
+                        let close_to_tray = klip::database::config::get(&db, "close_to_tray")
+                            .ok()
+                            .flatten()
+                            .map(|v| v == "true")
+                            .unwrap_or(true);
+
+                        if klip::window_close_decision(close_to_tray)
+                            == klip::WindowCloseDecision::HideToTray
+                        {
+                            api.prevent_close();
+                            tracing::info!("Window close requested, hiding to tray");
+                            if let Some(win) = app_handle.get_webview_window("main") {
+                                let _ = win.hide();
+                            }
+                        } else {
+                            tracing::info!(
+                                "Window close requested, exiting because close_to_tray is false"
+                            );
+                            app_handle.exit(0);
+                        }
+                    } else if let tauri::WindowEvent::Focused(false) = event {
                         let db = app_handle.state::<klip::database::Database>();
                         let close_to_tray = klip::database::config::get(&db, "close_to_tray")
                             .ok()

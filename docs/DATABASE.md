@@ -7,7 +7,7 @@
 | 数据库类型 | SQLite |
 | 数据库文件 | `{app_data_dir}/klip.db` |
 | 最小版本 | SQLite 3.x |
-| 最大大小 | 100MB (可配置) |
+| 最大大小 | 当前未强制限制；数量保留由 `max_history_count` 控制 |
 
 ### 数据库文件位置
 
@@ -120,8 +120,8 @@ INSERT INTO app_config (key, value, updated_at) VALUES
 | hotkey_toggle_window | string | Ctrl+Alt+K | 窗口切换快捷键；当前运行时支持 `Ctrl+Alt+<A-Z>` |
 | hotkey_quick_paste_prefix | string | Ctrl+Alt | 快速粘贴前缀；当前运行时固定派生为 `Ctrl+Alt+1..9` |
 | auto_start | boolean | false | 开机自启动开关；启动时会与系统层面的自启状态同步 |
-| close_to_tray | boolean | true | 关闭时最小化到托盘 |
-| show_in_tray | boolean | true | 显示托盘图标 |
+| close_to_tray | boolean | true | 关闭主窗口时隐藏到托盘；设为 false 时关闭会退出应用 |
+| show_in_tray | boolean | true | 遗留键；当前运行时不消费，前端不再保存 |
 | window_width | number | 560 | 窗口宽度 |
 | window_height | number | 760 | 窗口高度 |
 | search_debounce_ms | number | 150 | 搜索防抖时间 |
@@ -254,9 +254,9 @@ fn migrate_v1_to_v2(db: &Connection) -> Result<()> {
 
 | 规则 | 触发时机 | 操作 |
 |------|----------|------|
-| 数量限制 | 每次插入后 | 保留最近 N 条，删除其余 |
-| 时间限制 | 应用启动时 | 删除超过 30 天的记录 |
-| 大小限制 | 应用启动时 | 删除最大的记录直到总大小 < 100MB |
+| 数量限制 | 每次插入后 | 收藏项不参与清理；未收藏项保留最近 N 条，删除其余 |
+
+当前实现只执行数量限制清理。时间限制和总大小限制尚未实现，避免在没有明确产品策略和迁移提示的情况下自动删除用户数据。
 
 ### 5.2 清理实现
 
@@ -265,9 +265,10 @@ fn cleanup_old_records(db: &Connection, max_count: i64) -> Result<()> {
     db.execute(
         "DELETE FROM clipboard_items WHERE id NOT IN (
             SELECT id FROM clipboard_items
+            WHERE is_favorited = 0
             ORDER BY created_at DESC
             LIMIT ?
-        )",
+        ) AND is_favorited = 0",
         params![max_count]
     )?;
     Ok(())

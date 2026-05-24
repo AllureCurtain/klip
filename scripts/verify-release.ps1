@@ -37,6 +37,20 @@ if (-not (Select-String -Path 'CHANGELOG.md' -Pattern ([regex]::Escape($packageV
 
 Write-Host "Version metadata OK: $packageVersion"
 
+Step 'Checking distribution caveats'
+$windowsBundle = $tauriConfig.bundle.windows
+$hasWindowsSigning = $false
+if ($windowsBundle) {
+  $hasWindowsSigning = -not [string]::IsNullOrWhiteSpace([string]$windowsBundle.certificateThumbprint)
+}
+
+if ($hasWindowsSigning) {
+  Write-Host "Windows code signing configured for thumbprint $($windowsBundle.certificateThumbprint)"
+} else {
+  Write-Host 'Windows code signing is not configured; installers may show SmartScreen or unknown publisher warnings.'
+}
+Write-Host 'No Tauri auto-updater is configured; publish updates through GitHub Release/manual installer distribution.'
+
 Step 'Running frontend lint, tests, and build'
 pnpm lint
 pnpm test -- --run

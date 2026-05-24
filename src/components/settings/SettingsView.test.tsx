@@ -117,7 +117,6 @@ describe('SettingsView', () => {
         hotkey_quick_paste_prefix: 'Ctrl+Alt',
         auto_start: false,
         close_to_tray: true,
-        show_in_tray: true,
         window_width: 560,
         window_height: 760,
         search_debounce_ms: 150,
@@ -245,6 +244,44 @@ describe('SettingsView', () => {
 
     expect(callbacks.onBack).not.toHaveBeenCalled();
     expect(screen.getByText('Invalid hotkey')).toBeTruthy();
+  });
+
+  it('uses the packaged window minimums for size inputs', async () => {
+    render(<SettingsView onBack={callbacks.onBack} />);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.getByLabelText('Window width').getAttribute('min')).toBe('360');
+    expect(screen.getByLabelText('Window height').getAttribute('min')).toBe('480');
+  });
+
+  it('opens the requested initial tab', async () => {
+    render(<SettingsView onBack={callbacks.onBack} initialTab="about" />);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole('tab', { name: 'About', selected: true })).toBeTruthy();
+    expect(screen.getByRole('tabpanel', { name: 'About' })).toBeTruthy();
+  });
+
+  it('updates the active tab when the requested tab changes', async () => {
+    const { rerender } = render(
+      <SettingsView onBack={callbacks.onBack} initialTab="general" />
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole('tab', { name: 'General', selected: true })).toBeTruthy();
+
+    rerender(<SettingsView onBack={callbacks.onBack} initialTab="about" />);
+
+    expect(screen.getByRole('tab', { name: 'About', selected: true })).toBeTruthy();
   });
 
   it('labels general and behavior controls for assistive technology', async () => {

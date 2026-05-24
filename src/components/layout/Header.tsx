@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Search,
@@ -17,7 +17,6 @@ import {
 } from '@/components/ui/dialog';
 import { useThemeStore, useClipboardStore } from '@/stores';
 import { cn } from '@/lib/utils';
-import { onOpenSettings, onOpenAbout } from '@/lib/tauri';
 import { HeaderMoreMenu } from './HeaderMoreMenu';
 import { SelectionToolbar } from './SelectionToolbar';
 import type { Tag } from '@/types';
@@ -74,16 +73,6 @@ export function Header({
     { value: 'image', label: t('header.filter.image'), icon: <Image className="h-3 w-3" /> },
     { value: 'file', label: t('header.filter.file'), icon: <FolderOpen className="h-3 w-3" /> },
   ];
-
-  useEffect(() => {
-    const unlistenSettings = onOpenSettings(() => onSettingsOpen());
-    const unlistenAbout = onOpenAbout(() => onSettingsOpen());
-
-    return () => {
-      unlistenSettings.then((fn) => fn());
-      unlistenAbout.then((fn) => fn());
-    };
-  }, [onSettingsOpen]);
 
   const toggleTheme = () => {
     setTheme(resolvedTheme === 'dark' ? 'light' : 'dark');

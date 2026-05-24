@@ -7,6 +7,7 @@ Use this checklist for Windows-first release verification. The current public re
 - [ ] `git status --short` is clean or only contains intentional release changes.
 - [ ] Versions match in `package.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json`.
 - [ ] `CHANGELOG.md` includes the version being released.
+- [ ] `pnpm test:coverage` succeeds and records current frontend source coverage in release notes.
 - [ ] `pnpm release:verify -SkipBundle` succeeds.
 - [ ] `pnpm e2e` succeeds on a Windows desktop session with `tauri-driver` and Edge WebDriver installed.
 
@@ -38,6 +39,7 @@ Use this checklist for Windows-first release verification. The current public re
 - [ ] `Ctrl+Alt+K` toggles the main window.
 - [ ] `Ctrl+Alt+1` through `Ctrl+Alt+9` paste the corresponding visible entries.
 - [ ] Editing `hotkey_toggle_window` in Settings → Shortcuts saves and reloads without app restart.
+- [ ] Closing the main window hides to tray when `close_to_tray=true` and exits when `close_to_tray=false`.
 - [ ] Window hides after paste and does not remain in the taskbar.
 - [ ] Tray click opens the window without immediately hiding it.
 
@@ -79,6 +81,7 @@ Use this checklist for Windows-first release verification. The current public re
 - [ ] Release notes mention unsigned installer warnings.
 - [ ] Release notes state this is Windows-first and macOS/Linux are post-MVP.
 - [ ] Release notes state sync, auto-update, database encryption, and code signing are not included.
+- [ ] Release notes state `show_in_tray` is a deprecated database key, not a supported runtime setting.
 
 ## 11. GitHub Release Workflow
 

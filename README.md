@@ -79,7 +79,7 @@ pnpm release:verify
 pnpm release:smoke
 ```
 
-当前安装包尚未代码签名，Windows 可能显示 SmartScreen 或未知发布者提示。
+当前安装包尚未代码签名，Windows 可能显示 SmartScreen 或未知发布者提示。当前版本也没有配置自动更新器；发布更新需要通过 GitHub Release 或手动下载安装包完成。
 
 ## 桌面 E2E 测试
 
