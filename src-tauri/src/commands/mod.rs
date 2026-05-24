@@ -210,10 +210,10 @@ fn apply_window_size_from_config(
 ) -> Result<(), AppError> {
     let width: u32 = database::config::get(db, "window_width")?
         .and_then(|v| v.parse().ok())
-        .unwrap_or(480);
+        .unwrap_or(560);
     let height: u32 = database::config::get(db, "window_height")?
         .and_then(|v| v.parse().ok())
-        .unwrap_or(720);
+        .unwrap_or(760);
 
     if let Some(window) = app.get_webview_window("main") {
         window

@@ -18,6 +18,13 @@
     "release:smoke": "powershell -ExecutionPolicy Bypass -File scripts/smoke-installers.ps1",
     "prepare": "node scripts/install-hooks.mjs"
   },
+  "pnpm": {
+    "overrides": {
+      "diff": "8.0.3",
+      "glob": "10.5.0",
+      "serialize-javascript": "7.0.5"
+    }
+  },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
     "@fontsource-variable/geist": "^5.2.8",

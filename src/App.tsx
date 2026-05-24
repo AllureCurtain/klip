@@ -56,10 +56,6 @@ function App() {
       }
     });
 
-    const unlistenPromise = listen<ClipboardItem>('clipboard-updated', (event) => {
-      addItems([event.payload]);
-    });
-
     const unlistenClearedPromise = onClipboardCleared(() => {
       setItems([]);
     });
@@ -76,11 +72,29 @@ function App() {
     });
 
     return () => {
-      unlistenPromise.then((fn) => fn());
       unlistenClearedPromise.then((fn) => fn());
       unlistenConfigPromise.then((fn) => fn());
     };
-  }, [fetchItems, fetchTags, addItems, setItems]);
+  }, [fetchItems, fetchTags, setItems]);
+
+  useEffect(() => {
+    const unlistenPromise = listen<ClipboardItem>('clipboard-updated', (event) => {
+      if (
+        clipboardItemMatchesView(event.payload, {
+          searchQuery,
+          contentType,
+          showFavorites,
+          selectedTagId,
+        })
+      ) {
+        addItems([event.payload]);
+      }
+    });
+
+    return () => {
+      unlistenPromise.then((fn) => fn());
+    };
+  }, [addItems, contentType, searchQuery, selectedTagId, showFavorites]);
 
   useEffect(() => {
     const trimmed = searchQuery.trim();
@@ -157,3 +171,41 @@ function App() {
 }
 
 export default App;
+
+function clipboardItemMatchesView(
+  item: ClipboardItem,
+  {
+    searchQuery,
+    contentType,
+    showFavorites,
+    selectedTagId,
+  }: {
+    searchQuery: string;
+    contentType: string | null;
+    showFavorites: boolean;
+    selectedTagId: number | null;
+  }
+): boolean {
+  if (contentType && item.content_type !== contentType) {
+    return false;
+  }
+
+  if (showFavorites && !item.is_favorited) {
+    return false;
+  }
+
+  if (selectedTagId !== null && !item.tags.some((tag) => tag.id === selectedTagId)) {
+    return false;
+  }
+
+  const query = searchQuery.trim().toLocaleLowerCase();
+  if (query === '') {
+    return true;
+  }
+
+  const preview = item.preview?.toLocaleLowerCase() ?? '';
+  const searchableContent =
+    item.content_type === 'image' ? '' : item.content.toLocaleLowerCase();
+
+  return preview.includes(query) || searchableContent.includes(query);
+}

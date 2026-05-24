@@ -118,8 +118,8 @@ describe('SettingsView', () => {
         auto_start: false,
         close_to_tray: true,
         show_in_tray: true,
-        window_width: 480,
-        window_height: 720,
+        window_width: 560,
+        window_height: 760,
         search_debounce_ms: 150,
         language: 'zh-CN',
         sensitive_capture_policy: 'flag',
@@ -221,6 +221,30 @@ describe('SettingsView', () => {
     expect(apiMocks.configSet).toHaveBeenCalledWith('hotkey_toggle_window', 'Ctrl+Alt+Z');
     expect(apiMocks.configSet).toHaveBeenCalledWith('hotkey_quick_paste_prefix', 'Ctrl+Alt');
     expect(callbacks.onBack).toHaveBeenCalled();
+  });
+
+  it('keeps settings open and shows the save error when saving fails', async () => {
+    apiMocks.configSet.mockRejectedValue(new Error('Invalid hotkey'));
+
+    render(<SettingsView onBack={callbacks.onBack} />);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Shortcuts' }));
+    fireEvent.change(screen.getByLabelText('Toggle window'), {
+      target: { value: 'Ctrl+Alt+?' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(callbacks.onBack).not.toHaveBeenCalled();
+    expect(screen.getByText('Invalid hotkey')).toBeTruthy();
   });
 
   it('labels general and behavior controls for assistive technology', async () => {

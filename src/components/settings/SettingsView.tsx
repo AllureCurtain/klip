@@ -20,6 +20,7 @@ import {
 import { cn } from '@/lib/utils';
 import { SUPPORTED_LANGUAGES } from '@/i18n';
 import { DataManagementView } from './DataManagementView';
+import { DEFAULT_WINDOW_HEIGHT, DEFAULT_WINDOW_WIDTH } from '@/lib/constants';
 
 export type SettingsTab = 'general' | 'shortcuts' | 'behavior' | 'data' | 'about';
 
@@ -68,8 +69,10 @@ export function SettingsView({ onBack }: SettingsViewProps) {
   }, [fetchConfig, fetchSystemInfo, fetchDiagnosticsInfo]);
 
   const handleSave = async () => {
-    await saveChanges();
-    onBack();
+    const saved = await saveChanges();
+    if (saved) {
+      onBack();
+    }
   };
 
   const handleCancel = async () => {
@@ -168,7 +171,7 @@ export function SettingsView({ onBack }: SettingsViewProps) {
                   min={300}
                   max={1000}
                   value={config.window_width}
-                  onChange={(e) => setWindowWidth(parseInt(e.target.value, 10) || 480)}
+                  onChange={(e) => setWindowWidth(parseInt(e.target.value, 10) || DEFAULT_WINDOW_WIDTH)}
                   className="h-7 w-16 text-xs"
                 />
                 <span className="text-muted-foreground text-xs">x</span>
@@ -181,7 +184,7 @@ export function SettingsView({ onBack }: SettingsViewProps) {
                   min={400}
                   max={1400}
                   value={config.window_height}
-                  onChange={(e) => setWindowHeight(parseInt(e.target.value, 10) || 720)}
+                  onChange={(e) => setWindowHeight(parseInt(e.target.value, 10) || DEFAULT_WINDOW_HEIGHT)}
                   className="h-7 w-16 text-xs"
                 />
                 <span className="text-[10px] text-muted-foreground">px</span>

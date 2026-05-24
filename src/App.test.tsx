@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 
@@ -17,10 +17,22 @@ const storeState = vi.hoisted(() => ({
 }));
 
 const tauriMocks = vi.hoisted(() => ({
-  listen: vi.fn(() => Promise.resolve(vi.fn())),
+  clipboardUpdated: undefined as undefined | ((event: { payload: unknown }) => void),
+  listen: vi.fn((event: string, callback: (event: { payload: unknown }) => void) => {
+    if (event === 'clipboard-updated') {
+      tauriMocks.clipboardUpdated = callback;
+    }
+    return Promise.resolve(vi.fn());
+  }),
   onClipboardCleared: vi.fn(() => Promise.resolve(vi.fn())),
   onConfigChanged: vi.fn(() => Promise.resolve(vi.fn())),
   configGet: vi.fn(() => Promise.resolve(null)),
+}));
+
+const headerMocks = vi.hoisted(() => ({
+  props: undefined as undefined | {
+    onContentTypeChange: (type: string | null) => void;
+  },
 }));
 
 vi.mock('@tauri-apps/api/event', () => ({
@@ -40,7 +52,10 @@ vi.mock('./stores/clipboardStore', () => ({
 }));
 
 vi.mock('./components/layout/Header', () => ({
-  Header: () => <div data-testid="header" />,
+  Header: (props: { onContentTypeChange: (type: string | null) => void }) => {
+    headerMocks.props = props;
+    return <div data-testid="header" />;
+  },
 }));
 
 vi.mock('./components/clipboard/ClipboardList', () => ({
@@ -59,6 +74,8 @@ describe('App status states', () => {
     storeState.tags = [];
     storeState.loading = false;
     storeState.error = null;
+    tauriMocks.clipboardUpdated = undefined;
+    headerMocks.props = undefined;
   });
 
   it('renders loading as a compact operational note', () => {
@@ -84,5 +101,38 @@ describe('App status states', () => {
     expect(note.className).toContain('items-start');
     expect(note.className).not.toContain('justify-center');
     expect(note.className).not.toContain('h-full');
+  });
+
+  it('does not inject clipboard updates that do not match the active content filter', async () => {
+    render(<App />);
+
+    act(() => {
+      headerMocks.props?.onContentTypeChange('image');
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    act(() => {
+      tauriMocks.clipboardUpdated?.({
+        payload: {
+          id: 1,
+          content_type: 'text',
+          content: 'plain text',
+          preview: 'plain text',
+          hash: 'hash-1',
+          size: 10,
+          metadata: null,
+          is_favorited: false,
+          is_sensitive: false,
+          sensitivity_reason: null,
+          tags: [],
+          created_at: 1,
+          last_used_at: 1,
+        },
+      });
+    });
+
+    expect(storeState.addItems).not.toHaveBeenCalled();
   });
 });

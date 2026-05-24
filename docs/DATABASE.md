@@ -104,8 +104,8 @@ INSERT INTO app_config (key, value, updated_at) VALUES
     ('auto_start', 'false', strftime('%s', 'now') * 1000),
     ('close_to_tray', 'true', strftime('%s', 'now') * 1000),
     ('show_in_tray', 'true', strftime('%s', 'now') * 1000),
-    ('window_width', '480', strftime('%s', 'now') * 1000),
-    ('window_height', '720', strftime('%s', 'now') * 1000),
+    ('window_width', '560', strftime('%s', 'now') * 1000),
+    ('window_height', '760', strftime('%s', 'now') * 1000),
     ('search_debounce_ms', '150', strftime('%s', 'now') * 1000),
     ('language', 'zh-CN', strftime('%s', 'now') * 1000),
     ('sensitive_capture_policy', 'flag', strftime('%s', 'now') * 1000),
@@ -122,8 +122,8 @@ INSERT INTO app_config (key, value, updated_at) VALUES
 | auto_start | boolean | false | 开机自启动开关；启动时会与系统层面的自启状态同步 |
 | close_to_tray | boolean | true | 关闭时最小化到托盘 |
 | show_in_tray | boolean | true | 显示托盘图标 |
-| window_width | number | 480 | 窗口宽度 |
-| window_height | number | 720 | 窗口高度 |
+| window_width | number | 560 | 窗口宽度 |
+| window_height | number | 760 | 窗口高度 |
 | search_debounce_ms | number | 150 | 搜索防抖时间 |
 | language | string | zh-CN | UI 语言 |
 | sensitive_capture_policy | flag/skip | flag | 敏感内容保存策略；`skip` 会跳过新捕获的敏感文本 |
@@ -205,20 +205,25 @@ VALUES (?, ?, ?);
 
 ---
 
-## 4. 数据迁移策略（后续阶段）
+## 4. 数据迁移策略
 
 ### 4.1 版本管理
 
-在 `app_config` 表中存储数据库版本：
+在 `app_config` 表中存储数据库版本。当前 schema 版本由后端常量 `CURRENT_DB_VERSION` 管理，当前值为 `3`：
 
 ```sql
 INSERT INTO app_config (key, value, updated_at)
-VALUES ('db_version', '1', strftime('%s', 'now') * 1000);
+VALUES ('db_version', '3', strftime('%s', 'now') * 1000);
 ```
 
 ### 4.2 迁移流程
 
-当前版本仅保留 `db_version` 配置项与基础建表/兼容逻辑，完整迁移框架仍是后续阶段能力。下面示例仅表示后续实现方向。
+当前版本在启动建表后执行轻量迁移：
+
+- 拒绝打开比当前应用更新的 `db_version`，避免静默降级损坏数据。
+- v1 -> v2 会规范化旧热键配置，并迁移早期窗口尺寸默认值。
+- v2 -> v3 会把早期较小窗口尺寸迁移到当前默认尺寸。
+- 完成后写回当前 `db_version`。
 
 ```rust
 fn run_migrations(db: &Connection) -> Result<()> {
@@ -312,7 +317,7 @@ pub struct RestoreSummary {
 ### 7.2 查询优化
 
 - 使用 `LIMIT` 限制返回数量
-- 搜索使用 `LIKE '%keyword%'` 前缀匹配
+- 搜索使用 `LIKE '%keyword%'` 包含匹配
 - 批量操作使用事务
 
 ### 7.3 连接管理
@@ -331,21 +336,15 @@ pub struct Database {
 
 ## 8. 错误处理
 
-### 8.1 数据库损坏（后续阶段）
+### 8.1 数据库损坏
 
-当前版本尚未实现自动损坏检测与重建流程，以下内容为规划方向。
+启动时如果 SQLite 打开或建表阶段检测到可恢复的损坏错误，当前版本会保留原始数据库文件，并创建一个干净 schema 继续启动。损坏文件会保存为同目录下的 `klip.db.corrupt-<timestamp>.bak`。
 
 ```rust
 fn handle_corrupted_database(db_path: &Path) -> Result<()> {
-    // 1. 尝试备份损坏的文件
-    let backup_path = db_path.with_extension("db.corrupted");
-    let _ = std::fs::rename(db_path, &backup_path);
-
-    // 2. 创建新数据库
-    let conn = Connection::open(db_path)?;
-    init_schema(&conn)?;
-
-    // 3. 通知用户
+    let backup_path = next_corrupt_backup_path(db_path);
+    std::fs::rename(db_path, &backup_path)?;
+    Database::new(db_path)?;
     Ok(())
 }
 ```

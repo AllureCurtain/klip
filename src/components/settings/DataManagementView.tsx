@@ -76,6 +76,20 @@ export function DataManagementView() {
     }
   };
 
+  const handleImportJson = async () => {
+    const summary = await run('import-json', () => importJson(jsonPath), t('settings.data.imported'));
+    if (summary) {
+      await Promise.all([fetchItems(), fetchTags()]);
+    }
+  };
+
+  const handleImportCsv = async () => {
+    const summary = await run('import-csv', () => importCsv(csvPath), t('settings.data.imported'));
+    if (summary) {
+      await Promise.all([fetchItems(), fetchTags()]);
+    }
+  };
+
   const chooseSavePath = async (
     setter: (value: string) => void,
     defaultPath: string,
@@ -226,7 +240,7 @@ export function DataManagementView() {
                 {
                   label: t('settings.data.import'),
                   icon: <Upload className="h-3 w-3" />,
-                  onClick: () => run('import-json', () => importJson(jsonPath), t('settings.data.imported')),
+                  onClick: handleImportJson,
                 },
               ]}
               busyAction={busyAction}
@@ -259,7 +273,7 @@ export function DataManagementView() {
                 {
                   label: t('settings.data.import'),
                   icon: <Upload className="h-3 w-3" />,
-                  onClick: () => run('import-csv', () => importCsv(csvPath), t('settings.data.imported')),
+                  onClick: handleImportCsv,
                 },
               ]}
               busyAction={busyAction}

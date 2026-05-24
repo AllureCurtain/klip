@@ -24,9 +24,14 @@
 - Regression coverage for localized dialog close actions.
 - Regression coverage for Settings tab semantics.
 - Regression coverage for image thumbnail preview and image preview download action labels.
+- Regression coverage for Settings save failures staying visible.
+- Regression coverage for refreshing clipboard data after JSON/CSV imports.
+- Regression coverage for frontend window-size defaults matching backend defaults.
+- Regression coverage for ignoring clipboard update events that do not match the active content filter.
 
 ### Changed
 
+- Documentation now describes search as keyword contains matching and aligns PRD window minimums with the packaged Tauri window.
 - Data Management path inputs now expose accessible labels for assistive technology.
 - Dialog close actions now use the active interface language.
 - Header favorites, content-type, and tag filters now expose their pressed state.
@@ -51,6 +56,17 @@
 - Header icon-only actions now expose accessible labels.
 - Header selected-item tag assignment actions now expose localized accessible labels.
 - Image thumbnails and image preview downloads now expose explicit accessible actions.
+
+### Fixed
+
+- Settings save failures now keep the Settings view open and show the error.
+- JSON/CSV imports now refresh clipboard items and tags after a successful import.
+- Missing frontend window-size config now falls back to the current 560x760 backend defaults instead of the old 480x720 values.
+- Live clipboard update events now respect the current search, content type, favorites, and tag filters before inserting a new row.
+
+### Security
+
+- Pinned patched transitive Mocha dependencies so `pnpm audit` reports no known vulnerabilities.
 
 ## [0.1.2] - 2026-05-22
 

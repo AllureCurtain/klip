@@ -189,6 +189,48 @@ describe('DataManagementView', () => {
     expect(storeMocks.fetchTags).toHaveBeenCalled();
   });
 
+  it('refreshes clipboard data after JSON import succeeds', async () => {
+    render(<DataManagementView />);
+    openPortability();
+
+    dialogMocks.open.mockResolvedValueOnce('C:\\tmp\\import.json');
+    fireEvent.click(screen.getAllByRole('button', { name: 'Choose file...' })[0]);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Import' })[0]);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(storeMocks.importJson).toHaveBeenCalledWith('C:\\tmp\\import.json');
+    expect(storeMocks.fetchItems).toHaveBeenCalled();
+    expect(storeMocks.fetchTags).toHaveBeenCalled();
+  });
+
+  it('refreshes clipboard data after CSV import succeeds', async () => {
+    render(<DataManagementView />);
+    openPortability();
+
+    dialogMocks.open.mockResolvedValueOnce('C:\\tmp\\import.csv');
+    fireEvent.click(screen.getAllByRole('button', { name: 'Choose file...' })[1]);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Import' })[1]);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(storeMocks.importCsv).toHaveBeenCalledWith('C:\\tmp\\import.csv');
+    expect(storeMocks.fetchItems).toHaveBeenCalled();
+    expect(storeMocks.fetchTags).toHaveBeenCalled();
+  });
+
   it('keeps destructive file actions disabled until a path is present', () => {
     render(<DataManagementView />);
     openPortability();

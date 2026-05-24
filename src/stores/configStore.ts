@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { configApi, systemApi } from '@/lib/tauri';
+import { DEFAULT_WINDOW_HEIGHT, DEFAULT_WINDOW_WIDTH } from '@/lib/constants';
 import type { AppConfig, DiagnosticsInfo, SystemInfo } from '@/types';
 import { getErrorMessage } from '@/types';
 
@@ -37,7 +38,7 @@ interface ConfigState {
   setLanguage: (value: string) => void;
   setSensitiveCapturePolicy: (value: AppConfig['sensitive_capture_policy']) => void;
   setMaskSensitivePreviews: (value: boolean) => void;
-  saveChanges: () => Promise<void>;
+  saveChanges: () => Promise<boolean>;
   resetChanges: () => Promise<void>;
 }
 
@@ -48,8 +49,8 @@ const DEFAULT_CONFIG: AppConfig = {
   auto_start: false,
   close_to_tray: true,
   show_in_tray: true,
-  window_width: 480,
-  window_height: 720,
+  window_width: DEFAULT_WINDOW_WIDTH,
+  window_height: DEFAULT_WINDOW_HEIGHT,
   search_debounce_ms: 150,
   language: 'zh-CN',
   sensitive_capture_policy: 'flag',
@@ -75,8 +76,8 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
         auto_start: parseBoolean(allConfig['auto_start'], false),
         close_to_tray: parseBoolean(allConfig['close_to_tray'], true),
         show_in_tray: parseBoolean(allConfig['show_in_tray'], true),
-        window_width: parseNumber(allConfig['window_width'], 480),
-        window_height: parseNumber(allConfig['window_height'], 720),
+        window_width: parseNumber(allConfig['window_width'], DEFAULT_WINDOW_WIDTH),
+        window_height: parseNumber(allConfig['window_height'], DEFAULT_WINDOW_HEIGHT),
         search_debounce_ms: parseNumber(allConfig['search_debounce_ms'], 150),
         language: allConfig['language'] || 'zh-CN',
         sensitive_capture_policy:
@@ -211,8 +212,10 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
       await configApi.set('sensitive_capture_policy', config.sensitive_capture_policy);
       await configApi.set('mask_sensitive_previews', config.mask_sensitive_previews.toString());
       set({ loading: false, hasChanges: false });
+      return true;
     } catch (error) {
       set({ error: getErrorMessage(error), loading: false });
+      return false;
     }
   },
 

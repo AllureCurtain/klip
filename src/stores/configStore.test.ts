@@ -10,8 +10,8 @@ const TEST_CONFIG: AppConfig = {
   auto_start: false,
   close_to_tray: true,
   show_in_tray: true,
-  window_width: 480,
-  window_height: 720,
+  window_width: 560,
+  window_height: 760,
   search_debounce_ms: 150,
   language: 'zh-CN',
   sensitive_capture_policy: 'flag',
@@ -49,6 +49,15 @@ describe('configStore', () => {
     await useConfigStore.getState().fetchConfig();
 
     expect(useConfigStore.getState().config.mask_sensitive_previews).toBe(true);
+  });
+
+  it('defaults missing window size config to the current backend defaults', async () => {
+    vi.mocked(configApi.getAll).mockResolvedValue({});
+
+    await useConfigStore.getState().fetchConfig();
+
+    expect(useConfigStore.getState().config.window_width).toBe(560);
+    expect(useConfigStore.getState().config.window_height).toBe(760);
   });
 
   it('persists sensitive preview masking with other config changes', async () => {
