@@ -7,22 +7,24 @@ interface EmptyStateProps {
 export function EmptyState({ showFavorites = false }: EmptyStateProps) {
   const { t } = useTranslation();
   return (
-    <div className="flex flex-col items-start px-3 py-4 text-muted-foreground">
-      {showFavorites ? (
-        <>
-          <p className="text-xs font-medium">{t('emptyState.noFavorites')}</p>
-          <p className="mt-1 text-[11px] text-muted-foreground/60">
-            {t('emptyState.noFavoritesHint')}
-          </p>
-        </>
-      ) : (
-        <>
-          <p className="text-xs font-medium">{t('emptyState.noHistory')}</p>
-          <p className="mt-1 text-[11px] text-muted-foreground/60">
-            {t('emptyState.noHistoryHint')}
-          </p>
-        </>
-      )}
+    <div className="flex flex-col items-center justify-center h-full px-6 py-8 text-center">
+      <div className="rounded-2xl bg-[var(--glass-bg)] backdrop-blur-sm border border-[var(--glass-border)] px-6 py-5 shadow-[var(--shadow-card)]">
+        {showFavorites ? (
+          <>
+            <p className="text-sm font-medium text-foreground/80">{t('emptyState.noFavorites')}</p>
+            <p className="mt-1.5 text-xs text-muted-foreground/60">
+              {t('emptyState.noFavoritesHint')}
+            </p>
+          </>
+        ) : (
+          <>
+            <p className="text-sm font-medium text-foreground/80">{t('emptyState.noHistory')}</p>
+            <p className="mt-1.5 text-xs text-muted-foreground/60">
+              {t('emptyState.noHistoryHint')}
+            </p>
+          </>
+        )}
+      </div>
     </div>
   );
 }

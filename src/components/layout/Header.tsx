@@ -122,10 +122,10 @@ export function Header({
 
   return (
     <>
-      <header className="flex flex-col border-b border-border/60">
+      <header className="flex flex-col backdrop-blur-md bg-[var(--glass-bg)] border-b border-[var(--glass-border)]">
         <div
           data-tauri-drag-region
-          className="flex items-center gap-1.5 px-2.5 pt-2 pb-1.5"
+          className="flex items-center gap-1.5 px-2.5 pt-1.5 pb-1"
         >
           <div className="relative flex-1 min-w-0">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
@@ -136,7 +136,7 @@ export function Header({
               autoFocus
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
-              className="h-7 pl-8 pr-3 text-xs"
+              className="h-7 pl-8 pr-3 text-xs bg-transparent border-[var(--glass-border)] placeholder:text-muted-foreground/50"
             />
           </div>
           <Button
@@ -170,7 +170,7 @@ export function Header({
         </div>
 
         {advancedOpen && (
-          <div className="mx-2.5 mb-2 rounded-md border bg-muted/20 px-2.5 py-2">
+          <div className="mx-2.5 mb-2 rounded-lg border border-[var(--glass-border)] bg-[var(--glass-bg)] backdrop-blur-sm px-2.5 py-2">
             <div className="grid grid-cols-2 gap-2">
               <label className="flex items-center justify-between gap-2 text-[11px]">
                 <span>{t('header.advanced.sensitiveOnly')}</span>
@@ -225,15 +225,15 @@ export function Header({
           </div>
         )}
 
-        <div className="flex items-center gap-1 px-2.5 pb-2">
+        <div className="flex items-center gap-1 px-2.5 pb-1.5">
           {contentFilters.map((filter) => (
             <button
               key={filter.value ?? 'all'}
               className={cn(
                 'flex items-center gap-1 h-6 px-2.5 rounded-full text-[11px] font-medium transition-all duration-200',
                 contentType === filter.value
-                  ? 'bg-accent text-accent-foreground shadow-[var(--shadow-ring)]'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/70'
+                  ? 'bg-primary/15 text-primary shadow-[var(--shadow-ring)]'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-[var(--glass-bg)]'
               )}
               aria-pressed={contentType === filter.value}
               onClick={() => onContentTypeChange(filter.value)}

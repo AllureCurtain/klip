@@ -54,7 +54,8 @@ describe('ClipboardList', () => {
   it('uses compact virtual rows for clipboard entries', () => {
     const { container } = render(<ClipboardList items={[makeTextItem()]} />);
 
-    const scroller = container.firstElementChild as HTMLElement;
+    const wrapper = container.firstElementChild as HTMLElement;
+    const scroller = wrapper.firstElementChild as HTMLElement;
     const virtualCanvas = scroller.firstElementChild as HTMLElement;
 
     expect(virtualCanvas.style.height).toBe('84px');

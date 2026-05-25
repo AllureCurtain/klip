@@ -1,5 +1,6 @@
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useTranslation } from 'react-i18next';
+import { AnimatePresence } from 'framer-motion';
 import { ClipboardItem } from './ClipboardItem';
 import { useClipboardStore } from '@/stores';
 import type { ClipboardItem as ClipboardItemType } from '@/types';
@@ -146,68 +147,74 @@ export function ClipboardList({ items, selectionMode = false }: ClipboardListPro
   }, [selectedIndex, itemIndices, virtualizer]);
 
   return (
-    <div ref={parentRef} className="h-full overflow-y-auto scrollbar-thin">
-      <div
-        style={{
-          height: virtualizer.getTotalSize(),
-          width: '100%',
-          position: 'relative',
-        }}
-      >
-        {virtualItems.map((virtualRow) => {
-          const row = rows[virtualRow.index];
-          if (!row) return null;
+    <div className="relative h-full">
+      <div ref={parentRef} className="h-full overflow-y-auto scrollbar-thin">
+        <div
+          style={{
+            height: virtualizer.getTotalSize(),
+            width: '100%',
+            position: 'relative',
+          }}
+        >
+          <AnimatePresence mode="popLayout">
+            {virtualItems.map((virtualRow) => {
+              const row = rows[virtualRow.index];
+              if (!row) return null;
 
-          if (row.type === 'header') {
-            return (
-              <div
-                key={row.id}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: `${HEADER_HEIGHT}px`,
-                  transform: `translateY(${virtualRow.start}px)`,
-                }}
-                className="flex items-center px-2.5 pt-2 pb-0.5"
-              >
-                <span className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">
-                  {row.label}
-                </span>
-              </div>
-            );
-          }
+              if (row.type === 'header') {
+                return (
+                  <div
+                    key={row.id}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      height: `${HEADER_HEIGHT}px`,
+                      transform: `translateY(${virtualRow.start}px)`,
+                    }}
+                    className="flex items-center px-4 pt-2 pb-0.5"
+                  >
+                    <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium text-muted-foreground/70 uppercase tracking-wider bg-[var(--glass-bg)] backdrop-blur-sm border border-[var(--glass-border)]">
+                      {row.label}
+                    </span>
+                  </div>
+                );
+              }
 
-          return (
-            <div
-              key={row.id}
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: '100%',
-                height: `${ITEM_HEIGHT}px`,
-                overflow: 'hidden',
-                transform: `translateY(${virtualRow.start}px)`,
-              }}
-            >
-              <ClipboardItem
-                item={row.item}
-                index={row.index}
-                isSelected={selectedIndex === row.index - 1}
-                selectionMode={selectionMode}
-                onSelect={() => setSelectedIndex(row.index - 1)}
-              />
-            </div>
-          );
-        })}
-      </div>
-      {loadingMore ? (
-        <div className="h-9 flex items-center justify-center text-[11px] text-muted-foreground">
-          {t('app.loading')}
+              return (
+                <div
+                  key={row.id}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: `${ITEM_HEIGHT}px`,
+                    overflow: 'hidden',
+                    transform: `translateY(${virtualRow.start}px)`,
+                  }}
+                >
+                  <ClipboardItem
+                    item={row.item}
+                    index={row.index}
+                    ageIndex={row.index - 1}
+                    isSelected={selectedIndex === row.index - 1}
+                    selectionMode={selectionMode}
+                    onSelect={() => setSelectedIndex(row.index - 1)}
+                  />
+                </div>
+              );
+            })}
+          </AnimatePresence>
         </div>
-      ) : null}
+        {loadingMore ? (
+          <div className="h-9 flex items-center justify-center text-[11px] text-muted-foreground">
+            {t('app.loading')}
+          </div>
+        ) : null}
+      </div>
+      <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-[var(--background)] to-transparent" />
     </div>
   );
 }

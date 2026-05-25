@@ -16,6 +16,7 @@ import { Button } from '@/components/ui';
 import { useClipboardStore } from '@/stores';
 import { useConfigStore } from '@/stores/configStore';
 import { formatTime, formatSize, truncate, cn } from '@/lib/utils';
+import { springs, cardVariants } from '@/lib/motion';
 import type {
   ClipboardItem as ClipboardItemType,
   FileMetadata,
@@ -27,6 +28,7 @@ import { ImagePreview } from './ImagePreview';
 interface ClipboardItemProps {
   item: ClipboardItemType;
   index: number;
+  ageIndex?: number;
   isSelected: boolean;
   selectionMode?: boolean;
   onSelect?: () => void;
@@ -75,32 +77,32 @@ const CLIP_TONES: Record<
   }
 > = {
   text: {
-    border: 'border-l-sky-500',
-    selected: 'bg-sky-500/10',
-    iconBg: 'bg-sky-500/10',
-    iconText: 'text-sky-600 dark:text-sky-400',
-    dot: 'bg-sky-500',
+    border: 'border-l-indigo-400/70',
+    selected: 'bg-indigo-500/8',
+    iconBg: 'bg-indigo-500/10',
+    iconText: 'text-indigo-500 dark:text-indigo-400',
+    dot: 'bg-indigo-400',
   },
   image: {
-    border: 'border-l-emerald-500',
-    selected: 'bg-emerald-500/10',
+    border: 'border-l-emerald-400/70',
+    selected: 'bg-emerald-500/8',
     iconBg: 'bg-emerald-500/10',
-    iconText: 'text-emerald-600 dark:text-emerald-400',
-    dot: 'bg-emerald-500',
+    iconText: 'text-emerald-500 dark:text-emerald-400',
+    dot: 'bg-emerald-400',
   },
   file: {
-    border: 'border-l-blue-500',
-    selected: 'bg-blue-500/10',
-    iconBg: 'bg-blue-500/10',
-    iconText: 'text-blue-600 dark:text-blue-400',
-    dot: 'bg-blue-500',
+    border: 'border-l-sky-400/70',
+    selected: 'bg-sky-500/8',
+    iconBg: 'bg-sky-500/10',
+    iconText: 'text-sky-500 dark:text-sky-400',
+    dot: 'bg-sky-400',
   },
   folder: {
-    border: 'border-l-amber-500',
-    selected: 'bg-amber-500/10',
+    border: 'border-l-amber-400/70',
+    selected: 'bg-amber-500/8',
     iconBg: 'bg-amber-500/10',
-    iconText: 'text-amber-600 dark:text-amber-400',
-    dot: 'bg-amber-500',
+    iconText: 'text-amber-500 dark:text-amber-400',
+    dot: 'bg-amber-400',
   },
 };
 
@@ -147,6 +149,7 @@ function classifyFile(item: ClipboardItemType): FileShape {
 
 export function ClipboardItem({
   item,
+  ageIndex = 0,
   isSelected,
   selectionMode = false,
   onSelect,
@@ -167,16 +170,21 @@ export function ClipboardItem({
     (state) => state.config.mask_sensitive_previews
   );
   const [copied, setCopied] = useState(false);
+  const [glowPulse, setGlowPulse] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [imagePreviewOpen, setImagePreviewOpen] = useState(false);
   const [tagMenuOpen, setTagMenuOpen] = useState(false);
   const confirmTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const isBatchSelected = selectedIds.includes(item.id);
 
+  const opacityForAge = Math.max(0.85, 1 - ageIndex * 0.005);
+
   const handleCopy = useCallback(() => {
     copyItem(item.id);
     setCopied(true);
+    setGlowPulse(true);
     setTimeout(() => setCopied(false), 800);
+    setTimeout(() => setGlowPulse(false), 600);
   }, [copyItem, item.id]);
 
   const handleClick = useCallback(() => {
@@ -252,12 +260,6 @@ export function ClipboardItem({
   const tone = CLIP_TONES[clipKind];
   const typeLabel = t(`clipboard.types.${clipKind}`);
   const strongRowState = copied || (selectionMode && isBatchSelected);
-  const rowStateClass =
-    strongRowState
-      ? tone.selected
-      : isSelected
-        ? 'bg-muted/50'
-        : 'hover:bg-muted/40';
 
   const renderIcon = () => {
     const className = cn('h-3.5 w-3.5 shrink-0', tone.iconText);
@@ -294,7 +296,7 @@ export function ClipboardItem({
     switch (item.content_type) {
       case 'text':
         return (
-          <span className="text-xs text-foreground truncate block">
+          <span className="text-xs text-foreground truncate block font-mono">
             {truncate(item.preview || item.content, 80)}
           </span>
         );
@@ -392,13 +394,25 @@ export function ClipboardItem({
       <motion.div
         ref={itemRef}
         onClick={handleClick}
-        initial={{ opacity: 0, y: 4 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.2, ease: 'easeOut' }}
-        whileHover={{ y: -1, boxShadow: '0 2px 8px -2px rgba(0,0,0,0.08)' }}
+        variants={cardVariants}
+        initial="initial"
+        animate="animate"
+        exit="exit"
+        transition={springs.default}
+        whileHover="hover"
+        whileTap="tap"
+        style={{ opacity: opacityForAge }}
         className={cn(
-          'group relative flex h-14 cursor-pointer items-center gap-2 overflow-hidden rounded-xl mx-1.5 px-2.5 transition-[background-color,border-color] duration-200',
-          rowStateClass
+          'group relative flex h-14 cursor-pointer items-center gap-2 overflow-hidden',
+          'rounded-xl mx-1.5 px-2.5',
+          'bg-[var(--glass-bg)] backdrop-blur-sm',
+          'border border-[var(--glass-border)]',
+          'shadow-[var(--shadow-card)]',
+          'hover:shadow-[var(--shadow-card-hover)]',
+          'transition-shadow duration-200',
+          isSelected && !strongRowState && 'shadow-[var(--shadow-card-glow)]',
+          strongRowState && tone.selected,
+          glowPulse && 'animate-glow-pulse'
         )}
       >
         {selectionMode && (

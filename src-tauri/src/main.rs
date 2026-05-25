@@ -86,6 +86,23 @@ fn main() {
                     );
                 }
 
+                // Apply platform-specific window vibrancy effects
+                #[cfg(target_os = "macos")]
+                {
+                    use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial};
+                    let _ = apply_vibrancy(
+                        &window,
+                        NSVisualEffectMaterial::UnderWindowBackground,
+                        None,
+                        None,
+                    );
+                }
+                #[cfg(target_os = "windows")]
+                {
+                    use window_vibrancy::apply_mica;
+                    let _ = apply_mica(&window, Some(true));
+                }
+
                 let app_handle = app.handle().clone();
                 let guard_ts = tray_click_guard.clone();
                 let guard_duration = guard_ms;

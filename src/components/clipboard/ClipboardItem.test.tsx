@@ -253,15 +253,15 @@ describe('ClipboardItem', () => {
     expect(row.className).not.toContain('border-l-sky-500');
   });
 
-  it('uses a neutral treatment for keyboard-selected rows', () => {
+  it('uses a glow treatment for keyboard-selected rows', () => {
     const { container } = render(
       <ClipboardItem item={makeTextItem()} index={1} isSelected />
     );
 
     const row = container.firstElementChild as HTMLElement;
 
-    expect(row.className).toContain('bg-muted/50');
-    expect(row.className).not.toContain('bg-sky-500/10');
+    expect(row.className).toContain('shadow-[var(--shadow-card-glow)]');
+    expect(row.className).not.toContain('bg-indigo-500/8');
   });
 
   it('floats item actions out of the default content layout', () => {

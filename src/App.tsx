@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { listen } from '@tauri-apps/api/event';
+import { motion } from 'framer-motion';
 import { useClipboardStore } from './stores/clipboardStore';
 import { Header } from './components/layout/Header';
 import type { HeaderAdvancedFilters } from './components/layout/Header';
@@ -14,6 +15,7 @@ import {
   onOpenSettings,
   configApi,
 } from '@/lib/tauri';
+import { springs, windowVariants } from '@/lib/motion';
 import { setLanguage, type SupportedLanguage, SUPPORTED_LANGUAGES } from '@/i18n';
 import type { ClipboardItem } from './types';
 
@@ -170,7 +172,13 @@ function App() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-background text-foreground">
+    <motion.div
+      variants={windowVariants}
+      initial="initial"
+      animate="animate"
+      transition={springs.snappy}
+      className="flex flex-col h-screen text-foreground"
+    >
       <Header
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
@@ -212,7 +220,7 @@ function App() {
           <ClipboardList items={items} selectionMode={selectionMode} />
         )}
       </main>
-    </div>
+    </motion.div>
   );
 }
 

@@ -193,9 +193,9 @@ describe('Header', () => {
 
     const activeFilter = screen.getByRole('button', { name: '全部' });
 
-    expect(activeFilter.className).toContain('bg-accent');
-    expect(activeFilter.className).toContain('text-accent-foreground');
-    expect(activeFilter.className).not.toContain('bg-muted/70');
+    expect(activeFilter.className).toContain('bg-primary/15');
+    expect(activeFilter.className).toContain('text-primary');
+    expect(activeFilter.className).not.toContain('hover:bg-[var(--glass-bg)]');
   });
 
   it('does not expose clear history as a default header action', () => {

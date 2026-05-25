@@ -99,11 +99,11 @@ export function SettingsView({ onBack, initialTab = 'general' }: SettingsViewPro
   };
 
   return (
-    <div className="flex flex-col h-screen bg-background text-foreground">
+    <div className="flex flex-col h-screen text-foreground">
       {/* Title bar */}
       <div
         data-tauri-drag-region
-        className="flex items-center gap-2 px-2 pt-1.5 pb-1 border-b border-border"
+        className="flex items-center gap-2 px-2 pt-1.5 pb-1 border-b border-[var(--glass-border)] backdrop-blur-md bg-[var(--glass-bg)]"
       >
         <Button
           variant="ghost"
@@ -124,7 +124,7 @@ export function SettingsView({ onBack, initialTab = 'general' }: SettingsViewPro
       <div
         role="tablist"
         aria-label={t('settings.title')}
-        className="flex items-center gap-0.5 px-2 pb-1.5 border-b border-border"
+        className="flex items-center gap-0.5 px-2 pb-1.5 border-b border-[var(--glass-border)]"
       >
         {tabItems.map((tab) => (
           <button
@@ -407,7 +407,7 @@ export function SettingsView({ onBack, initialTab = 'general' }: SettingsViewPro
           {error}
         </div>
       )}
-      <div className="flex items-center justify-end gap-2 px-3 pb-2 pt-1 border-t border-border">
+      <div className="flex items-center justify-end gap-2 px-3 pb-2 pt-1 border-t border-[var(--glass-border)]">
         <Button
           variant="outline"
           size="sm"
