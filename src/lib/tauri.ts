@@ -2,11 +2,16 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import type {
   BackupSummary,
+  AdvancedSearchQuery,
   ClipboardItem,
   ClipboardQueryOptions,
   DiagnosticsInfo,
   ImportSummary,
   RestoreSummary,
+  Snippet,
+  SnippetInput,
+  SourceRule,
+  SourceRuleInput,
   SystemInfo,
   Tag,
 } from '@/types';
@@ -51,6 +56,33 @@ export const clipboardApi = {
       tagId,
       limit,
       offset,
+    }),
+
+  searchAdvanced: ({
+    query,
+    contentType = null,
+    favoriteOnly = false,
+    sensitiveOnly = null,
+    tagId = null,
+    exactMatch = false,
+    createdAfter = null,
+    createdBefore = null,
+    limit = 100,
+    offset = 0,
+  }: AdvancedSearchQuery) =>
+    invoke<ClipboardItem[]>('search_clipboard_advanced', {
+      query: {
+        query,
+        contentType,
+        favoriteOnly,
+        sensitiveOnly,
+        tagId,
+        exactMatch,
+        createdAfter,
+        createdBefore,
+        limit,
+        offset,
+      },
     }),
 
   getById: (id: number) =>
@@ -105,6 +137,34 @@ export const clipboardApi = {
     invoke<RestoreSummary>('restore_database', { path }),
 
   clear: () => invoke('clear_clipboard_history'),
+};
+
+export const productApi = {
+  listSnippets: () => invoke<Snippet[]>('list_snippets'),
+
+  searchSnippets: (query: string) =>
+    invoke<Snippet[]>('search_snippets', { query }),
+
+  createSnippet: (input: SnippetInput) =>
+    invoke<Snippet>('create_snippet', { input }),
+
+  updateSnippet: (id: number, input: SnippetInput) =>
+    invoke<Snippet>('update_snippet', { id, input }),
+
+  deleteSnippet: (id: number) => invoke('delete_snippet', { id }),
+
+  listSourceRules: () => invoke<SourceRule[]>('list_source_rules'),
+
+  createSourceRule: (input: SourceRuleInput) =>
+    invoke<SourceRule>('create_source_rule', { input }),
+
+  updateSourceRule: (id: number, input: SourceRuleInput) =>
+    invoke<SourceRule>('update_source_rule', { id, input }),
+
+  setSourceRuleEnabled: (id: number, enabled: boolean) =>
+    invoke<SourceRule>('set_source_rule_enabled', { id, enabled }),
+
+  deleteSourceRule: (id: number) => invoke('delete_source_rule', { id }),
 };
 
 // 配置 API

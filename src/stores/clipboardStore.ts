@@ -65,7 +65,9 @@ export const useClipboardStore = create<ClipboardStore>((set) => ({
   fetchItems: async (options: ClipboardQueryOptions = {}) => {
     set({ loading: true, error: null });
     try {
-      const items = await clipboardApi.getListFiltered(options);
+      const items = hasAdvancedSearchOptions(options)
+        ? await clipboardApi.searchAdvanced(toAdvancedSearchQuery('', options))
+        : await clipboardApi.getListFiltered(options);
       set({
         items,
         loading: false,
@@ -81,7 +83,10 @@ export const useClipboardStore = create<ClipboardStore>((set) => ({
   searchItems: async (query: string, options: ClipboardQueryOptions = {}) => {
     set({ loading: true, error: null });
     try {
-      const items = await clipboardApi.searchFiltered(query, options);
+      const advanced = hasAdvancedSearchOptions(options);
+      const items = advanced
+        ? await clipboardApi.searchAdvanced(toAdvancedSearchQuery(query, options))
+        : await clipboardApi.searchFiltered(query, options);
       set({
         items,
         loading: false,
@@ -103,9 +108,11 @@ export const useClipboardStore = create<ClipboardStore>((set) => ({
     const options = { ...currentOptions, limit, offset: items.length };
     set({ loadingMore: true, error: null });
     try {
-      const nextItems = currentQuery
-        ? await clipboardApi.searchFiltered(currentQuery, options)
-        : await clipboardApi.getListFiltered(options);
+      const nextItems = hasAdvancedSearchOptions(options)
+        ? await clipboardApi.searchAdvanced(toAdvancedSearchQuery(currentQuery ?? '', options))
+        : currentQuery
+          ? await clipboardApi.searchFiltered(currentQuery, options)
+          : await clipboardApi.getListFiltered(options);
       set((state) => ({
         items: appendUniqueItems(state.items, nextItems),
         loadingMore: false,
@@ -321,6 +328,30 @@ export const useClipboardStore = create<ClipboardStore>((set) => ({
     set({ items, hasMore: false });
   },
 }));
+
+function hasAdvancedSearchOptions(options: ClipboardQueryOptions): boolean {
+  return (
+    options.sensitiveOnly != null ||
+    options.exactMatch === true ||
+    options.createdAfter != null ||
+    options.createdBefore != null
+  );
+}
+
+function toAdvancedSearchQuery(query: string, options: ClipboardQueryOptions) {
+  return {
+    query,
+    contentType: options.contentType ?? null,
+    favoriteOnly: options.favoriteOnly ?? false,
+    sensitiveOnly: options.sensitiveOnly ?? null,
+    tagId: options.tagId ?? null,
+    exactMatch: options.exactMatch ?? false,
+    createdAfter: options.createdAfter ?? null,
+    createdBefore: options.createdBefore ?? null,
+    limit: options.limit ?? PAGE_SIZE,
+    offset: options.offset ?? 0,
+  };
+}
 
 function appendUniqueItems(
   existingItems: ClipboardItem[],

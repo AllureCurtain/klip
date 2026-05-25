@@ -42,6 +42,13 @@ const tauriMocks = vi.hoisted(() => ({
 const headerMocks = vi.hoisted(() => ({
   props: undefined as undefined | {
     onContentTypeChange: (type: string | null) => void;
+    onSearchChange: (query: string) => void;
+    onAdvancedFiltersChange: (filters: {
+      sensitiveOnly: boolean | null;
+      exactMatch: boolean;
+      createdAfter: number | null;
+      createdBefore: number | null;
+    }) => void;
   },
 }));
 
@@ -64,7 +71,16 @@ vi.mock('./stores/clipboardStore', () => ({
 }));
 
 vi.mock('./components/layout/Header', () => ({
-  Header: (props: { onContentTypeChange: (type: string | null) => void }) => {
+  Header: (props: {
+    onContentTypeChange: (type: string | null) => void;
+    onSearchChange: (query: string) => void;
+    onAdvancedFiltersChange: (filters: {
+      sensitiveOnly: boolean | null;
+      exactMatch: boolean;
+      createdAfter: number | null;
+      createdBefore: number | null;
+    }) => void;
+  }) => {
     headerMocks.props = props;
     return <div data-testid="header" />;
   },
@@ -178,5 +194,38 @@ describe('App status states', () => {
     });
 
     expect(screen.getByTestId('settings-view').dataset.initialTab).toBe('general');
+  });
+
+  it('passes advanced filters into search requests', async () => {
+    vi.useFakeTimers();
+
+    render(<App />);
+
+    act(() => {
+      headerMocks.props?.onSearchChange('token');
+      headerMocks.props?.onAdvancedFiltersChange({
+        sensitiveOnly: true,
+        exactMatch: true,
+        createdAfter: 1_000,
+        createdBefore: 2_000,
+      });
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(150);
+      await Promise.resolve();
+    });
+
+    expect(storeState.searchItems).toHaveBeenCalledWith(
+      'token',
+      expect.objectContaining({
+        sensitiveOnly: true,
+        exactMatch: true,
+        createdAfter: 1_000,
+        createdBefore: 2_000,
+      })
+    );
+
+    vi.useRealTimers();
   });
 });

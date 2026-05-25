@@ -7,6 +7,7 @@ Use this checklist for Windows-first release verification. The current public re
 - [ ] `git status --short` is clean or only contains intentional release changes.
 - [ ] Versions match in `package.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json`.
 - [ ] `CHANGELOG.md` includes the version being released.
+- [ ] `pnpm release:readiness` reports the expected Windows signing and update feed readiness for this release.
 - [ ] `pnpm test:coverage` succeeds and records current frontend source coverage in release notes.
 - [ ] `pnpm release:verify -SkipBundle` succeeds.
 - [ ] `pnpm e2e` succeeds on a Windows desktop session with `tauri-driver` and Edge WebDriver installed.
@@ -75,12 +76,19 @@ Use this checklist for Windows-first release verification. The current public re
 - [ ] Copy a password/API-key-like text and confirm it is flagged as sensitive.
 - [ ] Confirm sensitive item previews are masked by default.
 - [ ] Enable "Skip sensitive clipboard content" and confirm newly copied sensitive text is not saved.
+- [ ] Create a snippet, copy it from Settings -> Data, and confirm the clipboard receives the snippet content.
+- [ ] Create a source ignore rule for a test process/window title and confirm new clipboard changes from that source are skipped on Windows.
+- [ ] Pause clipboard monitoring and enable 15-minute privacy mode from the header menu; confirm new clipboard changes are skipped while each gate is active.
+- [ ] Use advanced search filters for sensitive-only, exact match, and date range.
 
-## 10. Distribution Caveats
+## 10. Distribution Readiness and Caveats
 
-- [ ] Release notes mention unsigned installer warnings.
+- [ ] If shipping unsigned installers, release notes mention SmartScreen or unknown publisher warnings.
+- [ ] If signing this release, set `KLIP_WINDOWS_CERTIFICATE_THUMBPRINT` or `KLIP_WINDOWS_CERTIFICATE_PATH`; set `KLIP_WINDOWS_CERTIFICATE_PASSWORD` when using a PFX path.
+- [ ] If timestamping signed installers, set `KLIP_WINDOWS_TIMESTAMP_URL`.
+- [ ] If publishing an update feed, set `KLIP_UPDATE_FEED_URL` and record the hosted feed URL in release notes.
 - [ ] Release notes state this is Windows-first and macOS/Linux are post-MVP.
-- [ ] Release notes state sync, auto-update, database encryption, and code signing are not included.
+- [ ] Release notes distinguish local readiness settings from external services: certificates, hosted update feed, sync service, database encryption rollout, and plugin marketplace are not bundled by the app.
 - [ ] Release notes state `show_in_tray` is a deprecated database key, not a supported runtime setting.
 
 ## 11. GitHub Release Workflow

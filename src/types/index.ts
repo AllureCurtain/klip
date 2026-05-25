@@ -21,6 +21,38 @@ export interface Tag {
   created_at: number;
 }
 
+export interface Snippet {
+  id: number;
+  title: string;
+  content: string;
+  tag_id: number | null;
+  is_favorited: boolean;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface SnippetInput {
+  title: string;
+  content: string;
+  tagId: number | null;
+  isFavorited: boolean;
+}
+
+export interface SourceRule {
+  id: number;
+  match_type: 'process' | 'title' | 'any';
+  pattern: string;
+  enabled: boolean;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface SourceRuleInput {
+  matchType: 'process' | 'title' | 'any';
+  pattern: string;
+  enabled: boolean;
+}
+
 export interface ImportSummary {
   imported: number;
   skipped: number;
@@ -42,6 +74,23 @@ export interface ClipboardQueryOptions {
   contentType?: ContentType | null;
   favoriteOnly?: boolean;
   tagId?: number | null;
+  sensitiveOnly?: boolean | null;
+  exactMatch?: boolean;
+  createdAfter?: number | null;
+  createdBefore?: number | null;
+  limit?: number;
+  offset?: number;
+}
+
+export interface AdvancedSearchQuery {
+  query: string;
+  contentType?: ContentType | null;
+  favoriteOnly?: boolean;
+  sensitiveOnly?: boolean | null;
+  tagId?: number | null;
+  exactMatch?: boolean;
+  createdAfter?: number | null;
+  createdBefore?: number | null;
   limit?: number;
   offset?: number;
 }
@@ -79,6 +128,14 @@ export interface AppConfig {
   language: string;
   sensitive_capture_policy: 'flag' | 'skip';
   mask_sensitive_previews: boolean;
+  clipboard_monitor_enabled: boolean;
+  privacy_mode_until: number;
+  updates_enabled: boolean;
+  update_feed_url: string;
+  encryption_enabled: boolean;
+  encryption_status: string;
+  sync_folder: string;
+  plugin_folder: string;
 }
 
 export interface SystemInfo {

@@ -162,6 +162,44 @@ impl Database {
         )?;
 
         conn.execute(
+            "CREATE TABLE IF NOT EXISTS snippets (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                title           TEXT NOT NULL,
+                content         TEXT NOT NULL,
+                tag_id          INTEGER,
+                is_favorited    INTEGER NOT NULL DEFAULT 0,
+                created_at      INTEGER NOT NULL,
+                updated_at      INTEGER NOT NULL,
+                FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE SET NULL
+            )",
+            [],
+        )?;
+
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_snippets_updated_at
+             ON snippets(updated_at DESC)",
+            [],
+        )?;
+
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS clipboard_source_rules (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                match_type      TEXT NOT NULL,
+                pattern         TEXT NOT NULL,
+                enabled         INTEGER NOT NULL DEFAULT 1,
+                created_at      INTEGER NOT NULL,
+                updated_at      INTEGER NOT NULL
+            )",
+            [],
+        )?;
+
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_source_rules_enabled
+             ON clipboard_source_rules(enabled, match_type)",
+            [],
+        )?;
+
+        conn.execute(
             "CREATE TABLE IF NOT EXISTS app_config (
                 key         TEXT PRIMARY KEY,
                 value       TEXT NOT NULL,
@@ -188,6 +226,15 @@ impl Database {
             ("language", "zh-CN"),
             ("sensitive_capture_policy", "flag"),
             ("mask_sensitive_previews", "true"),
+            ("clipboard_monitor_enabled", "true"),
+            ("privacy_mode_until", "0"),
+            ("advanced_search_exact", "false"),
+            ("updates_enabled", "false"),
+            ("update_feed_url", ""),
+            ("encryption_enabled", "false"),
+            ("encryption_status", "off"),
+            ("sync_folder", ""),
+            ("plugin_folder", ""),
         ];
 
         for (key, value) in defaults {

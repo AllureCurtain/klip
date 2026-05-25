@@ -10,6 +10,9 @@ const storeMocks = vi.hoisted(() => ({
   deleteItem: vi.fn(),
   copyItem: vi.fn(),
   toggleFavorite: vi.fn(),
+  tags: [] as { id: number; name: string; color: string | null; created_at: number }[],
+  assignTagToItem: vi.fn(),
+  removeTagFromItem: vi.fn(),
   selectedIds: [] as number[],
   toggleSelected: vi.fn(),
 }));
@@ -109,7 +112,10 @@ describe('ClipboardItem', () => {
     storeMocks.deleteItem.mockReset();
     storeMocks.copyItem.mockReset();
     storeMocks.toggleFavorite.mockReset();
+    storeMocks.assignTagToItem.mockReset();
+    storeMocks.removeTagFromItem.mockReset();
     storeMocks.toggleSelected.mockReset();
+    storeMocks.tags = [];
     storeMocks.selectedIds = [];
   });
 
@@ -154,6 +160,30 @@ describe('ClipboardItem', () => {
     fireEvent.click(starBtn);
 
     expect(storeMocks.toggleFavorite).toHaveBeenCalledWith(42);
+  });
+
+  it('assigns and removes tags from the row action menu', () => {
+    storeMocks.tags = [
+      { id: 1, name: 'Work', color: '#2563eb', created_at: 0 },
+      { id: 2, name: 'Later', color: '#16a34a', created_at: 0 },
+    ];
+
+    render(
+      <ClipboardItem
+        item={makeTextItem({
+          tags: [{ id: 1, name: 'Work', color: '#2563eb', created_at: 0 }],
+        })}
+        index={1}
+        isSelected={false}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '标签' }));
+    fireEvent.click(screen.getByRole('button', { name: '移除 Work' }));
+    fireEvent.click(screen.getByRole('button', { name: '添加 Later' }));
+
+    expect(storeMocks.removeTagFromItem).toHaveBeenCalledWith(42, 1);
+    expect(storeMocks.assignTagToItem).toHaveBeenCalledWith(42, 2);
   });
 
   it('masks sensitive text previews by default', () => {

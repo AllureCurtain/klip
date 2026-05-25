@@ -19,6 +19,32 @@ const storeMocks = vi.hoisted(() => ({
   fetchTags: vi.fn(),
 }));
 
+const productivityMocks = vi.hoisted(() => ({
+  snippets: [] as Array<{
+    id: number;
+    title: string;
+    content: string;
+    tag_id: number | null;
+    is_favorited: boolean;
+    created_at: number;
+    updated_at: number;
+  }>,
+  sourceRules: [] as Array<{
+    id: number;
+    match_type: 'process' | 'title' | 'any';
+    pattern: string;
+    enabled: boolean;
+    created_at: number;
+    updated_at: number;
+  }>,
+  fetchProductivity: vi.fn(),
+  createSnippet: vi.fn(),
+  deleteSnippet: vi.fn(),
+  createSourceRule: vi.fn(),
+  setSourceRuleEnabled: vi.fn(),
+  deleteSourceRule: vi.fn(),
+}));
+
 const dialogMocks = vi.hoisted(() => ({
   open: vi.fn(),
   save: vi.fn(),
@@ -31,6 +57,7 @@ vi.mock('@tauri-apps/plugin-dialog', () => ({
 
 vi.mock('@/stores', () => ({
   useClipboardStore: () => storeMocks,
+  useProductivityStore: () => productivityMocks,
 }));
 
 vi.mock('react-i18next', () => ({
@@ -69,6 +96,26 @@ vi.mock('react-i18next', () => ({
         'settings.data.restoredWithBackup': 'Restore completed ({{size}}). Pre-restore backup: {{backupPath}}',
         'settings.data.rescanSensitive': 'Rescan sensitive content',
         'settings.data.sensitiveScanned': 'Sensitive content scan completed',
+        'settings.data.snippets': 'Snippets',
+        'settings.data.snippetTitle': 'Snippet title',
+        'settings.data.snippetContent': 'Snippet content',
+        'settings.data.createSnippet': 'Create snippet',
+        'settings.data.copySnippet': 'Copy {{title}}',
+        'settings.data.deleteSnippet': 'Delete snippet {{title}}',
+        'settings.data.sourceRules': 'Source ignore rules',
+        'settings.data.sourceRuleType': 'Rule type',
+        'settings.data.sourceRulePattern': 'Process or window title',
+        'settings.data.createSourceRule': 'Create source rule',
+        'settings.data.toggleSourceRule': 'Toggle source rule {{pattern}}',
+        'settings.data.deleteSourceRule': 'Delete source rule {{pattern}}',
+        'settings.data.readiness': 'Readiness',
+        'settings.data.monitoring': 'Clipboard monitoring',
+        'settings.data.updatesEnabled': 'Enable updates',
+        'settings.data.updateFeedUrl': 'Update feed URL',
+        'settings.data.encryptionEnabled': 'Enable local encryption readiness',
+        'settings.data.encryptionStatus': 'Encryption status: {{status}}',
+        'settings.data.syncFolder': 'Sync folder',
+        'settings.data.pluginFolder': 'Plugin folder',
       };
       const label = dict[key] ?? key;
       return vars
@@ -87,6 +134,14 @@ describe('DataManagementView', () => {
         ...state.config,
         sensitive_capture_policy: 'flag',
         mask_sensitive_previews: true,
+        clipboard_monitor_enabled: true,
+        privacy_mode_until: 0,
+        updates_enabled: false,
+        update_feed_url: '',
+        encryption_enabled: false,
+        encryption_status: 'off',
+        sync_folder: '',
+        plugin_folder: '',
       },
     }));
     storeMocks.tags = [
@@ -106,8 +161,51 @@ describe('DataManagementView', () => {
       pre_restore_backup_size: 1024,
     });
     storeMocks.rescanSensitive.mockResolvedValue(3);
+    productivityMocks.snippets = [
+      {
+        id: 1,
+        title: 'Deploy',
+        content: 'pnpm release:verify',
+        tag_id: null,
+        is_favorited: true,
+        created_at: 1,
+        updated_at: 1,
+      },
+    ];
+    productivityMocks.sourceRules = [
+      {
+        id: 1,
+        match_type: 'process',
+        pattern: '1Password.exe',
+        enabled: true,
+        created_at: 1,
+        updated_at: 1,
+      },
+    ];
+    productivityMocks.createSnippet.mockResolvedValue({
+      id: 2,
+      title: 'Greeting',
+      content: 'Hello team',
+      tag_id: null,
+      is_favorited: false,
+      created_at: 2,
+      updated_at: 2,
+    });
+    productivityMocks.createSourceRule.mockResolvedValue({
+      id: 2,
+      match_type: 'title',
+      pattern: 'Private Browsing',
+      enabled: true,
+      created_at: 2,
+      updated_at: 2,
+    });
     dialogMocks.open.mockResolvedValue('C:\\tmp\\chosen.json');
     dialogMocks.save.mockResolvedValue('C:\\tmp\\chosen.json');
+    Object.assign(navigator, {
+      clipboard: {
+        writeText: vi.fn().mockResolvedValue(undefined),
+      },
+    });
     vi.spyOn(window, 'confirm').mockReturnValue(true);
   });
 
@@ -119,6 +217,12 @@ describe('DataManagementView', () => {
   const openPortability = () => {
     fireEvent.click(screen.getByText('Import, export, and backups'));
   };
+
+  it('loads productivity data when opened', () => {
+    render(<DataManagementView />);
+
+    expect(productivityMocks.fetchProductivity).toHaveBeenCalled();
+  });
 
   it('toggles sensitive content switches through the config store', () => {
     render(<DataManagementView />);
@@ -290,5 +394,90 @@ describe('DataManagementView', () => {
     expect(screen.getByLabelText('JSON import/export path')).toBeTruthy();
     expect(screen.getByLabelText('CSV import/export path')).toBeTruthy();
     expect(screen.getByLabelText('Database backup path')).toBeTruthy();
+  });
+
+  it('creates, copies, and deletes snippets', async () => {
+    render(<DataManagementView />);
+
+    fireEvent.change(screen.getByLabelText('Snippet title'), {
+      target: { value: 'Greeting' },
+    });
+    fireEvent.change(screen.getByLabelText('Snippet content'), {
+      target: { value: 'Hello team' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create snippet' }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(productivityMocks.createSnippet).toHaveBeenCalledWith({
+      title: 'Greeting',
+      content: 'Hello team',
+      tagId: null,
+      isFavorited: false,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy Deploy' }));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('pnpm release:verify');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete snippet Deploy' }));
+    expect(productivityMocks.deleteSnippet).toHaveBeenCalledWith(1);
+  });
+
+  it('creates and toggles source ignore rules', async () => {
+    render(<DataManagementView />);
+
+    fireEvent.change(screen.getByLabelText('Rule type'), {
+      target: { value: 'title' },
+    });
+    fireEvent.change(screen.getByLabelText('Process or window title'), {
+      target: { value: 'Private Browsing' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create source rule' }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(productivityMocks.createSourceRule).toHaveBeenCalledWith({
+      matchType: 'title',
+      pattern: 'Private Browsing',
+      enabled: true,
+    });
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Toggle source rule 1Password.exe' }));
+    expect(productivityMocks.setSourceRuleEnabled).toHaveBeenCalledWith(1, false);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete source rule 1Password.exe' }));
+    expect(productivityMocks.deleteSourceRule).toHaveBeenCalledWith(1);
+  });
+
+  it('updates readiness settings through the config store', () => {
+    render(<DataManagementView />);
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Clipboard monitoring' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'Enable updates' }));
+    fireEvent.change(screen.getByLabelText('Update feed URL'), {
+      target: { value: 'https://updates.example.test/klip.json' },
+    });
+    fireEvent.click(screen.getByRole('switch', { name: 'Enable local encryption readiness' }));
+    fireEvent.change(screen.getByLabelText('Sync folder'), {
+      target: { value: 'C:\\Klip Sync' },
+    });
+    fireEvent.change(screen.getByLabelText('Plugin folder'), {
+      target: { value: 'C:\\Klip Plugins' },
+    });
+
+    const config = useConfigStore.getState().config;
+    expect(config.clipboard_monitor_enabled).toBe(false);
+    expect(config.updates_enabled).toBe(true);
+    expect(config.update_feed_url).toBe('https://updates.example.test/klip.json');
+    expect(config.encryption_enabled).toBe(true);
+    expect(config.sync_folder).toBe('C:\\Klip Sync');
+    expect(config.plugin_folder).toBe('C:\\Klip Plugins');
   });
 });

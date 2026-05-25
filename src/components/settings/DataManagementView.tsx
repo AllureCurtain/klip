@@ -1,15 +1,25 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { open, save } from '@tauri-apps/plugin-dialog';
-import { DatabaseBackup, Download, KeyRound, Plus, Trash2, Upload } from 'lucide-react';
+import {
+  ClipboardCopy,
+  DatabaseBackup,
+  Download,
+  KeyRound,
+  Plus,
+  Shield,
+  Trash2,
+  Upload,
+} from 'lucide-react';
 import { Button, Input } from '@/components/ui';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { useClipboardStore } from '@/stores';
+import { useClipboardStore, useProductivityStore } from '@/stores';
 import { useConfigStore } from '@/stores/configStore';
 import { Switch } from '@/components/ui/switch';
+import type { SourceRuleInput } from '@/types';
 
 const DEFAULT_TAG_COLOR = '#14b8a6';
 
@@ -19,7 +29,17 @@ const DB_FILTER = [{ name: 'SQLite database', extensions: ['db', 'sqlite', 'sqli
 
 export function DataManagementView() {
   const { t } = useTranslation();
-  const { config, setSensitiveCapturePolicy, setMaskSensitivePreviews } = useConfigStore();
+  const {
+    config,
+    setSensitiveCapturePolicy,
+    setMaskSensitivePreviews,
+    setClipboardMonitorEnabled,
+    setUpdatesEnabled,
+    setUpdateFeedUrl,
+    setEncryptionEnabled,
+    setSyncFolder,
+    setPluginFolder,
+  } = useConfigStore();
   const {
     tags,
     createTag,
@@ -34,14 +54,32 @@ export function DataManagementView() {
     fetchItems,
     fetchTags,
   } = useClipboardStore();
+  const {
+    snippets,
+    sourceRules,
+    fetchProductivity,
+    createSnippet,
+    deleteSnippet,
+    createSourceRule,
+    setSourceRuleEnabled,
+    deleteSourceRule,
+  } = useProductivityStore();
   const [tagName, setTagName] = useState('');
   const [tagColor, setTagColor] = useState(DEFAULT_TAG_COLOR);
+  const [snippetTitle, setSnippetTitle] = useState('');
+  const [snippetContent, setSnippetContent] = useState('');
+  const [sourceRuleType, setSourceRuleType] = useState<SourceRuleInput['matchType']>('process');
+  const [sourceRulePattern, setSourceRulePattern] = useState('');
   const [jsonPath, setJsonPath] = useState('');
   const [csvPath, setCsvPath] = useState('');
   const [backupPath, setBackupPath] = useState('');
   const [status, setStatus] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [portabilityOpen, setPortabilityOpen] = useState(false);
+
+  useEffect(() => {
+    void fetchProductivity();
+  }, [fetchProductivity]);
 
   const handleCreateTag = async () => {
     const tag = await createTag(tagName, tagColor);
@@ -59,6 +97,32 @@ export function DataManagementView() {
       return result;
     } finally {
       setBusyAction(null);
+    }
+  };
+
+  const handleCreateSnippet = async () => {
+    const snippet = await createSnippet({
+      title: snippetTitle,
+      content: snippetContent,
+      tagId: null,
+      isFavorited: false,
+    });
+    if (snippet) {
+      setSnippetTitle('');
+      setSnippetContent('');
+      setStatus(t('settings.data.snippetCreated', { title: snippet.title }));
+    }
+  };
+
+  const handleCreateSourceRule = async () => {
+    const rule = await createSourceRule({
+      matchType: sourceRuleType,
+      pattern: sourceRulePattern,
+      enabled: true,
+    });
+    if (rule) {
+      setSourceRulePattern('');
+      setStatus(t('settings.data.sourceRuleCreated', { pattern: rule.pattern }));
     }
   };
 
@@ -184,6 +248,195 @@ export function DataManagementView() {
           ))}
         </div>
       </div>
+
+      <Separator />
+
+      <section className="space-y-2">
+        <Label className="text-xs">{t('settings.data.snippets')}</Label>
+        <div className="grid gap-2">
+          <Label htmlFor="snippet-title" className="sr-only">
+            {t('settings.data.snippetTitle')}
+          </Label>
+          <Input
+            id="snippet-title"
+            value={snippetTitle}
+            onChange={(event) => setSnippetTitle(event.target.value)}
+            placeholder={t('settings.data.snippetTitle')}
+            className="h-7 text-xs"
+          />
+          <Label htmlFor="snippet-content" className="sr-only">
+            {t('settings.data.snippetContent')}
+          </Label>
+          <Input
+            id="snippet-content"
+            value={snippetContent}
+            onChange={(event) => setSnippetContent(event.target.value)}
+            placeholder={t('settings.data.snippetContent')}
+            className="h-7 text-xs"
+          />
+          <Button
+            size="sm"
+            className="h-7 justify-self-start text-xs"
+            onClick={handleCreateSnippet}
+            disabled={snippetTitle.trim() === '' || snippetContent.trim() === ''}
+          >
+            <Plus className="h-3 w-3" />
+            {t('settings.data.createSnippet')}
+          </Button>
+        </div>
+        <div className="space-y-1">
+          {snippets.map((snippet) => (
+            <div
+              key={snippet.id}
+              className="flex items-center gap-2 rounded-md border bg-muted/20 px-2 py-1.5"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-medium">{snippet.title}</p>
+                <p className="truncate text-[10px] text-muted-foreground">
+                  {snippet.content}
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7"
+                aria-label={t('settings.data.copySnippet', { title: snippet.title })}
+                onClick={() => void copyText(snippet.content)}
+              >
+                <ClipboardCopy className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7 text-destructive"
+                aria-label={t('settings.data.deleteSnippet', { title: snippet.title })}
+                onClick={() => void deleteSnippet(snippet.id)}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <Separator />
+
+      <section className="space-y-2">
+        <Label className="text-xs">{t('settings.data.sourceRules')}</Label>
+        <div className="grid grid-cols-[96px_1fr_auto] gap-2">
+          <Label htmlFor="source-rule-type" className="sr-only">
+            {t('settings.data.sourceRuleType')}
+          </Label>
+          <select
+            id="source-rule-type"
+            value={sourceRuleType}
+            onChange={(event) =>
+              setSourceRuleType(event.target.value as SourceRuleInput['matchType'])
+            }
+            className="h-7 rounded-full border border-input bg-card/60 px-2 text-xs"
+          >
+            <option value="process">{t('settings.data.sourceRuleProcess')}</option>
+            <option value="title">{t('settings.data.sourceRuleTitle')}</option>
+            <option value="any">{t('settings.data.sourceRuleAny')}</option>
+          </select>
+          <Label htmlFor="source-rule-pattern" className="sr-only">
+            {t('settings.data.sourceRulePattern')}
+          </Label>
+          <Input
+            id="source-rule-pattern"
+            value={sourceRulePattern}
+            onChange={(event) => setSourceRulePattern(event.target.value)}
+            placeholder={t('settings.data.sourceRulePattern')}
+            className="h-7 text-xs"
+          />
+          <Button
+            size="sm"
+            className="h-7"
+            onClick={handleCreateSourceRule}
+            disabled={sourceRulePattern.trim() === ''}
+          >
+            <Plus className="h-3 w-3" />
+            <span className="sr-only">{t('settings.data.createSourceRule')}</span>
+          </Button>
+        </div>
+        <div className="space-y-1">
+          {sourceRules.map((rule) => (
+            <div
+              key={rule.id}
+              className="flex items-center gap-2 rounded-md border bg-muted/20 px-2 py-1.5"
+            >
+              <Badge variant="outline" className="text-[10px]">
+                {rule.match_type}
+              </Badge>
+              <span className="min-w-0 flex-1 truncate font-mono text-[11px]">
+                {rule.pattern}
+              </span>
+              <Switch
+                aria-label={t('settings.data.toggleSourceRule', { pattern: rule.pattern })}
+                checked={rule.enabled}
+                onCheckedChange={(enabled) => setSourceRuleEnabled(rule.id, enabled)}
+              />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7 text-destructive"
+                aria-label={t('settings.data.deleteSourceRule', { pattern: rule.pattern })}
+                onClick={() => void deleteSourceRule(rule.id)}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <Separator />
+
+      <section className="space-y-3">
+        <div className="flex items-center gap-2">
+          <Shield className="h-3.5 w-3.5 text-muted-foreground" />
+          <Label className="text-xs">{t('settings.data.readiness')}</Label>
+        </div>
+        <ConfigSwitch
+          label={t('settings.data.monitoring')}
+          checked={config.clipboard_monitor_enabled}
+          onCheckedChange={setClipboardMonitorEnabled}
+        />
+        <ConfigSwitch
+          label={t('settings.data.updatesEnabled')}
+          checked={config.updates_enabled}
+          onCheckedChange={setUpdatesEnabled}
+        />
+        <Field
+          id="update-feed-url"
+          label={t('settings.data.updateFeedUrl')}
+          value={config.update_feed_url}
+          onChange={setUpdateFeedUrl}
+          placeholder="https://updates.example.com/klip.json"
+        />
+        <ConfigSwitch
+          label={t('settings.data.encryptionEnabled')}
+          checked={config.encryption_enabled}
+          onCheckedChange={setEncryptionEnabled}
+        />
+        <p className="text-[10px] text-muted-foreground">
+          {t('settings.data.encryptionStatus', { status: config.encryption_status })}
+        </p>
+        <Field
+          id="sync-folder"
+          label={t('settings.data.syncFolder')}
+          value={config.sync_folder}
+          onChange={setSyncFolder}
+          placeholder="C:\\Klip Sync"
+        />
+        <Field
+          id="plugin-folder"
+          label={t('settings.data.pluginFolder')}
+          value={config.plugin_folder}
+          onChange={setPluginFolder}
+          placeholder="C:\\Klip Plugins"
+        />
+      </section>
 
       <Separator />
 
@@ -391,8 +644,54 @@ function PathActions({ id, label, value, onChange, placeholder, actions, busyAct
   );
 }
 
+interface FieldProps {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+}
+
+function Field({ id, label, value, onChange, placeholder }: FieldProps) {
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor={id} className="text-xs">{label}</Label>
+      <Input
+        id={id}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        className="h-7 font-mono text-[11px]"
+      />
+    </div>
+  );
+}
+
+interface ConfigSwitchProps {
+  label: string;
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
+}
+
+function ConfigSwitch({ label, checked, onCheckedChange }: ConfigSwitchProps) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <Label className="text-xs">{label}</Label>
+      <Switch
+        aria-label={label}
+        checked={checked}
+        onCheckedChange={onCheckedChange}
+      />
+    </div>
+  );
+}
+
 function formatBytes(value: number): string {
   if (value < 1024) return `${value} B`;
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
   return `${(value / 1024 / 1024).toFixed(1)} MB`;
+}
+
+async function copyText(value: string): Promise<void> {
+  await navigator.clipboard?.writeText(value);
 }

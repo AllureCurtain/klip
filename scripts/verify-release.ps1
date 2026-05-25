@@ -1,5 +1,8 @@
+[CmdletBinding()]
 param(
-  [switch]$SkipBundle
+  [switch]$SkipBundle,
+  [switch]$ReadinessOnly,
+  [switch]$OutputJson
 )
 
 $ErrorActionPreference = 'Stop'
@@ -14,10 +17,107 @@ function Read-JsonFile($Path) {
   Get-Content -Raw $Path | ConvertFrom-Json
 }
 
-Step 'Checking version metadata'
+function Test-HasValue($Value) {
+  return -not [string]::IsNullOrWhiteSpace([string]$Value)
+}
+
+function Get-EnvValue($Name) {
+  return [Environment]::GetEnvironmentVariable($Name, 'Process')
+}
+
+function Get-ReleaseReadiness($TauriConfig) {
+  $windowsBundle = $TauriConfig.bundle.windows
+  $sources = New-Object System.Collections.Generic.List[string]
+
+  $configThumbprint = $null
+  $configTimestampUrl = $null
+  if ($windowsBundle) {
+    $configThumbprint = [string]$windowsBundle.certificateThumbprint
+    $configTimestampUrl = [string]$windowsBundle.timestampUrl
+  }
+
+  $envThumbprint = Get-EnvValue 'KLIP_WINDOWS_CERTIFICATE_THUMBPRINT'
+  $envCertificatePath = Get-EnvValue 'KLIP_WINDOWS_CERTIFICATE_PATH'
+  $envCertificatePassword = Get-EnvValue 'KLIP_WINDOWS_CERTIFICATE_PASSWORD'
+  $envTimestampUrl = Get-EnvValue 'KLIP_WINDOWS_TIMESTAMP_URL'
+  $envUpdateFeedUrl = Get-EnvValue 'KLIP_UPDATE_FEED_URL'
+
+  if (Test-HasValue $configThumbprint) {
+    $sources.Add('tauri.conf.json:bundle.windows.certificateThumbprint')
+  }
+  if (Test-HasValue $envThumbprint) {
+    $sources.Add('env:KLIP_WINDOWS_CERTIFICATE_THUMBPRINT')
+  }
+  if (Test-HasValue $envCertificatePath) {
+    $sources.Add('env:KLIP_WINDOWS_CERTIFICATE_PATH')
+  }
+
+  $timestampConfigured = (Test-HasValue $configTimestampUrl) -or (Test-HasValue $envTimestampUrl)
+  $signingConfigured = $sources.Count -gt 0
+  $updateConfigured = Test-HasValue $envUpdateFeedUrl
+
+  [pscustomobject]@{
+    signing = [pscustomobject]@{
+      configured = $signingConfigured
+      blocking = $false
+      sources = @($sources)
+      timestampConfigured = $timestampConfigured
+      passwordConfigured = Test-HasValue $envCertificatePassword
+      note = if ($signingConfigured) {
+        'Windows signing inputs are configured. This script does not validate certificate availability.'
+      } else {
+        'Windows signing inputs are not configured. Installers may show SmartScreen or unknown publisher warnings.'
+      }
+    }
+    updates = [pscustomobject]@{
+      configured = $updateConfigured
+      blocking = $false
+      feedUrl = if ($updateConfigured) { [string]$envUpdateFeedUrl } else { '' }
+      note = if ($updateConfigured) {
+        'Update feed URL is configured. This script does not validate hosted feed availability.'
+      } else {
+        'Update feed URL is not configured. Publish updates through GitHub Release/manual installer distribution.'
+      }
+    }
+  }
+}
+
+function Write-ReadinessSummary($Report) {
+  if ($Report.signing.configured) {
+    Write-Host "Windows code signing readiness configured via: $($Report.signing.sources -join ', ')"
+  } else {
+    Write-Host $Report.signing.note
+  }
+
+  if ($Report.signing.timestampConfigured) {
+    Write-Host 'Windows signing timestamp readiness configured.'
+  } else {
+    Write-Host 'Windows signing timestamp URL is not configured.'
+  }
+
+  if ($Report.updates.configured) {
+    Write-Host "Update feed readiness configured: $($Report.updates.feedUrl)"
+  } else {
+    Write-Host $Report.updates.note
+  }
+}
+
+if (-not ($ReadinessOnly -and $OutputJson)) {
+  Step 'Checking version metadata'
+}
 $packageJson = Read-JsonFile 'package.json'
 $tauriConfig = Read-JsonFile 'src-tauri/tauri.conf.json'
 $cargoToml = Get-Content -Raw 'src-tauri/Cargo.toml'
+$readinessReport = Get-ReleaseReadiness $tauriConfig
+
+if ($ReadinessOnly) {
+  if ($OutputJson) {
+    $readinessReport | ConvertTo-Json -Depth 6
+  } else {
+    Write-ReadinessSummary $readinessReport
+  }
+  exit 0
+}
 
 $packageVersion = [string]$packageJson.version
 $tauriVersion = [string]$tauriConfig.version
@@ -37,19 +137,8 @@ if (-not (Select-String -Path 'CHANGELOG.md' -Pattern ([regex]::Escape($packageV
 
 Write-Host "Version metadata OK: $packageVersion"
 
-Step 'Checking distribution caveats'
-$windowsBundle = $tauriConfig.bundle.windows
-$hasWindowsSigning = $false
-if ($windowsBundle) {
-  $hasWindowsSigning = -not [string]::IsNullOrWhiteSpace([string]$windowsBundle.certificateThumbprint)
-}
-
-if ($hasWindowsSigning) {
-  Write-Host "Windows code signing configured for thumbprint $($windowsBundle.certificateThumbprint)"
-} else {
-  Write-Host 'Windows code signing is not configured; installers may show SmartScreen or unknown publisher warnings.'
-}
-Write-Host 'No Tauri auto-updater is configured; publish updates through GitHub Release/manual installer distribution.'
+Step 'Checking distribution readiness'
+Write-ReadinessSummary $readinessReport
 
 Step 'Running frontend lint, tests, and build'
 pnpm lint

@@ -11,6 +11,10 @@ const storeMocks = vi.hoisted(() => ({
   deleteSelected: vi.fn(),
   assignTagToSelected: vi.fn(),
   setFavoriteForSelected: vi.fn(),
+  monitorEnabled: true,
+  privacyModeUntil: 0,
+  setMonitorEnabled: vi.fn(),
+  setPrivacyModeForMinutes: vi.fn(),
   resolvedTheme: 'light' as const,
   setTheme: vi.fn(),
 }));
@@ -28,6 +32,12 @@ vi.mock('@/stores', () => ({
     resolvedTheme: storeMocks.resolvedTheme,
     setTheme: storeMocks.setTheme,
   }),
+  useProductivityStore: () => ({
+    monitorEnabled: storeMocks.monitorEnabled,
+    privacyModeUntil: storeMocks.privacyModeUntil,
+    setMonitorEnabled: storeMocks.setMonitorEnabled,
+    setPrivacyModeForMinutes: storeMocks.setPrivacyModeForMinutes,
+  }),
 }));
 
 type HeaderWithSelectionProps = ComponentProps<typeof Header> & {
@@ -42,6 +52,8 @@ describe('Header', () => {
     cleanup();
     vi.clearAllMocks();
     storeMocks.selectedIds = [];
+    storeMocks.monitorEnabled = true;
+    storeMocks.privacyModeUntil = 0;
   });
 
   it('focuses the search input on render', () => {
@@ -249,6 +261,81 @@ describe('Header', () => {
     fireEvent.click(screen.getByRole('button', { name: '更多操作' }));
     fireEvent.click(screen.getByRole('button', { name: '清空历史' }));
     expect(screen.getByText('清空剪贴板历史')).toBeTruthy();
+  });
+
+  it('exposes pause monitoring and privacy mode actions in the more menu', () => {
+    render(
+      <HeaderWithSelection
+        searchQuery=""
+        onSearchChange={vi.fn()}
+        contentType={null}
+        onContentTypeChange={vi.fn()}
+        showFavorites={false}
+        onShowFavoritesChange={vi.fn()}
+        tags={[]}
+        selectedTagId={null}
+        onSelectedTagChange={vi.fn()}
+        selectionMode={false}
+        onSelectionModeChange={vi.fn()}
+        onSettingsOpen={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '更多操作' }));
+    fireEvent.click(screen.getByRole('button', { name: '暂停监听' }));
+    expect(storeMocks.setMonitorEnabled).toHaveBeenCalledWith(false);
+
+    fireEvent.click(screen.getByRole('button', { name: '更多操作' }));
+    fireEvent.click(screen.getByRole('button', { name: '隐私模式 15 分钟' }));
+    expect(storeMocks.setPrivacyModeForMinutes).toHaveBeenCalledWith(15);
+  });
+
+  it('exposes advanced search filters without crowding the default header', () => {
+    const onAdvancedFiltersChange = vi.fn();
+
+    render(
+      <HeaderWithSelection
+        searchQuery=""
+        onSearchChange={vi.fn()}
+        contentType={null}
+        onContentTypeChange={vi.fn()}
+        showFavorites={false}
+        onShowFavoritesChange={vi.fn()}
+        tags={[]}
+        selectedTagId={null}
+        onSelectedTagChange={vi.fn()}
+        selectionMode={false}
+        onSelectionModeChange={vi.fn()}
+        advancedFilters={{
+          sensitiveOnly: null,
+          exactMatch: false,
+          createdAfter: null,
+          createdBefore: null,
+        }}
+        onAdvancedFiltersChange={onAdvancedFiltersChange}
+        onSettingsOpen={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByRole('switch', { name: '仅敏感内容' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: '高级搜索' }));
+    fireEvent.click(screen.getByRole('switch', { name: '仅敏感内容' }));
+    expect(onAdvancedFiltersChange).toHaveBeenCalledWith(
+      expect.objectContaining({ sensitiveOnly: true })
+    );
+
+    fireEvent.click(screen.getByRole('switch', { name: '精确匹配' }));
+    expect(onAdvancedFiltersChange).toHaveBeenCalledWith(
+      expect.objectContaining({ exactMatch: true })
+    );
+
+    fireEvent.change(screen.getByLabelText('开始日期'), {
+      target: { value: '2026-05-01' },
+    });
+    expect(onAdvancedFiltersChange).toHaveBeenCalledWith(
+      expect.objectContaining({ createdAfter: new Date('2026-05-01T00:00:00').getTime() })
+    );
   });
 
   it('closes the more menu from escape and outside clicks', () => {

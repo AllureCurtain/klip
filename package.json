@@ -16,6 +16,7 @@
     "e2e": "powershell -ExecutionPolicy Bypass -File scripts/run-e2e.ps1",
     "verify": "pnpm lint && pnpm test -- --run && pnpm build && cd src-tauri && cargo fmt -- --check && cargo clippy -- -D warnings && cargo test",
     "release:verify": "powershell -ExecutionPolicy Bypass -File scripts/verify-release.ps1",
+    "release:readiness": "powershell -ExecutionPolicy Bypass -File scripts/verify-release.ps1 -ReadinessOnly",
     "release:smoke": "powershell -ExecutionPolicy Bypass -File scripts/smoke-installers.ps1",
     "prepare": "node scripts/install-hooks.mjs"
   },

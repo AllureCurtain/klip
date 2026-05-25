@@ -8,6 +8,7 @@ import {
   Star,
   Check,
   ShieldAlert,
+  Tags,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
@@ -151,7 +152,16 @@ export function ClipboardItem({
   onSelect,
 }: ClipboardItemProps) {
   const { t } = useTranslation();
-  const { deleteItem, copyItem, toggleFavorite, selectedIds, toggleSelected } =
+  const {
+    deleteItem,
+    copyItem,
+    toggleFavorite,
+    tags,
+    assignTagToItem,
+    removeTagFromItem,
+    selectedIds,
+    toggleSelected,
+  } =
     useClipboardStore();
   const maskSensitivePreviews = useConfigStore(
     (state) => state.config.mask_sensitive_previews
@@ -159,6 +169,7 @@ export function ClipboardItem({
   const [copied, setCopied] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [imagePreviewOpen, setImagePreviewOpen] = useState(false);
+  const [tagMenuOpen, setTagMenuOpen] = useState(false);
   const confirmTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const isBatchSelected = selectedIds.includes(item.id);
 
@@ -192,6 +203,24 @@ export function ClipboardItem({
   const handleToggleFavorite = (e: React.MouseEvent) => {
     e.stopPropagation();
     toggleFavorite(item.id);
+  };
+
+  const handleToggleTagMenu = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setTagMenuOpen((open) => !open);
+  };
+
+  const handleTagAction = (
+    e: React.MouseEvent,
+    tagId: number,
+    assigned: boolean
+  ) => {
+    e.stopPropagation();
+    if (assigned) {
+      removeTagFromItem(item.id, tagId);
+    } else {
+      assignTagToItem(item.id, tagId);
+    }
   };
 
   const handleToggleSelected = (e: React.MouseEvent<HTMLInputElement>) => {
@@ -423,6 +452,54 @@ export function ClipboardItem({
               )}
             />
           </Button>
+          {tags.length > 0 && (
+            <div className="relative">
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={t('clipboard.tags')}
+                title={t('clipboard.tags')}
+                className="size-6"
+                onClick={handleToggleTagMenu}
+              >
+                <Tags className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+              </Button>
+              {tagMenuOpen && (
+                <div
+                  className="absolute right-0 top-7 z-30 min-w-28 rounded-lg border border-border/60 bg-popover p-1 shadow-[var(--shadow-pop)]"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {tags.map((tag) => {
+                    const assigned = item.tags.some((existing) => existing.id === tag.id);
+                    return (
+                      <button
+                        key={tag.id}
+                        type="button"
+                        className="flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-[10px] text-popover-foreground hover:bg-muted"
+                        aria-label={
+                          assigned
+                            ? t('clipboard.removeTag', { name: tag.name })
+                            : t('clipboard.addTag', { name: tag.name })
+                        }
+                        onClick={(e) => handleTagAction(e, tag.id, assigned)}
+                      >
+                        {tag.color && (
+                          <span
+                            className="size-1.5 shrink-0 rounded-full"
+                            style={{ backgroundColor: tag.color }}
+                          />
+                        )}
+                        <span className="truncate">{tag.name}</span>
+                        <span className="ml-auto text-muted-foreground">
+                          {assigned ? t('clipboard.tagAssigned') : t('clipboard.tagAvailable')}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
           <Button
             variant="ghost"
             size="icon"

@@ -12,11 +12,13 @@
 - **历史记录** - 自动保存最近 100 条剪贴板内容
 - **多格式支持** - 支持文本、图片、文件路径
 - **标签与分组** - 按标签和分组组织历史内容
+- **片段管理** - 在设置中维护常用短语、命令和模板，并可一键复制
 - **导入导出** - 支持 JSON / CSV 导入和导出
 - **备份与恢复** - 支持数据库备份、恢复和恢复前自动备份
 - **敏感内容保护** - 自动标记并遮罩密码、API key 等内容
+- **来源忽略规则** - Windows 上可按前台进程或窗口标题跳过采集
 - **快捷键操作** - `Ctrl+Alt+K` 唤起，`Ctrl+Alt+1~9` 快速粘贴
-- **关键词搜索** - 通过包含匹配快速查找历史内容
+- **关键词搜索** - 支持类型、标签、收藏、敏感、精确匹配和日期范围过滤
 - **系统托盘** - 后台常驻，不占用任务栏
 - **本地存储** - 数据完全本地化，隐私安全
 - **开机自启** - 可在设置中开启/关闭，安装包阶段重点验证
@@ -42,7 +44,7 @@
 
 ## 配置与数据
 
-当前版本将历史记录和应用配置统一存储在本地 SQLite 数据库 `klip.db` 中，配置项位于 `app_config` 表。
+当前版本将历史记录、标签、片段、来源忽略规则和应用配置统一存储在本地 SQLite 数据库 `klip.db` 中，配置项位于 `app_config` 表。
 
 - Windows: `%APPDATA%\com.klip.app\klip.db`
 - macOS: `~/Library/Application Support/com.klip.app/klip.db`（后续阶段）
@@ -74,12 +76,15 @@
 本地验证当前 Windows-first MVP 候选版本：
 
 ```bash
+pnpm release:readiness
 pnpm release:verify -SkipBundle
 pnpm release:verify
 pnpm release:smoke
 ```
 
-当前安装包尚未代码签名，Windows 可能显示 SmartScreen 或未知发布者提示。当前版本也没有配置自动更新器；发布更新需要通过 GitHub Release 或手动下载安装包完成。
+`pnpm release:readiness` 会检查 Windows 签名输入和更新源 URL 是否已配置。可通过 `KLIP_WINDOWS_CERTIFICATE_THUMBPRINT`、`KLIP_WINDOWS_CERTIFICATE_PATH`、`KLIP_WINDOWS_CERTIFICATE_PASSWORD`、`KLIP_WINDOWS_TIMESTAMP_URL` 和 `KLIP_UPDATE_FEED_URL` 提供发布环境配置；脚本不会验证真实证书可用性，也不会访问托管更新源。
+
+当前仓库提供签名/更新配置就绪检查和设置项，但不包含代码签名证书、托管更新源、云同步服务或真实插件市场。未配置签名时，Windows 可能显示 SmartScreen 或未知发布者提示；未配置更新源时，发布更新仍通过 GitHub Release 或手动下载安装包完成。
 
 ## 桌面 E2E 测试
 

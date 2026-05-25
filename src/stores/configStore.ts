@@ -50,6 +50,13 @@ interface ConfigState {
   setLanguage: (value: string) => void;
   setSensitiveCapturePolicy: (value: AppConfig['sensitive_capture_policy']) => void;
   setMaskSensitivePreviews: (value: boolean) => void;
+  setClipboardMonitorEnabled: (value: boolean) => void;
+  setPrivacyModeUntil: (value: number) => void;
+  setUpdatesEnabled: (value: boolean) => void;
+  setUpdateFeedUrl: (value: string) => void;
+  setEncryptionEnabled: (value: boolean) => void;
+  setSyncFolder: (value: string) => void;
+  setPluginFolder: (value: string) => void;
   saveChanges: () => Promise<boolean>;
   resetChanges: () => Promise<void>;
 }
@@ -66,6 +73,14 @@ const DEFAULT_CONFIG: AppConfig = {
   language: 'zh-CN',
   sensitive_capture_policy: 'flag',
   mask_sensitive_previews: true,
+  clipboard_monitor_enabled: true,
+  privacy_mode_until: 0,
+  updates_enabled: false,
+  update_feed_url: '',
+  encryption_enabled: false,
+  encryption_status: 'off',
+  sync_folder: '',
+  plugin_folder: '',
 };
 
 export const useConfigStore = create<ConfigState>((set, get) => ({
@@ -93,6 +108,14 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
         sensitive_capture_policy:
           allConfig['sensitive_capture_policy'] === 'skip' ? 'skip' : 'flag',
         mask_sensitive_previews: parseBoolean(allConfig['mask_sensitive_previews'], true),
+        clipboard_monitor_enabled: parseBoolean(allConfig['clipboard_monitor_enabled'], true),
+        privacy_mode_until: parseNumber(allConfig['privacy_mode_until'], 0),
+        updates_enabled: parseBoolean(allConfig['updates_enabled'], false),
+        update_feed_url: allConfig['update_feed_url'] || '',
+        encryption_enabled: parseBoolean(allConfig['encryption_enabled'], false),
+        encryption_status: allConfig['encryption_status'] || 'off',
+        sync_folder: allConfig['sync_folder'] || '',
+        plugin_folder: allConfig['plugin_folder'] || '',
       };
       set({ config, loading: false, hasChanges: false });
     } catch (error) {
@@ -199,6 +222,59 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     }));
   },
 
+  setClipboardMonitorEnabled: (value) => {
+    set((state) => ({
+      config: { ...state.config, clipboard_monitor_enabled: value },
+      hasChanges: true,
+    }));
+  },
+
+  setPrivacyModeUntil: (value) => {
+    set((state) => ({
+      config: { ...state.config, privacy_mode_until: value },
+      hasChanges: true,
+    }));
+  },
+
+  setUpdatesEnabled: (value) => {
+    set((state) => ({
+      config: { ...state.config, updates_enabled: value },
+      hasChanges: true,
+    }));
+  },
+
+  setUpdateFeedUrl: (value) => {
+    set((state) => ({
+      config: { ...state.config, update_feed_url: value },
+      hasChanges: true,
+    }));
+  },
+
+  setEncryptionEnabled: (value) => {
+    set((state) => ({
+      config: {
+        ...state.config,
+        encryption_enabled: value,
+        encryption_status: value ? 'ready' : 'off',
+      },
+      hasChanges: true,
+    }));
+  },
+
+  setSyncFolder: (value) => {
+    set((state) => ({
+      config: { ...state.config, sync_folder: value },
+      hasChanges: true,
+    }));
+  },
+
+  setPluginFolder: (value) => {
+    set((state) => ({
+      config: { ...state.config, plugin_folder: value },
+      hasChanges: true,
+    }));
+  },
+
   saveChanges: async () => {
     const { config } = get();
     set({ loading: true, error: null });
@@ -213,6 +289,14 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
       await configApi.set('language', config.language);
       await configApi.set('sensitive_capture_policy', config.sensitive_capture_policy);
       await configApi.set('mask_sensitive_previews', config.mask_sensitive_previews.toString());
+      await configApi.set('clipboard_monitor_enabled', config.clipboard_monitor_enabled.toString());
+      await configApi.set('privacy_mode_until', config.privacy_mode_until.toString());
+      await configApi.set('updates_enabled', config.updates_enabled.toString());
+      await configApi.set('update_feed_url', config.update_feed_url);
+      await configApi.set('encryption_enabled', config.encryption_enabled.toString());
+      await configApi.set('encryption_status', config.encryption_status);
+      await configApi.set('sync_folder', config.sync_folder);
+      await configApi.set('plugin_folder', config.plugin_folder);
       set({ loading: false, hasChanges: false });
       return true;
     } catch (error) {

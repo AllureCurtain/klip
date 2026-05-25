@@ -109,7 +109,16 @@ INSERT INTO app_config (key, value, updated_at) VALUES
     ('search_debounce_ms', '150', strftime('%s', 'now') * 1000),
     ('language', 'zh-CN', strftime('%s', 'now') * 1000),
     ('sensitive_capture_policy', 'flag', strftime('%s', 'now') * 1000),
-    ('mask_sensitive_previews', 'true', strftime('%s', 'now') * 1000);
+    ('mask_sensitive_previews', 'true', strftime('%s', 'now') * 1000),
+    ('clipboard_monitor_enabled', 'true', strftime('%s', 'now') * 1000),
+    ('privacy_mode_until', '0', strftime('%s', 'now') * 1000),
+    ('advanced_search_exact', 'false', strftime('%s', 'now') * 1000),
+    ('updates_enabled', 'false', strftime('%s', 'now') * 1000),
+    ('update_feed_url', '', strftime('%s', 'now') * 1000),
+    ('encryption_enabled', 'false', strftime('%s', 'now') * 1000),
+    ('encryption_status', 'off', strftime('%s', 'now') * 1000),
+    ('sync_folder', '', strftime('%s', 'now') * 1000),
+    ('plugin_folder', '', strftime('%s', 'now') * 1000);
 ```
 
 #### 配置项说明
@@ -128,6 +137,76 @@ INSERT INTO app_config (key, value, updated_at) VALUES
 | language | string | zh-CN | UI 语言 |
 | sensitive_capture_policy | flag/skip | flag | 敏感内容保存策略；`skip` 会跳过新捕获的敏感文本 |
 | mask_sensitive_previews | boolean | true | 列表中默认遮罩敏感内容预览 |
+| clipboard_monitor_enabled | boolean | true | 剪贴板监听开关；设为 false 会跳过新采集 |
+| privacy_mode_until | number | 0 | 隐私模式结束时间；未来毫秒时间戳会跳过新采集 |
+| advanced_search_exact | boolean | false | 高级搜索精确匹配 UI 默认项 |
+| updates_enabled | boolean | false | 更新能力本地就绪开关；当前不包含托管更新源 |
+| update_feed_url | string | 空 | 更新源 URL 配置；发布脚本可检查 `KLIP_UPDATE_FEED_URL` |
+| encryption_enabled | boolean | false | 数据库加密本地就绪开关；当前不执行真实加密迁移 |
+| encryption_status | string | off | 加密状态显示字段 |
+| sync_folder | string | 空 | 同步目录配置；当前不包含同步服务 |
+| plugin_folder | string | 空 | 插件目录配置；当前不包含插件运行时或市场 |
+
+---
+
+### 2.3 snippets (常用片段表)
+
+存储用户手动维护的常用短语、命令和模板。
+
+```sql
+CREATE TABLE snippets (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    title           TEXT NOT NULL,
+    content         TEXT NOT NULL,
+    tag_id          INTEGER,
+    is_favorited    INTEGER NOT NULL DEFAULT 0,
+    created_at      INTEGER NOT NULL,
+    updated_at      INTEGER NOT NULL,
+    FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE SET NULL
+);
+
+CREATE INDEX idx_snippets_updated_at ON snippets(updated_at DESC);
+```
+
+### 2.4 clipboard_source_rules (来源忽略规则表)
+
+存储剪贴板采集来源忽略规则。Windows 运行时会读取前台进程名和窗口标题并匹配规则；非 Windows 平台当前不做来源识别。
+
+```sql
+CREATE TABLE clipboard_source_rules (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    match_type      TEXT NOT NULL,              -- process | title | any
+    pattern         TEXT NOT NULL,
+    enabled         INTEGER NOT NULL DEFAULT 1,
+    created_at      INTEGER NOT NULL,
+    updated_at      INTEGER NOT NULL
+);
+
+CREATE INDEX idx_source_rules_enabled
+ON clipboard_source_rules(enabled, match_type);
+```
+
+### 2.5 tags / clipboard_item_tags (标签表)
+
+```sql
+CREATE TABLE tags (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    name        TEXT NOT NULL UNIQUE,
+    color       TEXT,
+    created_at  INTEGER NOT NULL
+);
+
+CREATE TABLE clipboard_item_tags (
+    item_id INTEGER NOT NULL,
+    tag_id  INTEGER NOT NULL,
+    PRIMARY KEY (item_id, tag_id),
+    FOREIGN KEY (item_id) REFERENCES clipboard_items(id) ON DELETE CASCADE,
+    FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_clipboard_item_tags_tag_id
+ON clipboard_item_tags(tag_id, item_id);
+```
 
 ---
 
@@ -146,6 +225,9 @@ pub struct ClipboardItem {
     pub hash: String,
     pub size: i64,
     pub is_favorited: bool,
+    pub is_sensitive: bool,
+    pub sensitivity_reason: Option<String>,
+    pub tags: Vec<Tag>,
     pub created_at: i64,
     pub last_used_at: i64,
 }
@@ -155,6 +237,27 @@ pub struct ClipboardItem {
 pub struct ConfigEntry {
     pub key: String,
     pub value: String,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Snippet {
+    pub id: i64,
+    pub title: String,
+    pub content: String,
+    pub tag_id: Option<i64>,
+    pub is_favorited: bool,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SourceRule {
+    pub id: i64,
+    pub match_type: String,
+    pub pattern: String,
+    pub enabled: bool,
+    pub created_at: i64,
     pub updated_at: i64,
 }
 ```
@@ -314,6 +417,10 @@ pub struct RestoreSummary {
 | idx_clipboard_preview | 搜索优化 |
 | idx_clipboard_content_type | 类型筛选 |
 | idx_clipboard_sensitive | 敏感条目筛选和排序 |
+| idx_clipboard_favorite_last_used | 收藏筛选和排序 |
+| idx_clipboard_item_tags_tag_id | 标签筛选 |
+| idx_snippets_updated_at | 片段列表排序 |
+| idx_source_rules_enabled | 启用来源规则读取 |
 
 ### 7.2 查询优化
 

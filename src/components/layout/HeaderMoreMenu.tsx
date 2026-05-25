@@ -4,7 +4,10 @@ import {
   ListChecks,
   MoreHorizontal,
   Moon,
+  Pause,
+  Play,
   Settings,
+  Shield,
   Star,
   Sun,
   Trash2,
@@ -25,6 +28,10 @@ interface HeaderMoreMenuProps {
   onSettingsOpen: () => void;
   onToggleTheme: () => void;
   resolvedTheme: 'light' | 'dark';
+  monitorEnabled: boolean;
+  privacyModeUntil: number;
+  onMonitorEnabledChange: (enabled: boolean) => void;
+  onPrivacyModeForMinutes: (minutes: number) => void;
 }
 
 export function HeaderMoreMenu({
@@ -39,6 +46,10 @@ export function HeaderMoreMenu({
   onSettingsOpen,
   onToggleTheme,
   resolvedTheme,
+  monitorEnabled,
+  privacyModeUntil,
+  onMonitorEnabledChange,
+  onPrivacyModeForMinutes,
 }: HeaderMoreMenuProps) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
@@ -128,6 +139,42 @@ export function HeaderMoreMenu({
             />
             <span>{t('header.showFavorites')}</span>
           </button>
+
+          <div className="mt-1 border-t border-border/50 pt-1">
+            <button
+              type="button"
+              className={cn(
+                'flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-muted',
+                !monitorEnabled && 'bg-accent text-accent-foreground'
+              )}
+              aria-pressed={!monitorEnabled}
+              onClick={() =>
+                runAndClose(() => onMonitorEnabledChange(!monitorEnabled))
+              }
+            >
+              {monitorEnabled ? (
+                <Pause className="h-3.5 w-3.5" />
+              ) : (
+                <Play className="h-3.5 w-3.5" />
+              )}
+              <span>
+                {monitorEnabled
+                  ? t('header.pauseMonitoring')
+                  : t('header.resumeMonitoring')}
+              </span>
+            </button>
+            <button
+              type="button"
+              className={cn(
+                'flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-muted',
+                privacyModeUntil > Date.now() && 'bg-accent text-accent-foreground'
+              )}
+              onClick={() => runAndClose(() => onPrivacyModeForMinutes(15))}
+            >
+              <Shield className="h-3.5 w-3.5" />
+              <span>{t('header.privacyMode15')}</span>
+            </button>
+          </div>
 
           {tags.length > 0 && (
             <div className="mt-1 border-t border-border/50 pt-1">

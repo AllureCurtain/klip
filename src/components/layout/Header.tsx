@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import {
   Search,
   FileText,
+  Filter,
   Image,
   FolderOpen,
 } from 'lucide-react';
@@ -15,11 +16,16 @@ import {
   DialogFooter,
   DialogDescription,
 } from '@/components/ui/dialog';
-import { useThemeStore, useClipboardStore } from '@/stores';
+import { useThemeStore, useClipboardStore, useProductivityStore } from '@/stores';
 import { cn } from '@/lib/utils';
 import { HeaderMoreMenu } from './HeaderMoreMenu';
 import { SelectionToolbar } from './SelectionToolbar';
-import type { Tag } from '@/types';
+import type { ClipboardQueryOptions, Tag } from '@/types';
+
+export type HeaderAdvancedFilters = Pick<
+  ClipboardQueryOptions,
+  'sensitiveOnly' | 'exactMatch' | 'createdAfter' | 'createdBefore'
+>;
 
 interface HeaderProps {
   searchQuery: string;
@@ -31,6 +37,8 @@ interface HeaderProps {
   tags: Tag[];
   selectedTagId: number | null;
   onSelectedTagChange: (tagId: number | null) => void;
+  advancedFilters?: HeaderAdvancedFilters;
+  onAdvancedFiltersChange?: (filters: HeaderAdvancedFilters) => void;
   selectionMode?: boolean;
   onSelectionModeChange?: (enabled: boolean) => void;
   onSettingsOpen: () => void;
@@ -46,6 +54,13 @@ export function Header({
   tags,
   selectedTagId,
   onSelectedTagChange,
+  advancedFilters = {
+    sensitiveOnly: null,
+    exactMatch: false,
+    createdAfter: null,
+    createdBefore: null,
+  },
+  onAdvancedFiltersChange = () => undefined,
   selectionMode = false,
   onSelectionModeChange = () => undefined,
   onSettingsOpen,
@@ -60,7 +75,14 @@ export function Header({
     assignTagToSelected,
     setFavoriteForSelected,
   } = useClipboardStore();
+  const {
+    monitorEnabled,
+    privacyModeUntil,
+    setMonitorEnabled,
+    setPrivacyModeForMinutes,
+  } = useProductivityStore();
   const [clearDialogOpen, setClearDialogOpen] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
 
   const contentFilters: {
@@ -117,6 +139,17 @@ export function Header({
               className="h-7 pl-8 pr-3 text-xs"
             />
           </div>
+          <Button
+            variant={hasActiveAdvancedFilters(advancedFilters) ? 'secondary' : 'ghost'}
+            size="icon"
+            className="size-7 shrink-0"
+            onClick={() => setAdvancedOpen((open) => !open)}
+            aria-label={t('header.advancedSearch')}
+            aria-expanded={advancedOpen}
+            title={t('header.advancedSearch')}
+          >
+            <Filter className="h-3.5 w-3.5" />
+          </Button>
           <HeaderMoreMenu
             showFavorites={showFavorites}
             onShowFavoritesChange={onShowFavoritesChange}
@@ -129,8 +162,68 @@ export function Header({
             onSettingsOpen={onSettingsOpen}
             onToggleTheme={toggleTheme}
             resolvedTheme={resolvedTheme}
+            monitorEnabled={monitorEnabled}
+            privacyModeUntil={privacyModeUntil}
+            onMonitorEnabledChange={setMonitorEnabled}
+            onPrivacyModeForMinutes={setPrivacyModeForMinutes}
           />
         </div>
+
+        {advancedOpen && (
+          <div className="mx-2.5 mb-2 rounded-md border bg-muted/20 px-2.5 py-2">
+            <div className="grid grid-cols-2 gap-2">
+              <label className="flex items-center justify-between gap-2 text-[11px]">
+                <span>{t('header.advanced.sensitiveOnly')}</span>
+                <input
+                  type="checkbox"
+                  role="switch"
+                  aria-label={t('header.advanced.sensitiveOnly')}
+                  checked={advancedFilters.sensitiveOnly === true}
+                  onChange={(event) =>
+                    onAdvancedFiltersChange({
+                      ...advancedFilters,
+                      sensitiveOnly: event.target.checked ? true : null,
+                    })
+                  }
+                />
+              </label>
+              <label className="flex items-center justify-between gap-2 text-[11px]">
+                <span>{t('header.advanced.exactMatch')}</span>
+                <input
+                  type="checkbox"
+                  role="switch"
+                  aria-label={t('header.advanced.exactMatch')}
+                  checked={advancedFilters.exactMatch === true}
+                  onChange={(event) =>
+                    onAdvancedFiltersChange({
+                      ...advancedFilters,
+                      exactMatch: event.target.checked,
+                    })
+                  }
+                />
+              </label>
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <DateField
+                id="advanced-created-after"
+                label={t('header.advanced.createdAfter')}
+                value={advancedFilters.createdAfter}
+                onChange={(createdAfter) =>
+                  onAdvancedFiltersChange({ ...advancedFilters, createdAfter })
+                }
+              />
+              <DateField
+                id="advanced-created-before"
+                label={t('header.advanced.createdBefore')}
+                value={advancedFilters.createdBefore}
+                endOfDay
+                onChange={(createdBefore) =>
+                  onAdvancedFiltersChange({ ...advancedFilters, createdBefore })
+                }
+              />
+            </div>
+          </div>
+        )}
 
         <div className="flex items-center gap-1 px-2.5 pb-2">
           {contentFilters.map((filter) => (
@@ -191,4 +284,48 @@ export function Header({
       </Dialog>
     </>
   );
+}
+
+function hasActiveAdvancedFilters(filters: HeaderAdvancedFilters): boolean {
+  return (
+    filters.sensitiveOnly !== null ||
+    filters.exactMatch === true ||
+    filters.createdAfter !== null ||
+    filters.createdBefore !== null
+  );
+}
+
+interface DateFieldProps {
+  id: string;
+  label: string;
+  value?: number | null;
+  endOfDay?: boolean;
+  onChange: (value: number | null) => void;
+}
+
+function DateField({ id, label, value, endOfDay = false, onChange }: DateFieldProps) {
+  return (
+    <label htmlFor={id} className="space-y-1 text-[11px]">
+      <span className="block text-muted-foreground">{label}</span>
+      <Input
+        id={id}
+        type="date"
+        value={value ? toDateInputValue(value) : ''}
+        onChange={(event) => onChange(dateInputToMillis(event.target.value, endOfDay))}
+        className="h-7 px-2 text-[11px]"
+      />
+    </label>
+  );
+}
+
+function toDateInputValue(value: number): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toISOString().slice(0, 10);
+}
+
+function dateInputToMillis(value: string, endOfDay: boolean): number | null {
+  if (!value) return null;
+  const date = new Date(`${value}T${endOfDay ? '23:59:59.999' : '00:00:00'}`);
+  return Number.isNaN(date.getTime()) ? null : date.getTime();
 }

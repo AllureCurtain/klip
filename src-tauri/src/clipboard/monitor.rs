@@ -7,7 +7,8 @@ use tauri::{AppHandle, Emitter, Manager};
 
 #[cfg(target_os = "windows")]
 use crate::clipboard::format::{ExtractedContent, FormatStrategyRegistry};
-use crate::database::{self, NewClipboardItem};
+use crate::database::{self, ClipboardItem, NewClipboardItem};
+use crate::{AppError, Database};
 
 #[cfg(target_os = "windows")]
 use clipboard_master::{CallbackResult, ClipboardHandler, Master};
@@ -19,6 +20,14 @@ static LAST_HASH: std::sync::OnceLock<std::sync::Mutex<String>> = std::sync::Onc
 
 #[cfg(target_os = "windows")]
 const CLIPBOARD_SETTLE_DELAY: std::time::Duration = std::time::Duration::from_millis(150);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CaptureGateDecision {
+    Capture,
+    SkipMonitoringDisabled,
+    SkipPrivacyMode,
+    SkipSourceRule,
+}
 
 #[cfg(target_os = "windows")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -132,13 +141,28 @@ impl ClipboardMonitor {
                         continue;
                     }
 
+                    let source = current_clipboard_source();
+                    if let Some(reason) = should_skip_capture(
+                        &app_handle,
+                        source.process_name(),
+                        source.window_title(),
+                    ) {
+                        tracing::info!("Clipboard capture skipped: {:?}", reason);
+                        continue;
+                    }
+
                     tracing::info!("Clipboard change detected, extracting content...");
 
                     let start = std::time::Instant::now();
                     let extracted = extract_clipboard_content_with_retry();
                     if let Some(extracted) = extracted {
                         if let Some(item) = process_extracted_content(extracted) {
-                            save_clipboard_item(&app_handle, &item);
+                            save_clipboard_item(
+                                &app_handle,
+                                &item,
+                                source.process_name(),
+                                source.window_title(),
+                            );
                         }
                     }
                     let elapsed = start.elapsed();
@@ -181,9 +205,15 @@ impl ClipboardMonitor {
             tracing::info!("Starting clipboard monitor (polling-based)");
 
             while running.load(Ordering::Relaxed) {
+                if let Some(reason) = should_skip_capture(&app_handle, None, None) {
+                    tracing::debug!("Clipboard capture skipped: {:?}", reason);
+                    thread::sleep(std::time::Duration::from_millis(500));
+                    continue;
+                }
+
                 if let Ok(text) = read_platform_text() {
                     if let Some(item) = process_extracted_text(&text) {
-                        save_clipboard_item(&app_handle, &item);
+                        save_clipboard_item(&app_handle, &item, None, None);
                     }
                 }
 
@@ -333,12 +363,17 @@ fn process_extracted_text(text: &str) -> Option<NewClipboardItem> {
     })
 }
 
-fn save_clipboard_item(app_handle: &AppHandle, item: &NewClipboardItem) {
+fn save_clipboard_item(
+    app_handle: &AppHandle,
+    item: &NewClipboardItem,
+    process_name: Option<&str>,
+    window_title: Option<&str>,
+) {
     tracing::info!("Saving clipboard item to database...");
     let db = app_handle.state::<database::Database>();
 
-    match database::clipboard::insert(&db, item) {
-        Ok(saved_item) => {
+    match insert_from_monitor(&db, item, process_name, window_title) {
+        Ok(Some(saved_item)) => {
             tracing::info!("Clipboard item saved, id: {}", saved_item.id);
             if let Err(e) = app_handle.emit("clipboard-updated", &saved_item) {
                 tracing::warn!("Failed to emit clipboard-updated event: {}", e);
@@ -354,10 +389,162 @@ fn save_clipboard_item(app_handle: &AppHandle, item: &NewClipboardItem) {
                 }
             }
         }
+        Ok(None) => {
+            tracing::info!("Clipboard item skipped by capture gate");
+        }
         Err(e) => {
             tracing::error!("Failed to save clipboard item: {}", e);
         }
     }
+}
+
+pub fn insert_from_monitor(
+    db: &Database,
+    item: &NewClipboardItem,
+    process_name: Option<&str>,
+    window_title: Option<&str>,
+) -> Result<Option<ClipboardItem>, AppError> {
+    if capture_gate_decision(db, process_name, window_title)? != CaptureGateDecision::Capture {
+        return Ok(None);
+    }
+
+    database::clipboard::insert(db, item).map(Some)
+}
+
+pub fn capture_gate_decision(
+    db: &Database,
+    process_name: Option<&str>,
+    window_title: Option<&str>,
+) -> Result<CaptureGateDecision, AppError> {
+    let enabled = database::config::get(db, "clipboard_monitor_enabled")?
+        .unwrap_or_else(|| "true".to_string());
+    if enabled != "true" {
+        return Ok(CaptureGateDecision::SkipMonitoringDisabled);
+    }
+
+    let privacy_until = database::config::get(db, "privacy_mode_until")?
+        .and_then(|value| value.parse::<i64>().ok())
+        .unwrap_or(0);
+    if privacy_until > now_millis() {
+        return Ok(CaptureGateDecision::SkipPrivacyMode);
+    }
+
+    if database::productization::source_should_be_ignored(db, process_name, window_title)? {
+        return Ok(CaptureGateDecision::SkipSourceRule);
+    }
+
+    Ok(CaptureGateDecision::Capture)
+}
+
+fn should_skip_capture(
+    app_handle: &AppHandle,
+    process_name: Option<&str>,
+    window_title: Option<&str>,
+) -> Option<CaptureGateDecision> {
+    let db = app_handle.state::<database::Database>();
+    match capture_gate_decision(&db, process_name, window_title) {
+        Ok(CaptureGateDecision::Capture) => None,
+        Ok(decision) => Some(decision),
+        Err(error) => {
+            tracing::warn!("Failed to evaluate clipboard capture gate: {}", error);
+            None
+        }
+    }
+}
+
+fn now_millis() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as i64
+}
+
+#[derive(Default)]
+struct ClipboardSource {
+    process_name: Option<String>,
+    window_title: Option<String>,
+}
+
+impl ClipboardSource {
+    fn process_name(&self) -> Option<&str> {
+        self.process_name.as_deref()
+    }
+
+    fn window_title(&self) -> Option<&str> {
+        self.window_title.as_deref()
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn current_clipboard_source() -> ClipboardSource {
+    use windows::core::PWSTR;
+    use windows::Win32::Foundation::CloseHandle;
+    use windows::Win32::System::Threading::{
+        OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32,
+        PROCESS_QUERY_LIMITED_INFORMATION,
+    };
+    use windows::Win32::UI::WindowsAndMessaging::{
+        GetForegroundWindow, GetWindowTextLengthW, GetWindowTextW, GetWindowThreadProcessId,
+    };
+
+    unsafe {
+        let hwnd = GetForegroundWindow();
+        if hwnd.0.is_null() {
+            return ClipboardSource::default();
+        }
+
+        let title = {
+            let len = GetWindowTextLengthW(hwnd);
+            if len > 0 {
+                let mut buffer = vec![0u16; len as usize + 1];
+                let copied = GetWindowTextW(hwnd, &mut buffer);
+                if copied > 0 {
+                    Some(String::from_utf16_lossy(&buffer[..copied as usize]))
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        };
+
+        let mut pid = 0u32;
+        let _ = GetWindowThreadProcessId(hwnd, Some(&mut pid));
+        let process_name = if pid > 0 {
+            OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid)
+                .ok()
+                .and_then(|handle| {
+                    let mut buffer = vec![0u16; 32768];
+                    let mut len = buffer.len() as u32;
+                    let result = QueryFullProcessImageNameW(
+                        handle,
+                        PROCESS_NAME_WIN32,
+                        PWSTR::from_raw(buffer.as_mut_ptr()),
+                        &mut len,
+                    );
+                    let _ = CloseHandle(handle);
+                    result.ok().and_then(|_| {
+                        let path = String::from_utf16_lossy(&buffer[..len as usize]);
+                        std::path::Path::new(&path)
+                            .file_name()
+                            .and_then(|name| name.to_str())
+                            .map(|name| name.to_string())
+                    })
+                })
+        } else {
+            None
+        };
+
+        ClipboardSource {
+            process_name,
+            window_title: title,
+        }
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn current_clipboard_source() -> ClipboardSource {
+    ClipboardSource::default()
 }
 
 pub fn start_monitor(app_handle: AppHandle) -> Result<(), crate::AppError> {
@@ -365,11 +552,98 @@ pub fn start_monitor(app_handle: AppHandle) -> Result<(), crate::AppError> {
     monitor.start().map_err(crate::AppError::Clipboard)
 }
 
-#[cfg(all(test, target_os = "windows"))]
+#[cfg(test)]
 mod tests {
+    use crate::database::{self, ContentType, Database, NewClipboardItem, SourceRuleInput};
+    use rusqlite::Connection;
+    use sha2::{Digest, Sha256};
+
+    #[cfg(target_os = "windows")]
     use super::{drain_pending_events, ClipboardEventQueue, EnqueueResult};
 
+    fn test_db() -> Database {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")
+            .unwrap();
+        let db = Database::from_conn(conn);
+        db.init_schema().unwrap();
+        db
+    }
+
+    fn text_item(content: &str) -> NewClipboardItem {
+        NewClipboardItem {
+            content_type: ContentType::Text,
+            data: content.as_bytes().to_vec(),
+            preview: Some(content.to_string()),
+            hash: format!("{:x}", Sha256::digest(content.as_bytes())),
+            size: content.len() as i64,
+            metadata: None,
+        }
+    }
+
     #[test]
+    fn capture_gate_skips_when_monitoring_is_disabled() {
+        let db = test_db();
+        database::config::set(&db, "clipboard_monitor_enabled", "false").unwrap();
+
+        let decision = super::capture_gate_decision(&db, None, None).unwrap();
+
+        assert_eq!(decision, super::CaptureGateDecision::SkipMonitoringDisabled);
+    }
+
+    #[test]
+    fn capture_gate_skips_while_privacy_mode_is_active() {
+        let db = test_db();
+        database::config::set(
+            &db,
+            "privacy_mode_until",
+            &(super::now_millis() + 60_000).to_string(),
+        )
+        .unwrap();
+
+        let decision = super::capture_gate_decision(&db, None, None).unwrap();
+
+        assert_eq!(decision, super::CaptureGateDecision::SkipPrivacyMode);
+    }
+
+    #[test]
+    fn capture_gate_skips_when_source_rule_matches() {
+        let db = test_db();
+        database::productization::create_source_rule(
+            &db,
+            SourceRuleInput {
+                match_type: "process".into(),
+                pattern: "1password.exe".into(),
+                enabled: true,
+            },
+        )
+        .unwrap();
+
+        let decision =
+            super::capture_gate_decision(&db, Some("1Password.exe"), Some("Unlocked")).unwrap();
+
+        assert_eq!(decision, super::CaptureGateDecision::SkipSourceRule);
+    }
+
+    #[test]
+    fn insert_from_monitor_respects_capture_gate_without_touching_manual_insert() {
+        let db = test_db();
+        database::config::set(&db, "clipboard_monitor_enabled", "false").unwrap();
+        let item = text_item("monitor should skip");
+
+        let result = super::insert_from_monitor(&db, &item, None, None).unwrap();
+
+        assert!(result.is_none());
+        assert!(database::clipboard::get_list(&db, 100, 0)
+            .unwrap()
+            .is_empty());
+
+        let manual = database::clipboard::insert(&db, &item).unwrap();
+        assert_eq!(manual.preview.as_deref(), Some("monitor should skip"));
+    }
+
+    #[test]
+    #[cfg(target_os = "windows")]
     fn clipboard_event_queue_coalesces_while_worker_is_busy() {
         let (queue, rx) = ClipboardEventQueue::new();
 
@@ -382,6 +656,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "windows")]
     fn clipboard_event_queue_reports_disconnected_worker() {
         let (queue, rx) = ClipboardEventQueue::new();
         drop(rx);
@@ -390,6 +665,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "windows")]
     fn drain_pending_events_detects_burst_after_worker_starts_processing() {
         let (queue, rx) = ClipboardEventQueue::new();
 

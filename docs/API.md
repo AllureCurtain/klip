@@ -99,6 +99,35 @@ ClipboardItem[]
 
 ---
 
+#### `search_clipboard_advanced`
+
+在关键词搜索基础上叠加类型、收藏、敏感、标签、精确匹配和创建时间范围过滤。
+
+**参数**:
+```typescript
+{
+  query: {
+    query: string;
+    contentType?: 'text' | 'image' | 'file' | null;
+    favoriteOnly?: boolean;
+    sensitiveOnly?: boolean | null;
+    tagId?: number | null;
+    exactMatch?: boolean;
+    createdAfter?: number | null;  // 毫秒时间戳
+    createdBefore?: number | null; // 毫秒时间戳
+    limit?: number;
+    offset?: number;
+  }
+}
+```
+
+**返回**:
+```typescript
+ClipboardItem[]
+```
+
+---
+
 #### `get_clipboard_by_id`
 
 获取单条剪贴板记录。
@@ -359,7 +388,140 @@ number
 
 ---
 
-### 1.3 配置管理
+### 1.3 片段和来源规则
+
+#### `list_snippets` / `search_snippets`
+
+返回全部片段，或按标题/内容搜索片段。
+
+**参数**:
+```typescript
+// list_snippets
+{}
+
+// search_snippets
+{ query: string }
+```
+
+**返回**:
+```typescript
+Snippet[]
+```
+
+---
+
+#### `create_snippet` / `update_snippet`
+
+创建或更新常用片段。
+
+**参数**:
+```typescript
+{
+  id?: number; // update_snippet 需要
+  input: {
+    title: string;
+    content: string;
+    tagId: number | null;
+    isFavorited: boolean;
+  }
+}
+```
+
+**返回**:
+```typescript
+Snippet
+```
+
+---
+
+#### `delete_snippet`
+
+删除片段。
+
+**参数**:
+```typescript
+{ id: number }
+```
+
+**返回**:
+```typescript
+void
+```
+
+---
+
+#### `list_source_rules`
+
+返回剪贴板来源忽略规则。
+
+**参数**: 无
+
+**返回**:
+```typescript
+SourceRule[]
+```
+
+---
+
+#### `create_source_rule` / `update_source_rule`
+
+创建或更新来源忽略规则。Windows 运行时会用前台进程名和窗口标题匹配这些规则；非 Windows 平台当前只应用监听/隐私模式开关，不做来源识别。
+
+**参数**:
+```typescript
+{
+  id?: number; // update_source_rule 需要
+  input: {
+    matchType: 'process' | 'title' | 'any';
+    pattern: string;
+    enabled: boolean;
+  }
+}
+```
+
+**返回**:
+```typescript
+SourceRule
+```
+
+---
+
+#### `set_source_rule_enabled`
+
+启用或禁用来源忽略规则。
+
+**参数**:
+```typescript
+{
+  id: number;
+  enabled: boolean;
+}
+```
+
+**返回**:
+```typescript
+SourceRule
+```
+
+---
+
+#### `delete_source_rule`
+
+删除来源忽略规则。
+
+**参数**:
+```typescript
+{ id: number }
+```
+
+**返回**:
+```typescript
+void
+```
+
+---
+
+### 1.4 配置管理
 
 #### `get_config`
 
@@ -416,11 +578,14 @@ void
 - 当前支持的快速粘贴前缀为 `Ctrl+Alt`，实际生效组合为 `Ctrl+Alt+1` 到 `Ctrl+Alt+9`
 - `sensitive_capture_policy=skip` 会让后端跳过新捕获的敏感文本
 - `mask_sensitive_previews` 由前端列表渲染消费，默认遮罩敏感内容预览
+- `clipboard_monitor_enabled=false` 会让后端监听器跳过新采集
+- `privacy_mode_until` 为未来毫秒时间戳时会让后端监听器跳过新采集
+- `updates_enabled`、`update_feed_url`、`encryption_enabled`、`encryption_status`、`sync_folder`、`plugin_folder` 是本地就绪/配置项；当前仓库不包含托管更新源、真实加密迁移、同步服务或插件运行时
 - 其他配置键当前主要负责持久化，不保证立即产生运行时副作用
 
 ---
 
-### 1.4 系统操作
+### 1.5 系统操作
 
 #### `toggle_window`
 
@@ -614,10 +779,67 @@ interface AppConfig {
   language: string;
   sensitive_capture_policy: 'flag' | 'skip';
   mask_sensitive_previews: boolean;
+  clipboard_monitor_enabled: boolean;
+  privacy_mode_until: number;
+  updates_enabled: boolean;
+  update_feed_url: string;
+  encryption_enabled: boolean;
+  encryption_status: string;
+  sync_folder: string;
+  plugin_folder: string;
 }
 ```
 
-### 3.4 ImportSummary / BackupSummary / RestoreSummary
+### 3.4 Snippet / SourceRule / AdvancedSearchQuery
+
+```typescript
+interface Snippet {
+  id: number;
+  title: string;
+  content: string;
+  tag_id: number | null;
+  is_favorited: boolean;
+  created_at: number;
+  updated_at: number;
+}
+
+interface SnippetInput {
+  title: string;
+  content: string;
+  tagId: number | null;
+  isFavorited: boolean;
+}
+
+interface SourceRule {
+  id: number;
+  match_type: 'process' | 'title' | 'any';
+  pattern: string;
+  enabled: boolean;
+  created_at: number;
+  updated_at: number;
+}
+
+interface SourceRuleInput {
+  matchType: 'process' | 'title' | 'any';
+  pattern: string;
+  enabled: boolean;
+}
+
+interface AdvancedSearchQuery {
+  query: string;
+  contentType?: ContentType | null;
+  favoriteOnly?: boolean;
+  sensitiveOnly?: boolean | null;
+  tagId?: number | null;
+  exactMatch?: boolean;
+  createdAfter?: number | null;
+  createdBefore?: number | null;
+  limit?: number;
+  offset?: number;
+}
+```
+
+### 3.5 ImportSummary / BackupSummary / RestoreSummary
 
 ```typescript
 interface ImportSummary {
@@ -638,7 +860,7 @@ interface RestoreSummary {
 }
 ```
 
-### 3.5 ContentType
+### 3.6 ContentType
 
 内容类型枚举。
 
@@ -646,7 +868,7 @@ interface RestoreSummary {
 type ContentType = 'text' | 'image' | 'file';
 ```
 
-### 3.6 SystemInfo
+### 3.7 SystemInfo
 
 系统信息。
 
@@ -682,6 +904,9 @@ export const clipboardApi = {
 
   searchFiltered: (query: string, options: ClipboardQueryOptions = {}) =>
     invoke<ClipboardItem[]>('search_clipboard_filtered', { query, ...options }),
+
+  searchAdvanced: (query: AdvancedSearchQuery) =>
+    invoke<ClipboardItem[]>('search_clipboard_advanced', { query }),
 
   delete: (id: number) =>
     invoke('delete_clipboard_item', { id }),
@@ -739,6 +964,38 @@ export const clipboardApi = {
 
   clear: () =>
     invoke('clear_clipboard_history'),
+};
+
+export const productApi = {
+  listSnippets: () =>
+    invoke<Snippet[]>('list_snippets'),
+
+  searchSnippets: (query: string) =>
+    invoke<Snippet[]>('search_snippets', { query }),
+
+  createSnippet: (input: SnippetInput) =>
+    invoke<Snippet>('create_snippet', { input }),
+
+  updateSnippet: (id: number, input: SnippetInput) =>
+    invoke<Snippet>('update_snippet', { id, input }),
+
+  deleteSnippet: (id: number) =>
+    invoke('delete_snippet', { id }),
+
+  listSourceRules: () =>
+    invoke<SourceRule[]>('list_source_rules'),
+
+  createSourceRule: (input: SourceRuleInput) =>
+    invoke<SourceRule>('create_source_rule', { input }),
+
+  updateSourceRule: (id: number, input: SourceRuleInput) =>
+    invoke<SourceRule>('update_source_rule', { id, input }),
+
+  setSourceRuleEnabled: (id: number, enabled: boolean) =>
+    invoke<SourceRule>('set_source_rule_enabled', { id, enabled }),
+
+  deleteSourceRule: (id: number) =>
+    invoke('delete_source_rule', { id }),
 };
 
 // 配置 API

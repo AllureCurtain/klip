@@ -10,6 +10,7 @@ vi.mock('@/lib/tauri', () => ({
     getListFiltered: vi.fn(),
     search: vi.fn(),
     searchFiltered: vi.fn(),
+    searchAdvanced: vi.fn(),
     delete: vi.fn(),
     deleteMany: vi.fn(),
     paste: vi.fn(),
@@ -238,6 +239,86 @@ describe('clipboardStore', () => {
 
       expect(clipboardApi.setFavoriteForItems).toHaveBeenCalledWith([1, 2], true);
       expect(useClipboardStore.getState().items.every((item) => item.is_favorited)).toBe(true);
+    });
+  });
+
+  describe('advanced search', () => {
+    it('uses the advanced search API when advanced filters are present', async () => {
+      const items = [makeItem(1, { is_sensitive: true })];
+      vi.mocked(clipboardApi.searchAdvanced).mockResolvedValue(items);
+
+      const { searchItems } = useClipboardStore.getState();
+      await searchItems('deploy', {
+        contentType: 'text',
+        sensitiveOnly: true,
+        exactMatch: true,
+        createdAfter: 1_000,
+        createdBefore: 2_000,
+      });
+
+      expect(clipboardApi.searchAdvanced).toHaveBeenCalledWith({
+        query: 'deploy',
+        contentType: 'text',
+        favoriteOnly: false,
+        sensitiveOnly: true,
+        tagId: null,
+        exactMatch: true,
+        createdAfter: 1_000,
+        createdBefore: 2_000,
+        limit: 100,
+        offset: 0,
+      });
+      expect(clipboardApi.searchFiltered).not.toHaveBeenCalled();
+      expect(useClipboardStore.getState().items).toEqual(items);
+    });
+
+    it('uses advanced search for empty queries when advanced filters are present', async () => {
+      const items = [makeItem(1, { is_sensitive: true })];
+      vi.mocked(clipboardApi.searchAdvanced).mockResolvedValue(items);
+
+      const { fetchItems } = useClipboardStore.getState();
+      await fetchItems({ sensitiveOnly: true });
+
+      expect(clipboardApi.searchAdvanced).toHaveBeenCalledWith({
+        query: '',
+        contentType: null,
+        favoriteOnly: false,
+        sensitiveOnly: true,
+        tagId: null,
+        exactMatch: false,
+        createdAfter: null,
+        createdBefore: null,
+        limit: 100,
+        offset: 0,
+      });
+      expect(clipboardApi.getListFiltered).not.toHaveBeenCalled();
+      expect(useClipboardStore.getState().items).toEqual(items);
+    });
+
+    it('keeps advanced search active when loading more results', async () => {
+      const firstPage = Array.from({ length: 100 }, (_value, index) => makeItem(index + 1));
+      const nextPage = [makeItem(101)];
+      vi.mocked(clipboardApi.searchAdvanced)
+        .mockResolvedValueOnce(firstPage)
+        .mockResolvedValueOnce(nextPage);
+
+      await useClipboardStore.getState().searchItems('deploy', { exactMatch: true });
+      await useClipboardStore.getState().loadMore();
+
+      expect(clipboardApi.searchAdvanced).toHaveBeenNthCalledWith(2, {
+        query: 'deploy',
+        contentType: null,
+        favoriteOnly: false,
+        sensitiveOnly: null,
+        tagId: null,
+        exactMatch: true,
+        createdAfter: null,
+        createdBefore: null,
+        limit: 100,
+        offset: 100,
+      });
+      expect(clipboardApi.searchFiltered).not.toHaveBeenCalled();
+      expect(useClipboardStore.getState().items).toHaveLength(101);
     });
   });
 

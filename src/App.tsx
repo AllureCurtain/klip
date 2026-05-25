@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { listen } from '@tauri-apps/api/event';
 import { useClipboardStore } from './stores/clipboardStore';
 import { Header } from './components/layout/Header';
+import type { HeaderAdvancedFilters } from './components/layout/Header';
 import { ClipboardList } from './components/clipboard/ClipboardList';
 import { EmptyState } from './components/layout/EmptyState';
 import { SettingsView, type SettingsTab } from './components/settings/SettingsView';
@@ -39,6 +40,12 @@ function App() {
   const [contentType, setContentType] = useState<string | null>(null);
   const [showFavorites, setShowFavorites] = useState(false);
   const [selectedTagId, setSelectedTagId] = useState<number | null>(null);
+  const [advancedFilters, setAdvancedFilters] = useState<HeaderAdvancedFilters>({
+    sensitiveOnly: null,
+    exactMatch: false,
+    createdAfter: null,
+    createdBefore: null,
+  });
   const [selectionMode, setSelectionMode] = useState(false);
   const [searchDebounceMs, setSearchDebounceMs] = useState(DEFAULT_SEARCH_DEBOUNCE_MS);
   const [view, setView] = useState<AppView>('clipboard');
@@ -102,9 +109,10 @@ function App() {
         clipboardItemMatchesView(event.payload, {
           searchQuery,
           contentType,
-          showFavorites,
-          selectedTagId,
-        })
+      showFavorites,
+      selectedTagId,
+      advancedFilters,
+    })
       ) {
         addItems([event.payload]);
       }
@@ -121,6 +129,10 @@ function App() {
       contentType: contentType as 'text' | 'image' | 'file' | null,
       favoriteOnly: showFavorites,
       tagId: selectedTagId,
+      sensitiveOnly: advancedFilters.sensitiveOnly ?? null,
+      exactMatch: advancedFilters.exactMatch ?? false,
+      createdAfter: advancedFilters.createdAfter ?? null,
+      createdBefore: advancedFilters.createdBefore ?? null,
     };
     const handle = window.setTimeout(() => {
       if (trimmed === '') {
@@ -131,7 +143,16 @@ function App() {
     }, searchDebounceMs);
 
     return () => window.clearTimeout(handle);
-  }, [searchQuery, contentType, showFavorites, selectedTagId, fetchItems, searchItems, searchDebounceMs]);
+  }, [
+    searchQuery,
+    contentType,
+    showFavorites,
+    selectedTagId,
+    advancedFilters,
+    fetchItems,
+    searchItems,
+    searchDebounceMs,
+  ]);
 
   useEffect(() => {
     if (!selectionMode) {
@@ -160,6 +181,8 @@ function App() {
         tags={tags}
         selectedTagId={selectedTagId}
         onSelectedTagChange={setSelectedTagId}
+        advancedFilters={advancedFilters}
+        onAdvancedFiltersChange={setAdvancedFilters}
         selectionMode={selectionMode}
         onSelectionModeChange={setSelectionMode}
         onSettingsOpen={() => {
@@ -202,11 +225,13 @@ function clipboardItemMatchesView(
     contentType,
     showFavorites,
     selectedTagId,
+    advancedFilters,
   }: {
     searchQuery: string;
     contentType: string | null;
     showFavorites: boolean;
     selectedTagId: number | null;
+    advancedFilters?: HeaderAdvancedFilters;
   }
 ): boolean {
   if (contentType && item.content_type !== contentType) {
@@ -221,6 +246,18 @@ function clipboardItemMatchesView(
     return false;
   }
 
+  if (advancedFilters?.sensitiveOnly === true && !item.is_sensitive) {
+    return false;
+  }
+
+  if (advancedFilters?.createdAfter && item.created_at < advancedFilters.createdAfter) {
+    return false;
+  }
+
+  if (advancedFilters?.createdBefore && item.created_at > advancedFilters.createdBefore) {
+    return false;
+  }
+
   const query = searchQuery.trim().toLocaleLowerCase();
   if (query === '') {
     return true;
@@ -229,6 +266,10 @@ function clipboardItemMatchesView(
   const preview = item.preview?.toLocaleLowerCase() ?? '';
   const searchableContent =
     item.content_type === 'image' ? '' : item.content.toLocaleLowerCase();
+
+  if (advancedFilters?.exactMatch) {
+    return preview === query || searchableContent === query;
+  }
 
   return preview.includes(query) || searchableContent.includes(query);
 }

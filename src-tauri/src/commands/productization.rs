@@ -1,4 +1,7 @@
-use crate::database::{self, BackupSummary, ClipboardItem, ImportSummary, RestoreSummary, Tag};
+use crate::database::{
+    self, AdvancedSearchQuery, BackupSummary, ClipboardItem, ImportSummary, RestoreSummary,
+    Snippet, SnippetInput, SourceRule, SourceRuleInput, Tag,
+};
 use crate::AppError;
 use tauri::Manager;
 use tauri::State;
@@ -41,6 +44,14 @@ pub fn search_clipboard_filtered(
         limit.unwrap_or(100),
         offset.unwrap_or(0),
     )
+}
+
+#[tauri::command]
+pub fn search_clipboard_advanced(
+    db: State<'_, database::Database>,
+    query: AdvancedSearchQuery,
+) -> Result<Vec<ClipboardItem>, AppError> {
+    database::productization::search_advanced(&db, query)
 }
 
 #[tauri::command]
@@ -95,6 +106,77 @@ pub fn remove_tag_from_item(
     tag_id: i64,
 ) -> Result<(), AppError> {
     database::productization::remove_tag(&db, item_id, tag_id)
+}
+
+#[tauri::command]
+pub fn list_snippets(db: State<'_, database::Database>) -> Result<Vec<Snippet>, AppError> {
+    database::snippets::list(&db)
+}
+
+#[tauri::command]
+pub fn search_snippets(
+    db: State<'_, database::Database>,
+    query: String,
+) -> Result<Vec<Snippet>, AppError> {
+    database::snippets::search(&db, &query)
+}
+
+#[tauri::command]
+pub fn create_snippet(
+    db: State<'_, database::Database>,
+    input: SnippetInput,
+) -> Result<Snippet, AppError> {
+    database::snippets::create(&db, input)
+}
+
+#[tauri::command]
+pub fn update_snippet(
+    db: State<'_, database::Database>,
+    id: i64,
+    input: SnippetInput,
+) -> Result<Snippet, AppError> {
+    database::snippets::update(&db, id, input)
+}
+
+#[tauri::command]
+pub fn delete_snippet(db: State<'_, database::Database>, id: i64) -> Result<(), AppError> {
+    database::snippets::delete(&db, id)
+}
+
+#[tauri::command]
+pub fn list_source_rules(db: State<'_, database::Database>) -> Result<Vec<SourceRule>, AppError> {
+    database::productization::list_source_rules(&db)
+}
+
+#[tauri::command]
+pub fn create_source_rule(
+    db: State<'_, database::Database>,
+    input: SourceRuleInput,
+) -> Result<SourceRule, AppError> {
+    database::productization::create_source_rule(&db, input)
+}
+
+#[tauri::command]
+pub fn update_source_rule(
+    db: State<'_, database::Database>,
+    id: i64,
+    input: SourceRuleInput,
+) -> Result<SourceRule, AppError> {
+    database::productization::update_source_rule(&db, id, input)
+}
+
+#[tauri::command]
+pub fn set_source_rule_enabled(
+    db: State<'_, database::Database>,
+    id: i64,
+    enabled: bool,
+) -> Result<SourceRule, AppError> {
+    database::productization::set_source_rule_enabled(&db, id, enabled)
+}
+
+#[tauri::command]
+pub fn delete_source_rule(db: State<'_, database::Database>, id: i64) -> Result<(), AppError> {
+    database::productization::delete_source_rule(&db, id)
 }
 
 #[tauri::command]

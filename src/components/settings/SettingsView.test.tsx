@@ -11,6 +11,10 @@ const apiMocks = vi.hoisted(() => ({
   configSet: vi.fn(),
 }));
 
+const shellMocks = vi.hoisted(() => ({
+  open: vi.fn(),
+}));
+
 const callbacks = vi.hoisted(() => ({
   onBack: vi.fn(),
 }));
@@ -25,6 +29,10 @@ vi.mock('@/lib/tauri', () => ({
     getDiagnostics: apiMocks.systemGetDiagnostics,
     setAutoStart: vi.fn(),
   },
+}));
+
+vi.mock('@tauri-apps/plugin-shell', () => ({
+  open: shellMocks.open,
 }));
 
 vi.mock('react-i18next', () => ({
@@ -44,6 +52,8 @@ vi.mock('react-i18next', () => ({
         'settings.about.dataDir': 'Data directory',
         'settings.about.database': 'Database',
         'settings.about.logDir': 'Log directory',
+        'settings.about.copyPath': 'Copy {{label}}',
+        'settings.about.openPath': 'Open {{label}}',
         'settings.about.tagline': 'Cross-platform clipboard manager',
         'settings.shortcuts.toggleWindow': 'Toggle window',
         'settings.shortcuts.toggleWindowHint': 'Supports Ctrl+Alt+A through Ctrl+Alt+Z',
@@ -123,6 +133,14 @@ describe('SettingsView', () => {
         language: 'zh-CN',
         sensitive_capture_policy: 'flag',
         mask_sensitive_previews: true,
+        clipboard_monitor_enabled: true,
+        privacy_mode_until: 0,
+        updates_enabled: false,
+        update_feed_url: '',
+        encryption_enabled: false,
+        encryption_status: 'off',
+        sync_folder: '',
+        plugin_folder: '',
       },
       systemInfo: {
         platform: 'windows',
@@ -146,6 +164,12 @@ describe('SettingsView', () => {
       data_dir: 'C:\\Users\\tester\\AppData\\Roaming\\com.klip.app',
       db_path: 'C:\\Users\\tester\\AppData\\Roaming\\com.klip.app\\klip.db',
       log_dir: 'C:\\Users\\tester\\AppData\\Roaming\\com.klip.app\\logs',
+    });
+    shellMocks.open.mockResolvedValue(undefined);
+    Object.assign(navigator, {
+      clipboard: {
+        writeText: vi.fn().mockResolvedValue(undefined),
+      },
     });
   });
 
@@ -190,11 +214,11 @@ describe('SettingsView', () => {
       target: { value: 'Ctrl+Alt+Z' },
     });
     fireEvent.change(screen.getByLabelText('Quick paste prefix'), {
-      target: { value: 'Ctrl+Shift' },
+      target: { value: 'Ctrl+Alt' },
     });
 
     expect(useConfigStore.getState().config.hotkey_toggle_window).toBe('Ctrl+Alt+Z');
-    expect(useConfigStore.getState().config.hotkey_quick_paste_prefix).toBe('Ctrl+Shift');
+    expect(useConfigStore.getState().config.hotkey_quick_paste_prefix).toBe('Ctrl+Alt');
   });
 
   it('saves edits through the store when save is clicked', async () => {
@@ -302,6 +326,23 @@ describe('SettingsView', () => {
     expect(screen.getByRole('switch', { name: 'Close to tray' })).toBeTruthy();
   });
 
+  it('uses constrained shortcut selectors instead of free-form text inputs', async () => {
+    render(<SettingsView onBack={callbacks.onBack} />);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Shortcuts' }));
+
+    const toggleSelect = screen.getByLabelText('Toggle window');
+    const prefixSelect = screen.getByLabelText('Quick paste prefix');
+
+    expect(toggleSelect.tagName).toBe('SELECT');
+    expect(prefixSelect.tagName).toBe('SELECT');
+    expect(screen.queryByDisplayValue('Ctrl+Shift')).toBeNull();
+  });
+
   it('exposes settings navigation as tabs for assistive technology', async () => {
     render(<SettingsView onBack={callbacks.onBack} />);
 
@@ -316,5 +357,27 @@ describe('SettingsView', () => {
 
     expect(screen.getByRole('tab', { name: 'About', selected: true })).toBeTruthy();
     expect(screen.getByRole('tabpanel', { name: 'About' })).toBeTruthy();
+  });
+
+  it('copies and opens diagnostics paths from About', async () => {
+    render(<SettingsView onBack={callbacks.onBack} initialTab="about" />);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy Database' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Log directory' }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
+      'C:\\Users\\tester\\AppData\\Roaming\\com.klip.app\\klip.db'
+    );
+    expect(shellMocks.open).toHaveBeenCalledWith(
+      'C:\\Users\\tester\\AppData\\Roaming\\com.klip.app\\logs'
+    );
   });
 });

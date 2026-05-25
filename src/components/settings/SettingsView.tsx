@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { open as openPath } from '@tauri-apps/plugin-shell';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,6 +17,8 @@ import {
   Monitor,
   Loader2,
   Database,
+  ClipboardCopy,
+  ExternalLink,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { SUPPORTED_LANGUAGES } from '@/i18n';
@@ -28,6 +31,11 @@ import {
 } from '@/lib/constants';
 
 export type SettingsTab = 'general' | 'shortcuts' | 'behavior' | 'data' | 'about';
+
+const TOGGLE_HOTKEY_OPTIONS = Array.from({ length: 26 }, (_value, index) =>
+  `Ctrl+Alt+${String.fromCharCode(65 + index)}`
+);
+const QUICK_PASTE_PREFIX_OPTIONS = ['Ctrl+Alt'];
 
 interface SettingsViewProps {
   onBack: () => void;
@@ -249,13 +257,18 @@ export function SettingsView({ onBack, initialTab = 'general' }: SettingsViewPro
           <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="hotkey-toggle-window" className="text-xs">{t('settings.shortcuts.toggleWindow')}</Label>
-              <Input
+              <select
                 id="hotkey-toggle-window"
                 value={config.hotkey_toggle_window}
                 onChange={(e) => setHotkeyToggleWindow(e.target.value)}
-                placeholder="Ctrl+Alt+K"
-                className="h-7 font-mono text-xs"
-              />
+                className="h-7 w-full rounded-md border border-input bg-card/60 px-3 font-mono text-xs text-foreground"
+              >
+                {TOGGLE_HOTKEY_OPTIONS.map((hotkey) => (
+                  <option key={hotkey} value={hotkey}>
+                    {hotkey}
+                  </option>
+                ))}
+              </select>
               <p className="text-[10px] text-muted-foreground">
                 {t('settings.shortcuts.toggleWindowHint')}
               </p>
@@ -265,13 +278,18 @@ export function SettingsView({ onBack, initialTab = 'general' }: SettingsViewPro
 
             <div className="space-y-2">
               <Label htmlFor="hotkey-quick-paste-prefix" className="text-xs">{t('settings.shortcuts.quickPastePrefix')}</Label>
-              <Input
+              <select
                 id="hotkey-quick-paste-prefix"
                 value={config.hotkey_quick_paste_prefix}
                 onChange={(e) => setHotkeyQuickPastePrefix(e.target.value)}
-                placeholder="Ctrl+Alt"
-                className="h-7 font-mono text-xs"
-              />
+                className="h-7 w-full rounded-md border border-input bg-card/60 px-3 font-mono text-xs text-foreground"
+              >
+                {QUICK_PASTE_PREFIX_OPTIONS.map((prefix) => (
+                  <option key={prefix} value={prefix}>
+                    {prefix}
+                  </option>
+                ))}
+              </select>
               <p className="text-[10px] text-muted-foreground">
                 {t('settings.shortcuts.quickPasteHint')}
               </p>
@@ -357,26 +375,26 @@ export function SettingsView({ onBack, initialTab = 'general' }: SettingsViewPro
 
             {diagnosticsInfo && (
               <div className="space-y-1.5 rounded-md border bg-muted/30 p-2.5 text-[10px]">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-muted-foreground">{t('settings.about.dataDir')}</span>
-                  <span className="truncate font-mono" title={diagnosticsInfo.data_dir}>
-                    {diagnosticsInfo.data_dir}
-                  </span>
-                </div>
+                <DiagnosticsPathRow
+                  label={t('settings.about.dataDir')}
+                  value={diagnosticsInfo.data_dir}
+                  copyLabel={t('settings.about.copyPath', { label: t('settings.about.dataDir') })}
+                  openLabel={t('settings.about.openPath', { label: t('settings.about.dataDir') })}
+                />
                 <Separator />
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-muted-foreground">{t('settings.about.database')}</span>
-                  <span className="truncate font-mono" title={diagnosticsInfo.db_path}>
-                    {diagnosticsInfo.db_path}
-                  </span>
-                </div>
+                <DiagnosticsPathRow
+                  label={t('settings.about.database')}
+                  value={diagnosticsInfo.db_path}
+                  copyLabel={t('settings.about.copyPath', { label: t('settings.about.database') })}
+                  openLabel={t('settings.about.openPath', { label: t('settings.about.database') })}
+                />
                 <Separator />
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-muted-foreground">{t('settings.about.logDir')}</span>
-                  <span className="truncate font-mono" title={diagnosticsInfo.log_dir}>
-                    {diagnosticsInfo.log_dir}
-                  </span>
-                </div>
+                <DiagnosticsPathRow
+                  label={t('settings.about.logDir')}
+                  value={diagnosticsInfo.log_dir}
+                  copyLabel={t('settings.about.copyPath', { label: t('settings.about.logDir') })}
+                  openLabel={t('settings.about.openPath', { label: t('settings.about.logDir') })}
+                />
               </div>
             )}
           </div>
@@ -409,6 +427,44 @@ export function SettingsView({ onBack, initialTab = 'general' }: SettingsViewPro
           {t('settings.save')}
         </Button>
       </div>
+    </div>
+  );
+}
+
+interface DiagnosticsPathRowProps {
+  label: string;
+  value: string;
+  copyLabel: string;
+  openLabel: string;
+}
+
+function DiagnosticsPathRow({ label, value, copyLabel, openLabel }: DiagnosticsPathRowProps) {
+  return (
+    <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="truncate font-mono" title={value}>
+        {value}
+      </span>
+      <span className="flex items-center gap-1">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-6"
+          aria-label={copyLabel}
+          onClick={() => void navigator.clipboard?.writeText(value)}
+        >
+          <ClipboardCopy className="h-3 w-3" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-6"
+          aria-label={openLabel}
+          onClick={() => void openPath(value)}
+        >
+          <ExternalLink className="h-3 w-3" />
+        </Button>
+      </span>
     </div>
   );
 }

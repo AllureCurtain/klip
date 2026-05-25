@@ -83,6 +83,59 @@ pub struct Tag {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Snippet {
+    pub id: i64,
+    pub title: String,
+    pub content: String,
+    pub tag_id: Option<i64>,
+    pub is_favorited: bool,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SnippetInput {
+    pub title: String,
+    pub content: String,
+    pub tag_id: Option<i64>,
+    pub is_favorited: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SourceRule {
+    pub id: i64,
+    pub match_type: String,
+    pub pattern: String,
+    pub enabled: bool,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SourceRuleInput {
+    pub match_type: String,
+    pub pattern: String,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AdvancedSearchQuery {
+    pub query: String,
+    pub content_type: Option<String>,
+    pub favorite_only: bool,
+    pub sensitive_only: Option<bool>,
+    pub tag_id: Option<i64>,
+    pub exact_match: bool,
+    pub created_after: Option<i64>,
+    pub created_before: Option<i64>,
+    pub limit: i64,
+    pub offset: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImportSummary {
     pub imported: usize,
     pub skipped: usize,
