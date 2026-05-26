@@ -10,7 +10,7 @@ export const cardVariants: Variants = {
   initial: { opacity: 0, y: 8, scale: 0.98 },
   animate: { opacity: 1, y: 0, scale: 1 },
   exit: { opacity: 0, x: 60, scale: 0.95 },
-  hover: { y: -1, scale: 1.01 },
+  hover: { y: -1, scale: 1 },
   tap: { scale: 0.98 },
 };
 

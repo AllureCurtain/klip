@@ -86,22 +86,8 @@ fn main() {
                     );
                 }
 
-                // Apply platform-specific window vibrancy effects
-                #[cfg(target_os = "macos")]
-                {
-                    use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial};
-                    let _ = apply_vibrancy(
-                        &window,
-                        NSVisualEffectMaterial::UnderWindowBackground,
-                        None,
-                        None,
-                    );
-                }
-                #[cfg(target_os = "windows")]
-                {
-                    use window_vibrancy::apply_mica;
-                    let _ = apply_mica(&window, Some(true));
-                }
+                #[cfg(any(target_os = "macos", target_os = "windows"))]
+                apply_platform_window_effects(&window);
 
                 let app_handle = app.handle().clone();
                 let guard_ts = tray_click_guard.clone();
@@ -297,6 +283,27 @@ fn should_show_window_for_e2e(value: Option<&std::ffi::OsStr>) -> bool {
         .unwrap_or(false)
 }
 
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+fn apply_platform_window_effects<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
+    let effects = tauri::window::EffectsBuilder::new()
+        .effect(platform_window_effect())
+        .build();
+
+    if let Err(e) = window.set_effects(effects) {
+        tracing::warn!("Failed to apply platform window effects: {}", e);
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn platform_window_effect() -> tauri::window::Effect {
+    tauri::window::Effect::Mica
+}
+
+#[cfg(target_os = "macos")]
+fn platform_window_effect() -> tauri::window::Effect {
+    tauri::window::Effect::UnderWindowBackground
+}
+
 /// Initialize the global tracing subscriber with two outputs:
 ///   1. stderr (so `pnpm tauri:dev` shows logs in the terminal)
 ///   2. a daily-rotating file under the OS-standard log dir, e.g.
@@ -349,5 +356,14 @@ mod tests {
             std::ffi::OsStr::new("1")
         )));
         assert!(!super::should_show_window_for_e2e(None));
+    }
+
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn windows_window_effect_follows_system_theme() {
+        assert!(matches!(
+            super::platform_window_effect(),
+            tauri::window::Effect::Mica
+        ));
     }
 }

@@ -253,14 +253,16 @@ describe('ClipboardItem', () => {
     expect(row.className).not.toContain('border-l-sky-500');
   });
 
-  it('uses a glow treatment for keyboard-selected rows', () => {
+  it('uses a quiet border treatment for keyboard-selected rows', () => {
     const { container } = render(
       <ClipboardItem item={makeTextItem()} index={1} isSelected />
     );
 
     const row = container.firstElementChild as HTMLElement;
 
-    expect(row.className).toContain('shadow-[var(--shadow-card-glow)]');
+    expect(row.className).toContain('border-primary/30');
+    expect(row.className).not.toContain('shadow-[var(--shadow-card)]');
+    expect(row.className).not.toContain('shadow-[var(--shadow-card-glow)]');
     expect(row.className).not.toContain('bg-indigo-500/8');
   });
 

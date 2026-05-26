@@ -263,6 +263,34 @@ describe('Header', () => {
     expect(screen.getByText('清空剪贴板历史')).toBeTruthy();
   });
 
+  it('keeps the more menu above the clipboard list layer', () => {
+    const { container } = render(
+      <HeaderWithSelection
+        searchQuery=""
+        onSearchChange={vi.fn()}
+        contentType={null}
+        onContentTypeChange={vi.fn()}
+        showFavorites={false}
+        onShowFavoritesChange={vi.fn()}
+        tags={[]}
+        selectedTagId={null}
+        onSelectedTagChange={vi.fn()}
+        selectionMode={false}
+        onSelectionModeChange={vi.fn()}
+        onSettingsOpen={vi.fn()}
+      />
+    );
+
+    const header = container.querySelector('header') as HTMLElement;
+    expect(header.className).toContain('relative');
+    expect(header.className).toContain('z-30');
+
+    fireEvent.click(screen.getByRole('button', { name: '更多操作' }));
+
+    const menu = screen.getByRole('region', { name: '更多操作' });
+    expect(menu.className).toContain('z-40');
+  });
+
   it('exposes pause monitoring and privacy mode actions in the more menu', () => {
     render(
       <HeaderWithSelection

@@ -51,13 +51,13 @@ describe('ClipboardList', () => {
     storeMocks.loadingMore = false;
   });
 
-  it('uses compact virtual rows for clipboard entries', () => {
+  it('uses compact virtual rows with breathing room between clipboard entries', () => {
     const { container } = render(<ClipboardList items={[makeTextItem()]} />);
 
     const wrapper = container.firstElementChild as HTMLElement;
     const scroller = wrapper.firstElementChild as HTMLElement;
     const virtualCanvas = scroller.firstElementChild as HTMLElement;
 
-    expect(virtualCanvas.style.height).toBe('84px');
+    expect(virtualCanvas.style.height).toBe('90px');
   });
 });

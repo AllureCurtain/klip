@@ -170,7 +170,6 @@ export function ClipboardItem({
     (state) => state.config.mask_sensitive_previews
   );
   const [copied, setCopied] = useState(false);
-  const [glowPulse, setGlowPulse] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [imagePreviewOpen, setImagePreviewOpen] = useState(false);
   const [tagMenuOpen, setTagMenuOpen] = useState(false);
@@ -182,9 +181,7 @@ export function ClipboardItem({
   const handleCopy = useCallback(() => {
     copyItem(item.id);
     setCopied(true);
-    setGlowPulse(true);
     setTimeout(() => setCopied(false), 800);
-    setTimeout(() => setGlowPulse(false), 600);
   }, [copyItem, item.id]);
 
   const handleClick = useCallback(() => {
@@ -407,12 +404,10 @@ export function ClipboardItem({
           'rounded-xl mx-1.5 px-2.5',
           'bg-[var(--glass-bg)] backdrop-blur-sm',
           'border border-[var(--glass-border)]',
-          'shadow-[var(--shadow-card)]',
-          'hover:shadow-[var(--shadow-card-hover)]',
-          'transition-shadow duration-200',
-          isSelected && !strongRowState && 'shadow-[var(--shadow-card-glow)]',
-          strongRowState && tone.selected,
-          glowPulse && 'animate-glow-pulse'
+          'transition-[background-color,border-color] duration-200',
+          'hover:bg-card/70 hover:border-border/70',
+          isSelected && !strongRowState && 'border-primary/30 bg-primary/5',
+          strongRowState && tone.selected
         )}
       >
         {selectionMode && (

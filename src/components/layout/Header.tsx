@@ -122,7 +122,7 @@ export function Header({
 
   return (
     <>
-      <header className="flex flex-col backdrop-blur-md bg-[var(--glass-bg)] border-b border-[var(--glass-border)]">
+      <header className="relative z-30 flex flex-col backdrop-blur-md bg-[var(--glass-bg)] border-b border-[var(--glass-border)]">
         <div
           data-tauri-drag-region
           className="flex items-center gap-1.5 px-2.5 pt-1.5 pb-1"

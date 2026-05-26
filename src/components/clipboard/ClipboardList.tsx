@@ -83,7 +83,7 @@ export function ClipboardList({ items, selectionMode = false }: ClipboardListPro
   selectedIndexRef.current = selectedIndex;
 
   const HEADER_HEIGHT = 28;
-  const ITEM_HEIGHT = 56;
+  const ITEM_HEIGHT = 62;
 
   const virtualizer = useVirtualizer({
     count: rows.length,
@@ -194,6 +194,7 @@ export function ClipboardList({ items, selectionMode = false }: ClipboardListPro
                     overflow: 'hidden',
                     transform: `translateY(${virtualRow.start}px)`,
                   }}
+                  className="py-[3px]"
                 >
                   <ClipboardItem
                     item={row.item}

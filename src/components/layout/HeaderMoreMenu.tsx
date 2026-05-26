@@ -100,7 +100,7 @@ export function HeaderMoreMenu({
 
       {open && (
         <div
-          className="absolute right-0 top-8 z-20 w-56 rounded-2xl border border-border/50 bg-popover/95 p-1.5 text-popover-foreground shadow-[var(--shadow-pop)] backdrop-blur-md"
+          className="absolute right-0 top-8 z-40 w-56 rounded-2xl border border-border/50 bg-popover/95 p-1.5 text-popover-foreground shadow-[var(--shadow-pop)] backdrop-blur-md"
           role="region"
           aria-label={t('header.moreActions')}
         >
