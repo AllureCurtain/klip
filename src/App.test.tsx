@@ -62,6 +62,11 @@ const headerMocks = vi.hoisted(() => ({
   },
 }));
 
+const settingsViewState = vi.hoisted(() => ({
+  suspend: false,
+  pending: new Promise<never>(() => {}),
+}));
+
 vi.mock('@tauri-apps/api/event', () => ({
   listen: tauriMocks.listen,
 }));
@@ -106,9 +111,13 @@ vi.mock('./components/clipboard/ClipboardList', () => ({
 }));
 
 vi.mock('./components/settings/SettingsView', () => ({
-  SettingsView: (props: { initialTab?: string }) => (
-    <div data-testid="settings-view" data-initial-tab={props.initialTab} />
-  ),
+  SettingsView: (props: { initialTab?: string }) => {
+    if (settingsViewState.suspend) {
+      throw settingsViewState.pending;
+    }
+
+    return <div data-testid="settings-view" data-initial-tab={props.initialTab} />;
+  },
 }));
 
 describe('App status states', () => {
@@ -125,6 +134,7 @@ describe('App status states', () => {
     tauriMocks.openSettings = undefined;
     tauriMocks.openAbout = undefined;
     headerMocks.props = undefined;
+    settingsViewState.suspend = false;
   });
 
   it('renders loading as a compact operational note', () => {
@@ -234,7 +244,8 @@ describe('App status states', () => {
       tauriMocks.openAbout?.();
     });
 
-    expect(screen.getByTestId('settings-view').dataset.initialTab).toBe('about');
+    const settingsView = await screen.findByTestId('settings-view');
+    expect(settingsView.dataset.initialTab).toBe('about');
   });
 
   it('opens the general settings tab from the tray settings event', async () => {
@@ -248,7 +259,23 @@ describe('App status states', () => {
       tauriMocks.openSettings?.();
     });
 
-    expect(screen.getByTestId('settings-view').dataset.initialTab).toBe('general');
+    const settingsView = await screen.findByTestId('settings-view');
+    expect(settingsView.dataset.initialTab).toBe('general');
+  });
+
+  it('shows a compact loading note while the settings view loads', async () => {
+    settingsViewState.suspend = true;
+    render(<App />);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    act(() => {
+      tauriMocks.openSettings?.();
+    });
+
+    expect(screen.getByRole('status').textContent).toContain('加载中...');
   });
 
   it('passes advanced filters into search requests', async () => {

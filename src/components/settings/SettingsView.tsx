@@ -99,7 +99,7 @@ export function SettingsView({ onBack, initialTab = 'general' }: SettingsViewPro
   };
 
   return (
-    <div className="flex flex-col h-screen text-foreground">
+    <div className="flex min-h-dvh flex-col text-foreground">
       {/* Title bar */}
       <div
         data-tauri-drag-region

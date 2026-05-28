@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { lazy, Suspense, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { listen } from '@tauri-apps/api/event';
 import { motion } from 'framer-motion';
@@ -7,7 +7,7 @@ import { Header } from './components/layout/Header';
 import type { HeaderAdvancedFilters } from './components/layout/Header';
 import { ClipboardList } from './components/clipboard/ClipboardList';
 import { EmptyState } from './components/layout/EmptyState';
-import { SettingsView, type SettingsTab } from './components/settings/SettingsView';
+import type { SettingsTab } from './components/settings/SettingsView';
 import { useProductivityStore } from './stores/productivityStore';
 import {
   onClipboardCleared,
@@ -23,6 +23,12 @@ import type { ClipboardItem } from './types';
 const DEFAULT_SEARCH_DEBOUNCE_MS = 150;
 
 type AppView = 'clipboard' | 'settings';
+
+const SettingsView = lazy(() =>
+  import('./components/settings/SettingsView').then((module) => ({
+    default: module.SettingsView,
+  }))
+);
 
 function App() {
   const { t } = useTranslation();
@@ -172,10 +178,21 @@ function App() {
 
   if (view === 'settings') {
     return (
-      <SettingsView
-        initialTab={settingsInitialTab}
-        onBack={() => setView('clipboard')}
-      />
+      <Suspense
+        fallback={
+          <div
+            role="status"
+            className="flex min-h-dvh items-start px-3 py-4 text-xs text-muted-foreground"
+          >
+            {t('app.loading')}
+          </div>
+        }
+      >
+        <SettingsView
+          initialTab={settingsInitialTab}
+          onBack={() => setView('clipboard')}
+        />
+      </Suspense>
     );
   }
 
@@ -185,7 +202,7 @@ function App() {
       initial="initial"
       animate="animate"
       transition={springs.snappy}
-      className="flex flex-col h-screen text-foreground"
+      className="flex min-h-dvh flex-col text-foreground"
     >
       <Header
         searchQuery={searchQuery}
