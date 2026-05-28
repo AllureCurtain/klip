@@ -75,6 +75,7 @@ export function DataManagementView() {
   const [backupPath, setBackupPath] = useState('');
   const [status, setStatus] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [readinessOpen, setReadinessOpen] = useState(false);
   const [portabilityOpen, setPortabilityOpen] = useState(false);
 
   useEffect(() => {
@@ -197,6 +198,12 @@ export function DataManagementView() {
           onCheckedChange={setMaskSensitivePreviews}
         />
       </div>
+
+      <ConfigSwitch
+        label={t('settings.data.monitoring')}
+        checked={config.clipboard_monitor_enabled}
+        onCheckedChange={setClipboardMonitorEnabled}
+      />
 
       <Separator />
 
@@ -392,50 +399,71 @@ export function DataManagementView() {
 
       <Separator />
 
-      <section className="space-y-3">
-        <div className="flex items-center gap-2">
-          <Shield className="h-3.5 w-3.5 text-muted-foreground" />
-          <Label className="text-xs">{t('settings.data.readiness')}</Label>
-        </div>
-        <ConfigSwitch
-          label={t('settings.data.monitoring')}
-          checked={config.clipboard_monitor_enabled}
-          onCheckedChange={setClipboardMonitorEnabled}
-        />
-        <ConfigSwitch
-          label={t('settings.data.updatesEnabled')}
-          checked={config.updates_enabled}
-          onCheckedChange={setUpdatesEnabled}
-        />
-        <Field
-          id="update-feed-url"
-          label={t('settings.data.updateFeedUrl')}
-          value={config.update_feed_url}
-          onChange={setUpdateFeedUrl}
-          placeholder="https://updates.example.com/klip.json"
-        />
-        <ConfigSwitch
-          label={t('settings.data.encryptionEnabled')}
-          checked={config.encryption_enabled}
-          onCheckedChange={setEncryptionEnabled}
-        />
-        <p className="text-[10px] text-muted-foreground">
-          {t('settings.data.encryptionStatus', { status: config.encryption_status })}
-        </p>
-        <Field
-          id="sync-folder"
-          label={t('settings.data.syncFolder')}
-          value={config.sync_folder}
-          onChange={setSyncFolder}
-          placeholder="C:\\Klip Sync"
-        />
-        <Field
-          id="plugin-folder"
-          label={t('settings.data.pluginFolder')}
-          value={config.plugin_folder}
-          onChange={setPluginFolder}
-          placeholder="C:\\Klip Plugins"
-        />
+      <section className="rounded-md border bg-muted/20">
+        <button
+          type="button"
+          className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left"
+          aria-expanded={readinessOpen}
+          aria-controls="external-readiness-panel"
+          onClick={() => setReadinessOpen((open) => !open)}
+        >
+          <span className="flex min-w-0 items-start gap-2">
+            <Shield className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            <span className="min-w-0">
+              <span className="block text-xs font-medium">
+                {t('settings.data.externalReadiness')}
+              </span>
+              <span className="block text-[10px] text-muted-foreground">
+                {t('settings.data.externalReadinessDesc')}
+              </span>
+            </span>
+          </span>
+          <span className="text-[10px] text-muted-foreground">
+            {readinessOpen ? t('common.close') : t('settings.data.openAdvanced')}
+          </span>
+        </button>
+
+        {readinessOpen && (
+          <div id="external-readiness-panel" className="space-y-3 border-t px-3 py-3">
+            <p className="text-[10px] text-muted-foreground">
+              {t('settings.data.externalReadinessNotice')}
+            </p>
+            <ConfigSwitch
+              label={t('settings.data.updatesEnabled')}
+              checked={config.updates_enabled}
+              onCheckedChange={setUpdatesEnabled}
+            />
+            <Field
+              id="update-feed-url"
+              label={t('settings.data.updateFeedUrl')}
+              value={config.update_feed_url}
+              onChange={setUpdateFeedUrl}
+              placeholder="https://updates.example.com/klip.json"
+            />
+            <ConfigSwitch
+              label={t('settings.data.encryptionEnabled')}
+              checked={config.encryption_enabled}
+              onCheckedChange={setEncryptionEnabled}
+            />
+            <p className="text-[10px] text-muted-foreground">
+              {t('settings.data.encryptionStatus', { status: config.encryption_status })}
+            </p>
+            <Field
+              id="sync-folder"
+              label={t('settings.data.syncFolder')}
+              value={config.sync_folder}
+              onChange={setSyncFolder}
+              placeholder="C:\\Klip Sync"
+            />
+            <Field
+              id="plugin-folder"
+              label={t('settings.data.pluginFolder')}
+              value={config.plugin_folder}
+              onChange={setPluginFolder}
+              placeholder="C:\\Klip Plugins"
+            />
+          </div>
+        )}
       </section>
 
       <Separator />

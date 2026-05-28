@@ -116,6 +116,9 @@ vi.mock('react-i18next', () => ({
         'settings.data.encryptionStatus': 'Encryption status: {{status}}',
         'settings.data.syncFolder': 'Sync folder',
         'settings.data.pluginFolder': 'Plugin folder',
+        'settings.data.externalReadiness': 'External readiness',
+        'settings.data.externalReadinessDesc': 'Stores external-service settings only.',
+        'settings.data.externalReadinessNotice': 'These options do not enable external services.',
       };
       const label = dict[key] ?? key;
       return vars
@@ -460,6 +463,7 @@ describe('DataManagementView', () => {
     render(<DataManagementView />);
 
     fireEvent.click(screen.getByRole('switch', { name: 'Clipboard monitoring' }));
+    fireEvent.click(screen.getByText('External readiness'));
     fireEvent.click(screen.getByRole('switch', { name: 'Enable updates' }));
     fireEvent.change(screen.getByLabelText('Update feed URL'), {
       target: { value: 'https://updates.example.test/klip.json' },
@@ -479,5 +483,18 @@ describe('DataManagementView', () => {
     expect(config.encryption_enabled).toBe(true);
     expect(config.sync_folder).toBe('C:\\Klip Sync');
     expect(config.plugin_folder).toBe('C:\\Klip Plugins');
+  });
+
+  it('keeps external readiness controls collapsed by default', () => {
+    render(<DataManagementView />);
+
+    expect(screen.getByRole('switch', { name: 'Clipboard monitoring' })).toBeTruthy();
+    expect(screen.queryByLabelText('Update feed URL')).toBeNull();
+    expect(screen.queryByLabelText('Sync folder')).toBeNull();
+
+    fireEvent.click(screen.getByText('External readiness'));
+
+    expect(screen.getByLabelText('Update feed URL')).toBeTruthy();
+    expect(screen.getByLabelText('Sync folder')).toBeTruthy();
   });
 });
