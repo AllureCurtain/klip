@@ -31,6 +31,8 @@
 
 ### Changed
 
+- README now uses a richer project-homepage structure with install guidance, core workflows, current limits, local development, release checks, and documentation links.
+- About copy, package metadata, and contribution scope now consistently describe Klip as a Windows-first local clipboard MVP.
 - README now presents Klip as a Windows-first local clipboard MVP and clearly separates current features from post-MVP services.
 - Roadmap, PRD, and documentation index now avoid treating cloud sync, plugins, hosted updates, cross-platform parity, and real encryption migration as current MVP work.
 - Documentation now describes search as keyword contains matching and aligns PRD window minimums with the packaged Tauri window.
@@ -61,6 +63,7 @@
 
 ### Fixed
 
+- Clipboard history day groups now use local calendar days instead of rolling 24-hour windows.
 - Settings save failures now keep the Settings view open and show the error.
 - JSON/CSV imports now refresh clipboard items and tags after a successful import.
 - Missing frontend window-size config now falls back to the current 560x760 backend defaults instead of the old 480x720 values.

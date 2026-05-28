@@ -33,13 +33,19 @@ function getTimeGroupLabel(
 ): string {
   const date = new Date(timestamp);
   const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  const diffDays = getLocalCalendarDayNumber(now) - getLocalCalendarDayNumber(date);
 
-  if (diffDays === 0) return t('list.today');
+  if (diffDays <= 0) return t('list.today');
   if (diffDays === 1) return t('list.yesterday');
   if (diffDays < 7) return t('list.daysAgo', { count: diffDays });
   return date.toLocaleDateString(locale, { month: 'short', day: 'numeric' });
+}
+
+function getLocalCalendarDayNumber(date: Date): number {
+  return Math.floor(
+    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) /
+      (1000 * 60 * 60 * 24)
+  );
 }
 
 export function ClipboardList({ items, selectionMode = false }: ClipboardListProps) {
@@ -66,7 +72,7 @@ export function ClipboardList({ items, selectionMode = false }: ClipboardListPro
       itemIndex++;
     }
     return result;
-  }, [items]);
+  }, [i18n.language, items, t]);
 
   // Track only item indices for keyboard navigation
   const itemIndices = useMemo(

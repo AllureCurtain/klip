@@ -54,7 +54,7 @@ vi.mock('react-i18next', () => ({
         'settings.about.logDir': 'Log directory',
         'settings.about.copyPath': 'Copy {{label}}',
         'settings.about.openPath': 'Open {{label}}',
-        'settings.about.tagline': 'Cross-platform clipboard manager',
+        'settings.about.tagline': 'Windows-first local clipboard manager',
         'settings.shortcuts.toggleWindow': 'Toggle window',
         'settings.shortcuts.toggleWindowHint': 'Supports Ctrl+Alt+A through Ctrl+Alt+Z',
         'settings.shortcuts.quickPastePrefix': 'Quick paste prefix',

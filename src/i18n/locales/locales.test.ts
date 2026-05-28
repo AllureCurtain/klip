@@ -43,6 +43,15 @@ describe('locale coverage', () => {
       expect(readMessage(messages, key), key).not.toBe('');
     }
   });
+
+  it('keeps About taglines aligned with the Windows-first MVP scope', () => {
+    expect(readMessage(enUS, 'settings.about.tagline')).toBe(
+      'Windows-first local clipboard manager'
+    );
+    expect(readMessage(zhCN, 'settings.about.tagline')).toBe(
+      'Windows-first 本地剪贴板管理器'
+    );
+  });
 });
 
 function readMessage(messages: unknown, path: string): unknown {

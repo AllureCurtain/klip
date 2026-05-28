@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import type { ClipboardItem as ClipboardItemType } from '@/types';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ClipboardList } from './ClipboardList';
@@ -10,6 +10,30 @@ const storeMocks = vi.hoisted(() => ({
   hasMore: false,
   loadMore: vi.fn(),
   loadingMore: false,
+}));
+
+vi.mock('@tanstack/react-virtual', () => ({
+  useVirtualizer: ({
+    count,
+    estimateSize,
+  }: {
+    count: number;
+    estimateSize: (index: number) => number;
+  }) => {
+    let start = 0;
+    const virtualItems = Array.from({ length: count }, (_value, index) => {
+      const size = estimateSize(index);
+      const item = { index, start, size, key: index };
+      start += size;
+      return item;
+    });
+
+    return {
+      getVirtualItems: () => virtualItems,
+      getTotalSize: () => start,
+      scrollToIndex: () => undefined,
+    };
+  },
 }));
 
 vi.mock('@/stores', () => ({
@@ -43,6 +67,7 @@ function makeTextItem(overrides: Partial<ClipboardItemType> = {}): ClipboardItem
 
 describe('ClipboardList', () => {
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
     storeMocks.copyItem.mockReset();
     storeMocks.toggleSelected.mockReset();
@@ -59,5 +84,18 @@ describe('ClipboardList', () => {
     const virtualCanvas = scroller.firstElementChild as HTMLElement;
 
     expect(virtualCanvas.style.height).toBe('90px');
+  });
+
+  it('groups items by local calendar day instead of elapsed hours', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 4, 28, 9, 0, 0));
+
+    render(
+      <ClipboardList
+        items={[makeTextItem({ created_at: new Date(2026, 4, 27, 23, 0, 0).getTime() })]}
+      />
+    );
+
+    expect(screen.getByText('昨天')).toBeTruthy();
   });
 });

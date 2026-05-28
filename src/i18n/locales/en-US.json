@@ -202,7 +202,7 @@
       "sensitiveScanned": "Sensitive content scan completed"
     },
     "about": {
-      "tagline": "Cross-platform clipboard manager",
+      "tagline": "Windows-first local clipboard manager",
       "version": "Version",
       "platform": "Platform",
       "system": "System",

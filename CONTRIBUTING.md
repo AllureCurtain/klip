@@ -18,4 +18,4 @@ cargo test
 
 ## Scope
 
-For the MVP, prioritize reliability of clipboard history, search, paste, settings, tray behavior, and packaging. Defer import/export, cloud sync, plugins, database encryption, and backup/restore unless the roadmap is updated first.
+For the MVP, prioritize reliability of clipboard history, search, paste, settings, tray behavior, privacy controls, and local data management. Cloud sync, plugins, account features, full cross-platform parity, and database encryption should stay out of scope unless the roadmap is updated first.
