@@ -123,7 +123,7 @@ function App() {
     return () => {
       unlistenPromise.then((fn) => fn());
     };
-  }, [addItems, contentType, searchQuery, selectedTagId, showFavorites]);
+  }, [addItems, advancedFilters, contentType, searchQuery, selectedTagId, showFavorites]);
 
   useEffect(() => {
     const trimmed = searchQuery.trim();

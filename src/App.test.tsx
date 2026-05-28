@@ -168,6 +168,44 @@ describe('App status states', () => {
     expect(storeState.addItems).not.toHaveBeenCalled();
   });
 
+  it('uses the latest advanced filters for live clipboard updates', async () => {
+    render(<App />);
+
+    act(() => {
+      headerMocks.props?.onAdvancedFiltersChange({
+        sensitiveOnly: true,
+        exactMatch: false,
+        createdAfter: null,
+        createdBefore: null,
+      });
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    act(() => {
+      tauriMocks.clipboardUpdated?.({
+        payload: {
+          id: 2,
+          content_type: 'text',
+          content: 'normal text',
+          preview: 'normal text',
+          hash: 'hash-2',
+          size: 11,
+          metadata: null,
+          is_favorited: false,
+          is_sensitive: false,
+          sensitivity_reason: null,
+          tags: [],
+          created_at: 1,
+          last_used_at: 1,
+        },
+      });
+    });
+
+    expect(storeState.addItems).not.toHaveBeenCalled();
+  });
+
   it('opens the About tab from the tray about event', async () => {
     render(<App />);
 
