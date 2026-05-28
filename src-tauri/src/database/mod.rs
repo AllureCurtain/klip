@@ -1,8 +1,11 @@
 pub mod clipboard;
+pub mod clipboard_query;
 pub mod config;
 pub mod connection;
 pub mod data_portability;
+pub mod migrations;
 pub mod productization;
+pub mod schema;
 pub mod snippets;
 pub mod types;
 

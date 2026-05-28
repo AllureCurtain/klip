@@ -1,9 +1,10 @@
 use tauri::{
     menu::{CheckMenuItem, Menu, MenuItem},
     tray::{TrayIcon, TrayIconBuilder},
-    AppHandle, Emitter, Manager,
+    AppHandle, Manager,
 };
 
+use crate::config::registry;
 use crate::AppError;
 
 struct TrayLabels {
@@ -37,13 +38,13 @@ pub fn setup_tray(app_handle: &AppHandle) -> Result<TrayIcon, AppError> {
     tracing::info!("Setting up tray icon...");
 
     let db = app_handle.state::<crate::database::Database>();
-    let auto_start_enabled = crate::database::config::get(&db, "auto_start")
+    let auto_start_enabled = crate::database::config::get(&db, registry::KEY_AUTO_START)
         .ok()
         .flatten()
         .map(|v| v == "true")
         .unwrap_or(false);
 
-    let language = crate::database::config::get(&db, "language")
+    let language = crate::database::config::get(&db, registry::KEY_LANGUAGE)
         .ok()
         .flatten()
         .unwrap_or_else(|| "zh-CN".to_string());
@@ -95,22 +96,14 @@ pub fn setup_tray(app_handle: &AppHandle) -> Result<TrayIcon, AppError> {
             match event.id.as_ref() {
                 "show" => {
                     tracing::info!("Show menu item clicked");
-                    if let Some(window) = app.get_webview_window("main") {
-                        // Capture the foreground window BEFORE we steal focus,
-                        // so paste can restore it later.
-                        crate::capture_previous_foreground();
-                        if let Err(e) = window.show() {
-                            tracing::error!("Failed to show window: {}", e);
-                        }
-                        if let Err(e) = window.set_focus() {
-                            tracing::error!("Failed to focus window: {}", e);
-                        }
+                    if let Err(error) = crate::window::controller::show_main_window_and_focus(app) {
+                        tracing::error!("Failed to show window: {}", error);
                     }
                 }
                 "autostart" => {
                     tracing::info!("Autostart menu item clicked");
                     let db = app.state::<crate::database::Database>();
-                    let current = crate::database::config::get(&db, "auto_start")
+                    let current = crate::database::config::get(&db, registry::KEY_AUTO_START)
                         .ok()
                         .flatten()
                         .map(|v| v == "true")
@@ -121,11 +114,11 @@ pub fn setup_tray(app_handle: &AppHandle) -> Result<TrayIcon, AppError> {
                 }
                 "settings" => {
                     tracing::info!("Settings menu item clicked");
-                    show_window_and_emit(app, "open-settings");
+                    crate::window::controller::show_main_window_and_emit(app, "open-settings");
                 }
                 "about" => {
                     tracing::info!("About menu item clicked");
-                    show_window_and_emit(app, "open-about");
+                    crate::window::controller::show_main_window_and_emit(app, "open-about");
                 }
                 "quit" => {
                     tracing::info!("Quit menu item clicked");
@@ -149,17 +142,8 @@ pub fn setup_tray(app_handle: &AppHandle) -> Result<TrayIcon, AppError> {
                             crate::notify_tray_click();
 
                             let app = tray.app_handle();
-                            if let Some(window) = app.get_webview_window("main") {
-                                let is_visible = window.is_visible().unwrap_or(false);
-                                if is_visible {
-                                    let _ = window.hide();
-                                } else {
-                                    // Capture the foreground window before Klip
-                                    // becomes foreground itself.
-                                    crate::capture_previous_foreground();
-                                    let _ = window.show();
-                                    let _ = window.set_focus();
-                                }
+                            if let Err(error) = crate::window::controller::toggle_main_window(app) {
+                                tracing::error!("Tray toggle failed: {}", error);
                             }
                         }
                         tauri::tray::MouseButtonState::Up => {
@@ -176,20 +160,4 @@ pub fn setup_tray(app_handle: &AppHandle) -> Result<TrayIcon, AppError> {
 
     tracing::info!("Tray icon created successfully");
     Ok(tray)
-}
-
-fn show_window_and_emit(app: &AppHandle, event: &str) {
-    if let Some(window) = app.get_webview_window("main") {
-        crate::capture_previous_foreground();
-        if let Err(e) = window.show() {
-            tracing::error!("Failed to show window: {}", e);
-        }
-        if let Err(e) = window.set_focus() {
-            tracing::error!("Failed to focus window: {}", e);
-        }
-    }
-
-    if let Err(e) = app.emit(event, ()) {
-        tracing::error!("Failed to emit {}: {}", event, e);
-    }
 }

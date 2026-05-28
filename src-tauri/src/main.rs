@@ -58,27 +58,13 @@ fn main() {
 
             // 设置窗口失焦自动隐藏（带托盘点击保护）
             if let Some(window) = app.get_webview_window("main") {
-                // 从配置读取窗口尺寸
                 let db = app.state::<klip::database::Database>();
-                let window_width: u32 = klip::database::config::get(&db, "window_width")
-                    .ok()
-                    .flatten()
-                    .and_then(|v| v.parse().ok())
-                    .map(klip::config::clamp_window_width)
-                    .unwrap_or(klip::config::DEFAULT_WINDOW_WIDTH);
-                let window_height: u32 = klip::database::config::get(&db, "window_height")
-                    .ok()
-                    .flatten()
-                    .and_then(|v| v.parse().ok())
-                    .map(klip::config::clamp_window_height)
-                    .unwrap_or(klip::config::DEFAULT_WINDOW_HEIGHT);
 
-                if let Err(e) = window.set_size(tauri::Size::Physical(tauri::PhysicalSize {
-                    width: window_width,
-                    height: window_height,
-                })) {
+                if let Err(e) = klip::window::controller::apply_configured_size(app.handle(), &db) {
                     tracing::warn!("Failed to set window size from config: {}", e);
-                } else {
+                } else if let Ok((window_width, window_height)) =
+                    klip::window::controller::configured_window_size(&db)
+                {
                     tracing::info!(
                         "Window size applied from config: {}x{}",
                         window_width,
@@ -95,20 +81,15 @@ fn main() {
                 window.on_window_event(move |event| {
                     if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                         let db = app_handle.state::<klip::database::Database>();
-                        let close_to_tray = klip::database::config::get(&db, "close_to_tray")
-                            .ok()
-                            .flatten()
-                            .map(|v| v == "true")
-                            .unwrap_or(true);
+                        let close_to_tray =
+                            klip::window::controller::close_to_tray_enabled(&db).unwrap_or(true);
 
-                        if klip::window_close_decision(close_to_tray)
+                        if klip::window::controller::close_decision(close_to_tray)
                             == klip::WindowCloseDecision::HideToTray
                         {
                             api.prevent_close();
                             tracing::info!("Window close requested, hiding to tray");
-                            if let Some(win) = app_handle.get_webview_window("main") {
-                                let _ = win.hide();
-                            }
+                            let _ = klip::window::controller::hide_main_window(&app_handle);
                         } else {
                             tracing::info!(
                                 "Window close requested, exiting because close_to_tray is false"
@@ -117,11 +98,8 @@ fn main() {
                         }
                     } else if let tauri::WindowEvent::Focused(false) = event {
                         let db = app_handle.state::<klip::database::Database>();
-                        let close_to_tray = klip::database::config::get(&db, "close_to_tray")
-                            .ok()
-                            .flatten()
-                            .map(|v| v == "true")
-                            .unwrap_or(true);
+                        let close_to_tray =
+                            klip::window::controller::close_to_tray_enabled(&db).unwrap_or(true);
 
                         // 如果 close_to_tray 为 false，不自动隐藏窗口
                         if !close_to_tray {
@@ -139,19 +117,16 @@ fn main() {
                             return;
                         }
                         tracing::info!("Window lost focus, hiding...");
-                        if let Some(win) = app_handle.get_webview_window("main") {
-                            let _ = win.hide();
-                        }
+                        let _ = klip::window::controller::hide_main_window(&app_handle);
                     }
                 });
                 tracing::info!("Window focus handler registered");
 
                 if should_show_window_for_e2e(std::env::var_os("KLIP_E2E_SHOW_WINDOW").as_deref()) {
                     tracing::info!("KLIP_E2E_SHOW_WINDOW is set, showing main window for E2E");
-                    if let Err(e) = window.show() {
-                        tracing::warn!("Failed to show E2E window: {}", e);
-                    }
-                    if let Err(e) = window.set_focus() {
+                    if let Err(e) =
+                        klip::window::controller::show_main_window_and_focus(app.handle())
+                    {
                         tracing::warn!("Failed to focus E2E window: {}", e);
                     }
                 }
@@ -222,12 +197,13 @@ fn main() {
 /// Sync autostart state with persisted config on startup.
 /// Respects user preference instead of always disabling.
 fn restore_autostart_state(app: &tauri::AppHandle) {
+    use klip::config::registry;
     use tauri::Manager;
     #[cfg(not(target_os = "linux"))]
     use tauri_plugin_autostart::ManagerExt;
 
     let db = app.state::<klip::database::Database>();
-    let config_enabled = klip::database::config::get(&db, "auto_start")
+    let config_enabled = klip::database::config::get(&db, registry::KEY_AUTO_START)
         .ok()
         .flatten()
         .map(|v| v == "true")

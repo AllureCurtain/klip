@@ -6,6 +6,7 @@ pub mod error;
 pub mod hotkey;
 pub mod platform;
 pub mod tray;
+pub mod window;
 
 pub use error::AppError;
 
@@ -66,11 +67,7 @@ pub enum WindowCloseDecision {
 }
 
 pub fn window_close_decision(close_to_tray: bool) -> WindowCloseDecision {
-    if close_to_tray {
-        WindowCloseDecision::HideToTray
-    } else {
-        WindowCloseDecision::Quit
-    }
+    window::controller::close_decision(close_to_tray)
 }
 
 /// Returns current time in ms since epoch (for the focus-lost guard).

@@ -1,4 +1,5 @@
-use crate::database::productization::{hydrate_tags, list_tags_locked, row_to_productized_item};
+use crate::database::clipboard_query::{self, ClipboardQuerySpec};
+use crate::database::productization::list_tags_locked;
 use crate::database::types::{
     BackupSummary, ClipboardItem, ContentType, ImportSummary, RestoreSummary, Tag,
 };
@@ -10,6 +11,19 @@ use sha2::Digest;
 use std::path::{Path, PathBuf};
 
 const SUPPORTED_EXPORT_VERSION: u32 = 1;
+const CSV_HEADERS: [&str; 10] = [
+    "id",
+    "content_type",
+    "preview",
+    "content",
+    "is_favorited",
+    "is_sensitive",
+    "sensitivity_reason",
+    "tags",
+    "created_at",
+    "last_used_at",
+];
+
 #[derive(Debug, Serialize, Deserialize)]
 struct ExportFile {
     version: u32,
@@ -18,10 +32,23 @@ struct ExportFile {
     tags: Vec<Tag>,
 }
 
+#[derive(Debug, Deserialize, Serialize)]
+struct ClipboardCsvRow {
+    id: i64,
+    content_type: String,
+    preview: String,
+    content: String,
+    is_favorited: bool,
+    is_sensitive: bool,
+    sensitivity_reason: String,
+    tags: String,
+    created_at: i64,
+    last_used_at: i64,
+}
+
 pub fn export_json(db: &Database, path: &str) -> Result<BackupSummary, AppError> {
     let conn = db.get_connection()?;
-    let mut items = load_all_items(&conn)?;
-    hydrate_tags(&conn, &mut items)?;
+    let items = load_all_items(&conn)?;
     let tags = list_tags_locked(&conn)?;
     let payload = ExportFile {
         version: SUPPORTED_EXPORT_VERSION,
@@ -36,9 +63,11 @@ pub fn export_json(db: &Database, path: &str) -> Result<BackupSummary, AppError>
 
 pub fn export_csv(db: &Database, path: &str) -> Result<BackupSummary, AppError> {
     let conn = db.get_connection()?;
-    let mut items = load_all_items(&conn)?;
-    hydrate_tags(&conn, &mut items)?;
-    let mut out = String::from("id,content_type,preview,content,is_favorited,is_sensitive,sensitivity_reason,tags,created_at,last_used_at\n");
+    let items = load_all_items(&conn)?;
+    let mut writer = csv::WriterBuilder::new()
+        .has_headers(false)
+        .from_writer(Vec::new());
+    writer.write_record(CSV_HEADERS).map_err(csv_error)?;
     for item in items {
         let tags = item
             .tags
@@ -46,24 +75,25 @@ pub fn export_csv(db: &Database, path: &str) -> Result<BackupSummary, AppError> 
             .map(|tag| tag.name.as_str())
             .collect::<Vec<_>>()
             .join("|");
-        out.push_str(
-            &[
-                item.id.to_string(),
-                csv_escape(item.content_type.as_str()),
-                csv_escape(item.preview.as_deref().unwrap_or_default()),
-                csv_escape(&item.content),
-                item.is_favorited.to_string(),
-                item.is_sensitive.to_string(),
-                csv_escape(item.sensitivity_reason.as_deref().unwrap_or_default()),
-                csv_escape(&tags),
-                item.created_at.to_string(),
-                item.last_used_at.to_string(),
-            ]
-            .join(","),
-        );
-        out.push('\n');
+        writer
+            .serialize(ClipboardCsvRow {
+                id: item.id,
+                content_type: item.content_type.as_str().to_string(),
+                preview: item.preview.unwrap_or_default(),
+                content: item.content,
+                is_favorited: item.is_favorited,
+                is_sensitive: item.is_sensitive,
+                sensitivity_reason: item.sensitivity_reason.unwrap_or_default(),
+                tags,
+                created_at: item.created_at,
+                last_used_at: item.last_used_at,
+            })
+            .map_err(csv_error)?;
     }
-    write_file(path, out.as_bytes())
+    let data = writer
+        .into_inner()
+        .map_err(|e| csv_error(e.into_error().into()))?;
+    write_file(path, &data)
 }
 
 pub fn import_json(db: &Database, path: &str) -> Result<ImportSummary, AppError> {
@@ -81,32 +111,28 @@ pub fn import_json(db: &Database, path: &str) -> Result<ImportSummary, AppError>
 }
 
 pub fn import_csv(db: &Database, path: &str) -> Result<ImportSummary, AppError> {
-    let data = std::fs::read_to_string(path)
+    let data = std::fs::read(path)
         .map_err(|e| AppError::System(format!("failed to read import file: {}", e)))?;
+    let mut reader = csv::ReaderBuilder::new()
+        .flexible(false)
+        .from_reader(data.as_slice());
+    validate_csv_headers(reader.headers().map_err(csv_error)?)?;
     let mut items = Vec::new();
-    for (record_no, record) in parse_csv_records(&data)?.into_iter().enumerate() {
-        if record_no == 0 || record.trim().is_empty() {
-            continue;
-        }
-        let fields = parse_csv_line(&record)?;
-        if fields.len() < 10 {
-            return Err(AppError::InvalidInput(format!(
-                "CSV record {} has too few fields",
-                record_no + 1
-            )));
-        }
+    for result in reader.deserialize::<ClipboardCsvRow>() {
+        let row = result.map_err(csv_error)?;
         items.push(ClipboardItem {
             id: 0,
-            content_type: parse_content_type(&fields[1]),
-            preview: empty_to_none(&fields[2]),
-            content: fields[3].clone(),
-            hash: hash_content(&fields[1], &fields[3]),
-            size: fields[3].len() as i64,
+            content_type: ContentType::from_db(&row.content_type),
+            preview: empty_to_none(&row.preview),
+            content: row.content.clone(),
+            hash: hash_content(&row.content_type, &row.content),
+            size: row.content.len() as i64,
             metadata: None,
-            is_favorited: fields[4] == "true",
-            is_sensitive: fields[5] == "true",
-            sensitivity_reason: empty_to_none(&fields[6]),
-            tags: fields[7]
+            is_favorited: row.is_favorited,
+            is_sensitive: row.is_sensitive,
+            sensitivity_reason: empty_to_none(&row.sensitivity_reason),
+            tags: row
+                .tags
                 .split('|')
                 .filter_map(|name| {
                     let trimmed = name.trim();
@@ -118,8 +144,8 @@ pub fn import_csv(db: &Database, path: &str) -> Result<ImportSummary, AppError> 
                     })
                 })
                 .collect(),
-            created_at: fields[8].parse().unwrap_or_else(|_| now_millis()),
-            last_used_at: fields[9].parse().unwrap_or_else(|_| now_millis()),
+            created_at: row.created_at,
+            last_used_at: row.last_used_at,
         });
     }
     import_items(db, items)
@@ -248,16 +274,8 @@ fn upsert_import_tag(tx: &rusqlite::Transaction<'_>, tag: &Tag) -> Result<i64, A
 }
 
 fn load_all_items(conn: &rusqlite::Connection) -> Result<Vec<ClipboardItem>, AppError> {
-    let mut stmt = conn.prepare(
-        "SELECT id, content_type, content, preview, hash, size, metadata, is_favorited,
-                created_at, last_used_at, is_sensitive, sensitivity_reason
-         FROM clipboard_items
-         ORDER BY last_used_at DESC, created_at DESC",
-    )?;
-    let items = stmt
-        .query_map([], |row| Ok(row_to_productized_item(row)))?
-        .collect::<Result<Vec<_>, _>>()?;
-    Ok(items)
+    let spec = ClipboardQuerySpec::all_items();
+    clipboard_query::fetch_items_with_tags_locked(conn, &spec)
 }
 
 fn hash_content(content_type: &str, content: &str) -> String {
@@ -298,93 +316,27 @@ fn ensure_parent_dir(path: &Path) -> Result<(), AppError> {
     Ok(())
 }
 
-fn csv_escape(value: &str) -> String {
-    if value.contains(',') || value.contains('"') || value.contains('\n') {
-        format!("\"{}\"", value.replace('"', "\"\""))
-    } else {
-        value.to_string()
-    }
-}
-
-fn parse_csv_line(line: &str) -> Result<Vec<String>, AppError> {
-    let mut fields = Vec::new();
-    let mut field = String::new();
-    let mut chars = line.chars().peekable();
-    let mut quoted = false;
-    while let Some(ch) = chars.next() {
-        match ch {
-            '"' if quoted && chars.peek() == Some(&'"') => {
-                field.push('"');
-                chars.next();
-            }
-            '"' => quoted = !quoted,
-            ',' if !quoted => {
-                fields.push(field);
-                field = String::new();
-            }
-            _ => field.push(ch),
-        }
-    }
-    if quoted {
-        return Err(AppError::InvalidInput("unterminated CSV quote".into()));
-    }
-    fields.push(field);
-    Ok(fields)
-}
-
-fn parse_csv_records(data: &str) -> Result<Vec<String>, AppError> {
-    let mut records = Vec::new();
-    let mut record = String::new();
-    let mut chars = data.chars().peekable();
-    let mut quoted = false;
-
-    while let Some(ch) = chars.next() {
-        match ch {
-            '"' if quoted && chars.peek() == Some(&'"') => {
-                record.push(ch);
-                record.push(chars.next().unwrap());
-            }
-            '"' => {
-                quoted = !quoted;
-                record.push(ch);
-            }
-            '\r' if !quoted => {
-                if chars.peek() == Some(&'\n') {
-                    chars.next();
-                }
-                records.push(std::mem::take(&mut record));
-            }
-            '\n' if !quoted => {
-                records.push(std::mem::take(&mut record));
-            }
-            _ => record.push(ch),
-        }
-    }
-
-    if quoted {
-        return Err(AppError::InvalidInput("unterminated CSV quote".into()));
-    }
-    if !record.is_empty() {
-        records.push(record);
-    }
-
-    Ok(records)
-}
-
-fn parse_content_type(value: &str) -> ContentType {
-    match value {
-        "image" => ContentType::Image,
-        "file" => ContentType::File,
-        _ => ContentType::Text,
-    }
-}
-
 fn empty_to_none(value: &str) -> Option<String> {
     if value.is_empty() {
         None
     } else {
         Some(value.to_string())
     }
+}
+
+fn validate_csv_headers(headers: &csv::StringRecord) -> Result<(), AppError> {
+    let actual = headers.iter().collect::<Vec<_>>();
+    if actual != CSV_HEADERS {
+        return Err(AppError::InvalidInput(format!(
+            "CSV headers must be: {}",
+            CSV_HEADERS.join(",")
+        )));
+    }
+    Ok(())
+}
+
+fn csv_error(error: csv::Error) -> AppError {
+    AppError::InvalidInput(format!("CSV error: {}", error))
 }
 
 fn now_millis() -> i64 {
@@ -568,6 +520,45 @@ mod tests {
 
         assert_eq!(summary.imported, 1);
         assert_eq!(first_content(&db_path), "first line\nsecond line");
+    }
+
+    #[test]
+    fn import_csv_preserves_quoted_commas_and_quotes() {
+        let dir = temp_dir("csv-quotes");
+        let db_path = dir.join("current.db");
+        let csv_path = dir.join("items.csv");
+        let db = create_db(&db_path);
+        std::fs::write(
+            &csv_path,
+            "id,content_type,preview,content,is_favorited,is_sensitive,sensitivity_reason,tags,created_at,last_used_at\n1,text,\"hello, preview\",\"he said \"\"hello, team\"\"\",true,false,,work|quoted,1,1\n",
+        )
+        .unwrap();
+
+        let summary = import_csv(&db, csv_path.to_str().unwrap()).unwrap();
+
+        assert_eq!(summary.imported, 1);
+        assert_eq!(first_content(&db_path), "he said \"hello, team\"");
+    }
+
+    #[test]
+    fn import_csv_rejects_missing_required_headers() {
+        let dir = temp_dir("csv-missing-header");
+        let db_path = dir.join("current.db");
+        let csv_path = dir.join("items.csv");
+        let db = create_db(&db_path);
+        std::fs::write(
+            &csv_path,
+            "id,content_type,preview,content,is_favorited,is_sensitive,sensitivity_reason,tags,created_at\n1,text,preview,content,false,false,,notes,1\n",
+        )
+        .unwrap();
+
+        let result = import_csv(&db, csv_path.to_str().unwrap());
+
+        assert!(matches!(
+            result,
+            Err(AppError::InvalidInput(message)) if message.contains("CSV headers")
+        ));
+        assert_eq!(count_items(&db_path), 0);
     }
 
     #[test]

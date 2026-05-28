@@ -9,8 +9,11 @@ import type {
 } from '@/types';
 import { getErrorMessage } from '@/types';
 import { clipboardApi } from '@/lib/tauri';
-
-const PAGE_SIZE = 100;
+import {
+  hasAdvancedFilters,
+  normalizeClipboardFilters,
+  toAdvancedSearchQuery,
+} from '@/lib/clipboardFilters';
 
 interface ClipboardStore {
   items: ClipboardItem[];
@@ -65,13 +68,14 @@ export const useClipboardStore = create<ClipboardStore>((set) => ({
   fetchItems: async (options: ClipboardQueryOptions = {}) => {
     set({ loading: true, error: null });
     try {
-      const items = hasAdvancedSearchOptions(options)
+      const items = hasAdvancedFilters(options)
         ? await clipboardApi.searchAdvanced(toAdvancedSearchQuery('', options))
         : await clipboardApi.getListFiltered(options);
+      const filters = normalizeClipboardFilters(options);
       set({
         items,
         loading: false,
-        hasMore: items.length === (options.limit ?? PAGE_SIZE),
+        hasMore: items.length === filters.limit,
         currentQuery: null,
         currentOptions: options,
       });
@@ -83,14 +87,15 @@ export const useClipboardStore = create<ClipboardStore>((set) => ({
   searchItems: async (query: string, options: ClipboardQueryOptions = {}) => {
     set({ loading: true, error: null });
     try {
-      const advanced = hasAdvancedSearchOptions(options);
+      const advanced = hasAdvancedFilters(options);
       const items = advanced
         ? await clipboardApi.searchAdvanced(toAdvancedSearchQuery(query, options))
         : await clipboardApi.searchFiltered(query, options);
+      const filters = normalizeClipboardFilters(options);
       set({
         items,
         loading: false,
-        hasMore: items.length === (options.limit ?? PAGE_SIZE),
+        hasMore: items.length === filters.limit,
         currentQuery: query,
         currentOptions: options,
       });
@@ -104,11 +109,11 @@ export const useClipboardStore = create<ClipboardStore>((set) => ({
       useClipboardStore.getState();
     if (!hasMore || loading || loadingMore) return;
 
-    const limit = currentOptions.limit ?? PAGE_SIZE;
+    const limit = normalizeClipboardFilters(currentOptions).limit;
     const options = { ...currentOptions, limit, offset: items.length };
     set({ loadingMore: true, error: null });
     try {
-      const nextItems = hasAdvancedSearchOptions(options)
+      const nextItems = hasAdvancedFilters(options)
         ? await clipboardApi.searchAdvanced(toAdvancedSearchQuery(currentQuery ?? '', options))
         : currentQuery
           ? await clipboardApi.searchFiltered(currentQuery, options)
@@ -328,30 +333,6 @@ export const useClipboardStore = create<ClipboardStore>((set) => ({
     set({ items, hasMore: false });
   },
 }));
-
-function hasAdvancedSearchOptions(options: ClipboardQueryOptions): boolean {
-  return (
-    options.sensitiveOnly != null ||
-    options.exactMatch === true ||
-    options.createdAfter != null ||
-    options.createdBefore != null
-  );
-}
-
-function toAdvancedSearchQuery(query: string, options: ClipboardQueryOptions) {
-  return {
-    query,
-    contentType: options.contentType ?? null,
-    favoriteOnly: options.favoriteOnly ?? false,
-    sensitiveOnly: options.sensitiveOnly ?? null,
-    tagId: options.tagId ?? null,
-    exactMatch: options.exactMatch ?? false,
-    createdAfter: options.createdAfter ?? null,
-    createdBefore: options.createdBefore ?? null,
-    limit: options.limit ?? PAGE_SIZE,
-    offset: options.offset ?? 0,
-  };
-}
 
 function appendUniqueItems(
   existingItems: ClipboardItem[],

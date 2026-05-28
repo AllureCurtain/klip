@@ -17,7 +17,9 @@ import {
   configApi,
 } from '@/lib/tauri';
 import { springs, windowVariants } from '@/lib/motion';
+import { clipboardItemMatchesFilters } from '@/lib/clipboardFilters';
 import { setLanguage, type SupportedLanguage, SUPPORTED_LANGUAGES } from '@/i18n';
+import { CONFIG_KEYS } from '@/stores/configSchema';
 import type { ClipboardItem } from './types';
 
 const DEFAULT_SEARCH_DEBOUNCE_MS = 150;
@@ -66,7 +68,7 @@ function App() {
     fetchTags();
     fetchProductivity();
 
-    configApi.get('search_debounce_ms').then((value) => {
+    configApi.get(CONFIG_KEYS.searchDebounceMs).then((value) => {
       if (value) {
         const ms = parseInt(value, 10);
         if (!isNaN(ms) && ms > 0) {
@@ -75,7 +77,7 @@ function App() {
       }
     });
 
-    configApi.get('language').then((value) => {
+    configApi.get(CONFIG_KEYS.language).then((value) => {
       if (value && SUPPORTED_LANGUAGES.includes(value as SupportedLanguage)) {
         setLanguage(value as SupportedLanguage);
       }
@@ -86,16 +88,16 @@ function App() {
     });
 
     const unlistenConfigPromise = onConfigChanged((key, value) => {
-      if (key === 'search_debounce_ms') {
+      if (key === CONFIG_KEYS.searchDebounceMs) {
         const ms = parseInt(value, 10);
         if (!isNaN(ms) && ms > 0) {
           setSearchDebounceMs(ms);
         }
-      } else if (key === 'language' && SUPPORTED_LANGUAGES.includes(value as SupportedLanguage)) {
+      } else if (key === CONFIG_KEYS.language && SUPPORTED_LANGUAGES.includes(value as SupportedLanguage)) {
         setLanguage(value as SupportedLanguage);
       } else if (
-        key === 'clipboard_monitor_enabled' ||
-        key === 'privacy_mode_until'
+        key === CONFIG_KEYS.clipboardMonitorEnabled ||
+        key === CONFIG_KEYS.privacyModeUntil
       ) {
         void fetchProductivity();
       }
@@ -122,13 +124,15 @@ function App() {
   useEffect(() => {
     const unlistenPromise = listen<ClipboardItem>('clipboard-updated', (event) => {
       if (
-        clipboardItemMatchesView(event.payload, {
-          searchQuery,
-          contentType,
-      showFavorites,
-      selectedTagId,
-      advancedFilters,
-    })
+        clipboardItemMatchesFilters(event.payload, searchQuery, {
+          contentType: contentType as 'text' | 'image' | 'file' | null,
+          favoriteOnly: showFavorites,
+          tagId: selectedTagId,
+          sensitiveOnly: advancedFilters.sensitiveOnly ?? null,
+          exactMatch: advancedFilters.exactMatch ?? false,
+          createdAfter: advancedFilters.createdAfter ?? null,
+          createdBefore: advancedFilters.createdBefore ?? null,
+        })
       ) {
         addItems([event.payload]);
       }
@@ -250,59 +254,3 @@ function App() {
 }
 
 export default App;
-
-function clipboardItemMatchesView(
-  item: ClipboardItem,
-  {
-    searchQuery,
-    contentType,
-    showFavorites,
-    selectedTagId,
-    advancedFilters,
-  }: {
-    searchQuery: string;
-    contentType: string | null;
-    showFavorites: boolean;
-    selectedTagId: number | null;
-    advancedFilters?: HeaderAdvancedFilters;
-  }
-): boolean {
-  if (contentType && item.content_type !== contentType) {
-    return false;
-  }
-
-  if (showFavorites && !item.is_favorited) {
-    return false;
-  }
-
-  if (selectedTagId !== null && !item.tags.some((tag) => tag.id === selectedTagId)) {
-    return false;
-  }
-
-  if (advancedFilters?.sensitiveOnly === true && !item.is_sensitive) {
-    return false;
-  }
-
-  if (advancedFilters?.createdAfter && item.created_at < advancedFilters.createdAfter) {
-    return false;
-  }
-
-  if (advancedFilters?.createdBefore && item.created_at > advancedFilters.createdBefore) {
-    return false;
-  }
-
-  const query = searchQuery.trim().toLocaleLowerCase();
-  if (query === '') {
-    return true;
-  }
-
-  const preview = item.preview?.toLocaleLowerCase() ?? '';
-  const searchableContent =
-    item.content_type === 'image' ? '' : item.content.toLocaleLowerCase();
-
-  if (advancedFilters?.exactMatch) {
-    return preview === query || searchableContent === query;
-  }
-
-  return preview.includes(query) || searchableContent.includes(query);
-}

@@ -16,6 +16,14 @@ impl ContentType {
             ContentType::File => "file",
         }
     }
+
+    pub fn from_db(value: &str) -> Self {
+        match value {
+            "image" => ContentType::Image,
+            "file" => ContentType::File,
+            _ => ContentType::Text,
+        }
+    }
 }
 
 impl std::fmt::Display for ContentType {

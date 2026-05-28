@@ -7,6 +7,7 @@ use tauri::{AppHandle, Emitter, Manager};
 
 #[cfg(target_os = "windows")]
 use crate::clipboard::format::{ExtractedContent, FormatStrategyRegistry};
+use crate::config::registry;
 use crate::database::{self, ClipboardItem, NewClipboardItem};
 use crate::{AppError, Database};
 
@@ -381,7 +382,7 @@ fn save_clipboard_item(
                 tracing::info!("clipboard-updated event emitted");
             }
 
-            if let Ok(max_count_str) = database::config::get(&db, "max_history_count") {
+            if let Ok(max_count_str) = database::config::get(&db, registry::KEY_MAX_HISTORY_COUNT) {
                 if let Ok(max_count) = max_count_str.unwrap_or_default().parse::<i64>() {
                     if max_count > 0 {
                         let _ = database::clipboard::cleanup_old_records(&db, max_count);
@@ -416,13 +417,13 @@ pub fn capture_gate_decision(
     process_name: Option<&str>,
     window_title: Option<&str>,
 ) -> Result<CaptureGateDecision, AppError> {
-    let enabled = database::config::get(db, "clipboard_monitor_enabled")?
+    let enabled = database::config::get(db, registry::KEY_CLIPBOARD_MONITOR_ENABLED)?
         .unwrap_or_else(|| "true".to_string());
     if enabled != "true" {
         return Ok(CaptureGateDecision::SkipMonitoringDisabled);
     }
 
-    let privacy_until = database::config::get(db, "privacy_mode_until")?
+    let privacy_until = database::config::get(db, registry::KEY_PRIVACY_MODE_UNTIL)?
         .and_then(|value| value.parse::<i64>().ok())
         .unwrap_or(0);
     if privacy_until > now_millis() {
@@ -554,6 +555,7 @@ pub fn start_monitor(app_handle: AppHandle) -> Result<(), crate::AppError> {
 
 #[cfg(test)]
 mod tests {
+    use crate::config::registry;
     use crate::database::{self, ContentType, Database, NewClipboardItem, SourceRuleInput};
     use rusqlite::Connection;
     use sha2::{Digest, Sha256};
@@ -584,7 +586,7 @@ mod tests {
     #[test]
     fn capture_gate_skips_when_monitoring_is_disabled() {
         let db = test_db();
-        database::config::set(&db, "clipboard_monitor_enabled", "false").unwrap();
+        database::config::set(&db, registry::KEY_CLIPBOARD_MONITOR_ENABLED, "false").unwrap();
 
         let decision = super::capture_gate_decision(&db, None, None).unwrap();
 
@@ -596,7 +598,7 @@ mod tests {
         let db = test_db();
         database::config::set(
             &db,
-            "privacy_mode_until",
+            registry::KEY_PRIVACY_MODE_UNTIL,
             &(super::now_millis() + 60_000).to_string(),
         )
         .unwrap();
@@ -628,7 +630,7 @@ mod tests {
     #[test]
     fn insert_from_monitor_respects_capture_gate_without_touching_manual_insert() {
         let db = test_db();
-        database::config::set(&db, "clipboard_monitor_enabled", "false").unwrap();
+        database::config::set(&db, registry::KEY_CLIPBOARD_MONITOR_ENABLED, "false").unwrap();
         let item = text_item("monitor should skip");
 
         let result = super::insert_from_monitor(&db, &item, None, None).unwrap();

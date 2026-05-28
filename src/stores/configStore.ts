@@ -1,32 +1,8 @@
 import { create } from 'zustand';
 import { configApi, systemApi } from '@/lib/tauri';
-import {
-  DEFAULT_WINDOW_HEIGHT,
-  DEFAULT_WINDOW_WIDTH,
-  MIN_WINDOW_HEIGHT,
-  MIN_WINDOW_WIDTH,
-} from '@/lib/constants';
 import type { AppConfig, DiagnosticsInfo, SystemInfo } from '@/types';
 import { getErrorMessage } from '@/types';
-
-function parseBoolean(value: string | null | undefined, defaultValue: boolean): boolean {
-  if (value == null) return defaultValue;
-  return value === 'true';
-}
-
-function parseNumber(value: string | null, defaultValue: number): number {
-  if (value === null) return defaultValue;
-  const parsed = parseInt(value, 10);
-  return isNaN(parsed) ? defaultValue : parsed;
-}
-
-function clampWindowWidth(value: number): number {
-  return Math.max(MIN_WINDOW_WIDTH, value);
-}
-
-function clampWindowHeight(value: number): number {
-  return Math.max(MIN_WINDOW_HEIGHT, value);
-}
+import { DEFAULT_CONFIG, clampWindowHeight, clampWindowWidth, parseConfig, serializeConfig } from './configSchema';
 
 interface ConfigState {
   config: AppConfig;
@@ -61,28 +37,6 @@ interface ConfigState {
   resetChanges: () => Promise<void>;
 }
 
-const DEFAULT_CONFIG: AppConfig = {
-  max_history_count: 100,
-  hotkey_toggle_window: 'Ctrl+Alt+K',
-  hotkey_quick_paste_prefix: 'Ctrl+Alt',
-  auto_start: false,
-  close_to_tray: true,
-  window_width: DEFAULT_WINDOW_WIDTH,
-  window_height: DEFAULT_WINDOW_HEIGHT,
-  search_debounce_ms: 150,
-  language: 'zh-CN',
-  sensitive_capture_policy: 'flag',
-  mask_sensitive_previews: true,
-  clipboard_monitor_enabled: true,
-  privacy_mode_until: 0,
-  updates_enabled: false,
-  update_feed_url: '',
-  encryption_enabled: false,
-  encryption_status: 'off',
-  sync_folder: '',
-  plugin_folder: '',
-};
-
 export const useConfigStore = create<ConfigState>((set, get) => ({
   config: DEFAULT_CONFIG,
   systemInfo: null,
@@ -95,28 +49,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     set({ loading: true, error: null });
     try {
       const allConfig = await configApi.getAll();
-      const config: AppConfig = {
-        max_history_count: parseNumber(allConfig['max_history_count'], 100),
-        hotkey_toggle_window: allConfig['hotkey_toggle_window'] || 'Ctrl+Alt+K',
-        hotkey_quick_paste_prefix: allConfig['hotkey_quick_paste_prefix'] || 'Ctrl+Alt',
-        auto_start: parseBoolean(allConfig['auto_start'], false),
-        close_to_tray: parseBoolean(allConfig['close_to_tray'], true),
-        window_width: clampWindowWidth(parseNumber(allConfig['window_width'], DEFAULT_WINDOW_WIDTH)),
-        window_height: clampWindowHeight(parseNumber(allConfig['window_height'], DEFAULT_WINDOW_HEIGHT)),
-        search_debounce_ms: parseNumber(allConfig['search_debounce_ms'], 150),
-        language: allConfig['language'] || 'zh-CN',
-        sensitive_capture_policy:
-          allConfig['sensitive_capture_policy'] === 'skip' ? 'skip' : 'flag',
-        mask_sensitive_previews: parseBoolean(allConfig['mask_sensitive_previews'], true),
-        clipboard_monitor_enabled: parseBoolean(allConfig['clipboard_monitor_enabled'], true),
-        privacy_mode_until: parseNumber(allConfig['privacy_mode_until'], 0),
-        updates_enabled: parseBoolean(allConfig['updates_enabled'], false),
-        update_feed_url: allConfig['update_feed_url'] || '',
-        encryption_enabled: parseBoolean(allConfig['encryption_enabled'], false),
-        encryption_status: allConfig['encryption_status'] || 'off',
-        sync_folder: allConfig['sync_folder'] || '',
-        plugin_folder: allConfig['plugin_folder'] || '',
-      };
+      const config = parseConfig(allConfig);
       set({ config, loading: false, hasChanges: false });
     } catch (error) {
       set({ error: getErrorMessage(error), loading: false });
@@ -279,24 +212,10 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     const { config } = get();
     set({ loading: true, error: null });
     try {
-      await configApi.set('max_history_count', config.max_history_count.toString());
-      await configApi.set('hotkey_toggle_window', config.hotkey_toggle_window);
-      await configApi.set('hotkey_quick_paste_prefix', config.hotkey_quick_paste_prefix);
-      await configApi.set('close_to_tray', config.close_to_tray.toString());
-      await configApi.set('window_width', config.window_width.toString());
-      await configApi.set('window_height', config.window_height.toString());
-      await configApi.set('search_debounce_ms', config.search_debounce_ms.toString());
-      await configApi.set('language', config.language);
-      await configApi.set('sensitive_capture_policy', config.sensitive_capture_policy);
-      await configApi.set('mask_sensitive_previews', config.mask_sensitive_previews.toString());
-      await configApi.set('clipboard_monitor_enabled', config.clipboard_monitor_enabled.toString());
-      await configApi.set('privacy_mode_until', config.privacy_mode_until.toString());
-      await configApi.set('updates_enabled', config.updates_enabled.toString());
-      await configApi.set('update_feed_url', config.update_feed_url);
-      await configApi.set('encryption_enabled', config.encryption_enabled.toString());
-      await configApi.set('encryption_status', config.encryption_status);
-      await configApi.set('sync_folder', config.sync_folder);
-      await configApi.set('plugin_folder', config.plugin_folder);
+      for (const [key, value] of serializeConfig(config)) {
+        if (key === 'auto_start') continue;
+        await configApi.set(key, value);
+      }
       set({ loading: false, hasChanges: false });
       return true;
     } catch (error) {

@@ -1,7 +1,7 @@
-use rusqlite::OptionalExtension;
-
 use base64::Engine;
 
+use crate::config::registry;
+use crate::database::clipboard_query::{self, ClipboardQuerySpec};
 use crate::database::types::ContentType;
 use crate::{AppError, Database};
 
@@ -45,12 +45,7 @@ mod tests {
             rusqlite::params![content, content, hash, content.len() as i64, created_at],
         ).unwrap();
 
-        let mut stmt = conn.prepare(
-            "SELECT id, content_type, content, preview, hash, size, metadata, is_favorited, created_at, last_used_at, is_sensitive, sensitivity_reason
-             FROM clipboard_items WHERE hash = ?1",
-        ).unwrap();
-        stmt.query_row([&hash], |row| Ok(row_to_clipboard_item(row)))
-            .unwrap()
+        crate::database::clipboard_query::fetch_item_by_hash_locked(&conn, &hash).unwrap()
     }
 
     #[test]
@@ -196,7 +191,7 @@ mod tests {
     #[test]
     fn insert_skips_sensitive_text_when_policy_is_skip() {
         let db = test_db();
-        crate::database::config::set(&db, "sensitive_capture_policy", "skip").unwrap();
+        crate::database::config::set(&db, registry::KEY_SENSITIVE_CAPTURE_POLICY, "skip").unwrap();
         let hash = format!("{:x}", sha2::Sha256::digest(b"password=super-secret"));
         let item = crate::database::types::NewClipboardItem {
             content_type: ContentType::Text,
@@ -215,20 +210,8 @@ mod tests {
 }
 
 pub fn get_list(db: &Database, limit: i64, offset: i64) -> Result<Vec<ClipboardItem>, AppError> {
-    let conn = db.get_connection()?;
-
-    let mut stmt = conn.prepare(
-        "SELECT id, content_type, content, preview, hash, size, metadata, is_favorited, created_at, last_used_at, is_sensitive, sensitivity_reason
-         FROM clipboard_items
-         ORDER BY last_used_at DESC, created_at DESC
-         LIMIT ?1 OFFSET ?2",
-    )?;
-
-    let items = stmt
-        .query_map([limit, offset], |row| Ok(row_to_clipboard_item(row)))?
-        .collect::<Result<Vec<_>, _>>()?;
-
-    Ok(items)
+    let spec = ClipboardQuerySpec::new(limit, offset);
+    clipboard_query::fetch_items(db, &spec)
 }
 
 pub fn search(
@@ -239,42 +222,10 @@ pub fn search(
 ) -> Result<Vec<ClipboardItem>, AppError> {
     let start = std::time::Instant::now();
 
-    let conn = db.get_connection()?;
-
-    let sql = match content_type {
-        Some(_) =>
-            "SELECT id, content_type, content, preview, hash, size, metadata, is_favorited, created_at, last_used_at, is_sensitive, sensitivity_reason
-             FROM clipboard_items
-             WHERE (preview LIKE ?1 OR (content_type != 'image' AND content LIKE ?1))
-               AND content_type = ?3
-             ORDER BY last_used_at DESC, created_at DESC
-             LIMIT ?2",
-        None =>
-            "SELECT id, content_type, content, preview, hash, size, metadata, is_favorited, created_at, last_used_at, is_sensitive, sensitivity_reason
-             FROM clipboard_items
-             WHERE preview LIKE ?1
-                OR (content_type != 'image' AND content LIKE ?1)
-             ORDER BY last_used_at DESC, created_at DESC
-             LIMIT ?2",
-    };
-
-    let mut stmt = conn.prepare(sql)?;
-
-    let search_pattern = format!("%{}%", query);
-    let limit_str = limit.to_string();
-
-    let items = match content_type {
-        Some(ct) => stmt
-            .query_map(rusqlite::params![&search_pattern, &limit_str, ct], |row| {
-                Ok(row_to_clipboard_item(row))
-            })?
-            .collect::<Result<Vec<_>, _>>()?,
-        None => stmt
-            .query_map([&search_pattern, &limit_str], |row| {
-                Ok(row_to_clipboard_item(row))
-            })?
-            .collect::<Result<Vec<_>, _>>()?,
-    };
+    let mut spec = ClipboardQuerySpec::new(limit, 0);
+    spec.text_query = Some(query.to_string());
+    spec.content_type = content_type.map(|value| value.to_string());
+    let items = clipboard_query::fetch_items(db, &spec)?;
 
     let elapsed = start.elapsed();
     if elapsed.as_millis() > 50 {
@@ -290,19 +241,7 @@ pub fn search(
 }
 
 pub fn get_by_id(db: &Database, id: i64) -> Result<Option<ClipboardItem>, AppError> {
-    let conn = db.get_connection()?;
-
-    let mut stmt = conn.prepare(
-        "SELECT id, content_type, content, preview, hash, size, metadata, is_favorited, created_at, last_used_at, is_sensitive, sensitivity_reason
-         FROM clipboard_items
-         WHERE id = ?1",
-    )?;
-
-    let result = stmt
-        .query_row([id], |row| Ok(row_to_clipboard_item(row)))
-        .optional()?;
-
-    Ok(result)
+    clipboard_query::fetch_item_by_id(db, id)
 }
 
 pub fn insert(
@@ -313,8 +252,9 @@ pub fn insert(
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_millis() as i64;
-    let sensitive_capture_policy = crate::database::config::get(db, "sensitive_capture_policy")?
-        .unwrap_or_else(|| "flag".to_string());
+    let sensitive_capture_policy =
+        crate::database::config::get(db, registry::KEY_SENSITIVE_CAPTURE_POLICY)?
+            .unwrap_or_else(|| "flag".to_string());
 
     let content_str = match item.content_type {
         ContentType::Text => String::from_utf8_lossy(&item.data).to_string(),
@@ -358,15 +298,7 @@ pub fn insert(
         ],
     )?;
 
-    let mut stmt = conn.prepare(
-        "SELECT id, content_type, content, preview, hash, size, metadata, is_favorited, created_at, last_used_at, is_sensitive, sensitivity_reason
-         FROM clipboard_items
-         WHERE hash = ?1",
-    )?;
-
-    let result = stmt.query_row([&item.hash], |row| Ok(row_to_clipboard_item(row)))?;
-
-    Ok(result)
+    clipboard_query::fetch_item_by_hash_locked(&conn, &item.hash)
 }
 
 pub fn delete(db: &Database, id: i64) -> Result<(), AppError> {
@@ -418,34 +350,5 @@ pub fn toggle_favorite(db: &Database, id: i64) -> Result<ClipboardItem, AppError
         [id],
     )?;
 
-    let mut stmt = conn.prepare(
-        "SELECT id, content_type, content, preview, hash, size, metadata, is_favorited, created_at, last_used_at, is_sensitive, sensitivity_reason
-         FROM clipboard_items WHERE id = ?1",
-    )?;
-
-    Ok(stmt.query_row([id], |row| Ok(row_to_clipboard_item(row)))?)
-}
-
-fn row_to_clipboard_item(row: &rusqlite::Row<'_>) -> ClipboardItem {
-    let content_type_str: String = row.get(1).unwrap_or_default();
-    let content_type = match content_type_str.as_str() {
-        "image" => ContentType::Image,
-        "file" => ContentType::File,
-        _ => ContentType::Text,
-    };
-    ClipboardItem {
-        id: row.get(0).unwrap_or(0),
-        content_type,
-        content: row.get(2).unwrap_or_default(),
-        preview: row.get(3).unwrap_or(None),
-        hash: row.get(4).unwrap_or_default(),
-        size: row.get(5).unwrap_or(0),
-        metadata: row.get(6).unwrap_or(None),
-        is_favorited: row.get::<_, i64>(7).unwrap_or(0) != 0,
-        created_at: row.get(8).unwrap_or(0),
-        last_used_at: row.get(9).unwrap_or(0),
-        is_sensitive: row.get::<_, i64>(10).unwrap_or(0) != 0,
-        sensitivity_reason: row.get(11).unwrap_or(None),
-        tags: Vec::new(),
-    }
+    clipboard_query::fetch_item_by_id_required_locked(&conn, id)
 }

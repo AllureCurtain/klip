@@ -2,6 +2,7 @@ mod productization;
 
 pub use productization::*;
 
+use crate::config::registry::{self, RuntimeEffect};
 use crate::database::{self, ClipboardItem, DiagnosticsInfo, SystemInfo};
 use crate::AppError;
 use tauri::{Emitter, Manager, State};
@@ -60,16 +61,7 @@ pub fn clear_clipboard_history(
 
 #[tauri::command]
 pub fn copy_to_clipboard(db: State<'_, database::Database>, id: i64) -> Result<(), AppError> {
-    let item = database::clipboard::get_by_id(&db, id)?
-        .ok_or_else(|| AppError::NotFound(format!("clipboard item {} not found", id)))?;
-
-    crate::clipboard::copy_to_clipboard(
-        &item.content,
-        &item.content_type,
-        item.metadata.as_deref(),
-    )?;
-    let _ = database::clipboard::touch_last_used(&db, id);
-    Ok(())
+    crate::clipboard::paste::copy_item_by_id(&db, id)
 }
 
 #[tauri::command]
@@ -78,51 +70,7 @@ pub fn paste_from_clipboard(
     db: State<'_, database::Database>,
     id: i64,
 ) -> Result<(), AppError> {
-    let item = database::clipboard::get_by_id(&db, id)?
-        .ok_or_else(|| AppError::NotFound(format!("clipboard item {} not found", id)))?;
-
-    crate::clipboard::copy_to_clipboard(
-        &item.content,
-        &item.content_type,
-        item.metadata.as_deref(),
-    )?;
-
-    let _ = database::clipboard::touch_last_used(&db, id);
-
-    if let Some(window) = app.get_webview_window("main") {
-        let _ = window.hide();
-    }
-
-    #[cfg(target_os = "windows")]
-    {
-        std::thread::sleep(std::time::Duration::from_millis(30));
-        let _ = crate::restore_previous_foreground();
-        std::thread::sleep(std::time::Duration::from_millis(120));
-        if let Ok(mut enigo) = enigo::Enigo::new(&enigo::Settings::default()) {
-            use enigo::Keyboard;
-            let _ = enigo.key(enigo::Key::Control, enigo::Direction::Press);
-            let _ = enigo.key(enigo::Key::Unicode('v'), enigo::Direction::Click);
-            let _ = enigo.key(enigo::Key::Control, enigo::Direction::Release);
-        }
-    }
-
-    #[cfg(target_os = "macos")]
-    {
-        std::thread::sleep(std::time::Duration::from_millis(50));
-        if let Ok(mut enigo) = enigo::Enigo::new(&enigo::Settings::default()) {
-            use enigo::Keyboard;
-            let _ = enigo.key(enigo::Key::Meta, enigo::Direction::Press);
-            let _ = enigo.key(enigo::Key::Unicode('v'), enigo::Direction::Click);
-            let _ = enigo.key(enigo::Key::Meta, enigo::Direction::Release);
-        }
-    }
-
-    #[cfg(target_os = "linux")]
-    {
-        crate::platform::linux::simulate_paste()?;
-    }
-
-    Ok(())
+    crate::clipboard::paste::paste_item_by_id(&app, &db, id)
 }
 
 #[tauri::command]
@@ -147,9 +95,9 @@ pub fn set_config(
     key: String,
     value: String,
 ) -> Result<(), AppError> {
-    let value = normalize_config_value(&key, value)?;
-    let previous_value = if key == "hotkey_toggle_window" || key == "hotkey_quick_paste_prefix" {
-        crate::hotkey::manager::validate_config_value(&key, &value)?;
+    let descriptor = registry::require_descriptor(&key)?;
+    let value = descriptor.normalize(&value)?;
+    let previous_value = if descriptor.effect == RuntimeEffect::HotkeyReload {
         database::config::get(&db, &key)?
     } else {
         None
@@ -157,45 +105,18 @@ pub fn set_config(
 
     database::config::set(&db, &key, &value)?;
 
-    if key == "window_width" || key == "window_height" {
-        apply_window_size_from_config(&app, &db)?;
-    }
-
-    if key == "hotkey_toggle_window" || key == "hotkey_quick_paste_prefix" {
-        if let Err(err) = crate::hotkey::manager::reload_hotkeys(&app) {
-            match previous_value {
-                Some(previous) => {
-                    let _ = database::config::set(&db, &key, &previous);
-                }
-                None => {
-                    let fallback = match key.as_str() {
-                        "hotkey_toggle_window" => crate::hotkey::manager::DEFAULT_TOGGLE_HOTKEY,
-                        "hotkey_quick_paste_prefix" => {
-                            crate::hotkey::manager::DEFAULT_QUICK_PASTE_PREFIX
-                        }
-                        _ => unreachable!(),
-                    };
-                    let _ = database::config::set(&db, &key, fallback);
-                }
+    match descriptor.effect {
+        RuntimeEffect::WindowSize => apply_window_size_from_config(&app, &db)?,
+        RuntimeEffect::HotkeyReload => {
+            if let Err(err) = crate::hotkey::manager::reload_hotkeys(&app) {
+                rollback_hotkey_config(&app, &db, descriptor, previous_value)?;
+                return Err(AppError::Hotkey(format!(
+                    "Failed to reload hotkeys: {}",
+                    err
+                )));
             }
-
-            if let Some(previous) = database::config::get(&db, "hotkey_toggle_window")? {
-                let quick_paste_prefix = database::config::get(&db, "hotkey_quick_paste_prefix")?
-                    .unwrap_or_else(|| {
-                        crate::hotkey::manager::DEFAULT_QUICK_PASTE_PREFIX.to_string()
-                    });
-                let _ = crate::hotkey::manager::reload_hotkeys_from_values(
-                    &app,
-                    &previous,
-                    &quick_paste_prefix,
-                );
-            }
-
-            return Err(AppError::Hotkey(format!(
-                "Failed to reload hotkeys: {}",
-                err
-            )));
         }
+        RuntimeEffect::None => {}
     }
 
     let _ = app.emit(
@@ -205,78 +126,48 @@ pub fn set_config(
     Ok(())
 }
 
+#[cfg(test)]
 fn normalize_config_value(key: &str, value: String) -> Result<String, AppError> {
-    match key {
-        "window_width" => value
-            .parse::<u32>()
-            .map(crate::config::clamp_window_width)
-            .map(|value| value.to_string())
-            .map_err(|_| AppError::InvalidInput("window_width must be a number".to_string())),
-        "window_height" => value
-            .parse::<u32>()
-            .map(crate::config::clamp_window_height)
-            .map(|value| value.to_string())
-            .map_err(|_| AppError::InvalidInput("window_height must be a number".to_string())),
-        _ => Ok(value),
-    }
+    registry::require_descriptor(key)?.normalize(&value)
 }
 
 fn apply_window_size_from_config(
     app: &tauri::AppHandle,
     db: &database::Database,
 ) -> Result<(), AppError> {
-    let width: u32 = database::config::get(db, "window_width")?
-        .and_then(|v| v.parse().ok())
-        .map(crate::config::clamp_window_width)
-        .unwrap_or(crate::config::DEFAULT_WINDOW_WIDTH);
-    let height: u32 = database::config::get(db, "window_height")?
-        .and_then(|v| v.parse().ok())
-        .map(crate::config::clamp_window_height)
-        .unwrap_or(crate::config::DEFAULT_WINDOW_HEIGHT);
+    crate::window::controller::apply_configured_size(app, db).map(|_| ())
+}
 
-    if let Some(window) = app.get_webview_window("main") {
-        window
-            .set_size(tauri::Size::Physical(tauri::PhysicalSize { width, height }))
-            .map_err(|e| AppError::Window(e.to_string()))?;
-    }
+fn rollback_hotkey_config(
+    app: &tauri::AppHandle,
+    db: &database::Database,
+    descriptor: &registry::ConfigDescriptor,
+    previous_value: Option<String>,
+) -> Result<(), AppError> {
+    let rollback_value = previous_value.unwrap_or_else(|| descriptor.default_value.to_string());
+    let _ = database::config::set(db, descriptor.key, &rollback_value);
 
+    let toggle = database::config::get(db, registry::KEY_HOTKEY_TOGGLE_WINDOW)?
+        .unwrap_or_else(|| registry::DEFAULT_TOGGLE_HOTKEY.to_string());
+    let quick_paste_prefix = database::config::get(db, registry::KEY_HOTKEY_QUICK_PASTE_PREFIX)?
+        .unwrap_or_else(|| registry::DEFAULT_QUICK_PASTE_PREFIX.to_string());
+    let _ = crate::hotkey::manager::reload_hotkeys_from_values(app, &toggle, &quick_paste_prefix);
     Ok(())
 }
 
 #[tauri::command]
 pub fn toggle_window(app: tauri::AppHandle) -> Result<(), AppError> {
-    if let Some(window) = app.get_webview_window("main") {
-        if window.is_visible().unwrap_or(false) {
-            window.hide().map_err(|e| AppError::Window(e.to_string()))?;
-        } else {
-            crate::capture_previous_foreground();
-            window.show().map_err(|e| AppError::Window(e.to_string()))?;
-            window
-                .set_focus()
-                .map_err(|e| AppError::Window(e.to_string()))?;
-        }
-    }
-    Ok(())
+    crate::window::controller::toggle_main_window(&app)
 }
 
 #[tauri::command]
 pub fn show_window(app: tauri::AppHandle) -> Result<(), AppError> {
-    if let Some(window) = app.get_webview_window("main") {
-        crate::capture_previous_foreground();
-        window.show().map_err(|e| AppError::Window(e.to_string()))?;
-        window
-            .set_focus()
-            .map_err(|e| AppError::Window(e.to_string()))?;
-    }
-    Ok(())
+    crate::window::controller::show_main_window_and_focus(&app)
 }
 
 #[tauri::command]
 pub fn hide_window(app: tauri::AppHandle) -> Result<(), AppError> {
-    if let Some(window) = app.get_webview_window("main") {
-        window.hide().map_err(|e| AppError::Window(e.to_string()))?;
-    }
-    Ok(())
+    crate::window::controller::hide_main_window(&app)
 }
 
 #[tauri::command]
@@ -290,10 +181,14 @@ pub fn set_auto_start(
         let exe = std::env::current_exe()
             .map_err(|e| AppError::System(format!("Failed to resolve current exe: {}", e)))?;
         crate::platform::linux::set_autostart(enabled, &exe)?;
-        database::config::set(&db, "auto_start", if enabled { "true" } else { "false" })?;
+        database::config::set(
+            &db,
+            registry::KEY_AUTO_START,
+            if enabled { "true" } else { "false" },
+        )?;
         let _ = app.emit(
             "config-changed",
-            serde_json::json!({ "key": "auto_start", "value": enabled.to_string() }),
+            serde_json::json!({ "key": registry::KEY_AUTO_START, "value": enabled.to_string() }),
         );
         Ok(())
     }
@@ -307,20 +202,20 @@ pub fn set_auto_start(
                 tracing::error!("Failed to enable autostart: {}", e);
                 AppError::System(format!("Failed to enable autostart: {}", e))
             })?;
-            database::config::set(&db, "auto_start", "true")?;
+            database::config::set(&db, registry::KEY_AUTO_START, "true")?;
             tracing::info!("Auto start enabled");
         } else {
             manager.disable().map_err(|e| {
                 tracing::warn!("Failed to disable autostart: {}", e);
                 AppError::System(format!("Failed to disable autostart: {}", e))
             })?;
-            database::config::set(&db, "auto_start", "false")?;
+            database::config::set(&db, registry::KEY_AUTO_START, "false")?;
             tracing::info!("Auto start disabled");
         }
 
         let _ = app.emit(
             "config-changed",
-            serde_json::json!({ "key": "auto_start", "value": enabled.to_string() }),
+            serde_json::json!({ "key": registry::KEY_AUTO_START, "value": enabled.to_string() }),
         );
         Ok(())
     }
@@ -434,15 +329,15 @@ mod tests {
     #[test]
     fn normalizes_window_size_config_to_packaged_minimums() {
         assert_eq!(
-            normalize_config_value("window_width", "300".to_string()).unwrap(),
+            normalize_config_value(registry::KEY_WINDOW_WIDTH, "300".to_string()).unwrap(),
             "360"
         );
         assert_eq!(
-            normalize_config_value("window_height", "400".to_string()).unwrap(),
+            normalize_config_value(registry::KEY_WINDOW_HEIGHT, "400".to_string()).unwrap(),
             "480"
         );
         assert_eq!(
-            normalize_config_value("window_width", "640".to_string()).unwrap(),
+            normalize_config_value(registry::KEY_WINDOW_WIDTH, "640".to_string()).unwrap(),
             "640"
         );
     }

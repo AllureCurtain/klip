@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { configApi, productApi } from '@/lib/tauri';
 import type { Snippet, SnippetInput, SourceRule, SourceRuleInput } from '@/types';
 import { getErrorMessage } from '@/types';
+import { CONFIG_KEYS } from './configSchema';
 
 interface ProductivityStore {
   snippets: Snippet[];
@@ -41,8 +42,8 @@ export const useProductivityStore = create<ProductivityStore>((set) => ({
       set({
         snippets,
         sourceRules,
-        monitorEnabled: config['clipboard_monitor_enabled'] !== 'false',
-        privacyModeUntil: parseNumber(config['privacy_mode_until'], 0),
+        monitorEnabled: config[CONFIG_KEYS.clipboardMonitorEnabled] !== 'false',
+        privacyModeUntil: parseNumber(config[CONFIG_KEYS.privacyModeUntil], 0),
         loading: false,
       });
     } catch (error) {
@@ -124,7 +125,7 @@ export const useProductivityStore = create<ProductivityStore>((set) => ({
 
   setMonitorEnabled: async (enabled) => {
     try {
-      await configApi.set('clipboard_monitor_enabled', enabled.toString());
+      await configApi.set(CONFIG_KEYS.clipboardMonitorEnabled, enabled.toString());
       set({ monitorEnabled: enabled });
     } catch (error) {
       set({ error: getErrorMessage(error) });
@@ -134,7 +135,7 @@ export const useProductivityStore = create<ProductivityStore>((set) => ({
   setPrivacyModeForMinutes: async (minutes, now = Date.now()) => {
     const until = now + minutes * 60 * 1000;
     try {
-      await configApi.set('privacy_mode_until', until.toString());
+      await configApi.set(CONFIG_KEYS.privacyModeUntil, until.toString());
       set({ privacyModeUntil: until });
     } catch (error) {
       set({ error: getErrorMessage(error) });

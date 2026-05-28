@@ -1,5 +1,6 @@
+use crate::database::clipboard_query::{self, ClipboardQuerySpec};
 use crate::database::types::{
-    AdvancedSearchQuery, ClipboardItem, ContentType, SourceRule, SourceRuleInput, Tag,
+    AdvancedSearchQuery, ClipboardItem, SourceRule, SourceRuleInput, Tag,
 };
 use crate::{AppError, Database};
 use rusqlite::OptionalExtension;
@@ -41,38 +42,11 @@ pub fn get_list_filtered(
     favorite_only: bool,
     tag_id: Option<i64>,
 ) -> Result<Vec<ClipboardItem>, AppError> {
-    let conn = db.get_connection()?;
-    let mut sql = select_sql();
-    let mut filters: Vec<String> = Vec::new();
-    if let Some(content_type) = content_type {
-        filters.push(format!(
-            "content_type = '{}'",
-            escape_sql_literal(content_type)
-        ));
-    }
-    if favorite_only {
-        filters.push("is_favorited = 1".to_string());
-    }
-    if let Some(tag_id) = tag_id {
-        filters.push(format!(
-            "id IN (SELECT item_id FROM clipboard_item_tags WHERE tag_id = {})",
-            tag_id
-        ));
-    }
-    if !filters.is_empty() {
-        sql.push_str(" WHERE ");
-        sql.push_str(&filters.join(" AND "));
-    }
-    sql.push_str(" ORDER BY last_used_at DESC, created_at DESC LIMIT ?1 OFFSET ?2");
-
-    let mut stmt = conn.prepare(&sql)?;
-    let mut items = stmt
-        .query_map(rusqlite::params![limit, offset], |row| {
-            Ok(row_to_productized_item(row))
-        })?
-        .collect::<Result<Vec<_>, _>>()?;
-    hydrate_tags(&conn, &mut items)?;
-    Ok(items)
+    let mut spec = ClipboardQuerySpec::new(limit, offset);
+    spec.content_type = content_type.map(|value| value.to_string());
+    spec.favorite_only = favorite_only;
+    spec.tag_id = tag_id;
+    clipboard_query::fetch_items_with_tags(db, &spec)
 }
 
 pub fn search_filtered(
@@ -84,104 +58,31 @@ pub fn search_filtered(
     limit: i64,
     offset: i64,
 ) -> Result<Vec<ClipboardItem>, AppError> {
-    let conn = db.get_connection()?;
-    let mut sql = select_sql();
-    let mut filters =
-        vec!["(preview LIKE ?1 OR (content_type != 'image' AND content LIKE ?1))".to_string()];
-    if let Some(content_type) = content_type {
-        filters.push(format!(
-            "content_type = '{}'",
-            escape_sql_literal(content_type)
-        ));
-    }
-    if favorite_only {
-        filters.push("is_favorited = 1".to_string());
-    }
-    if let Some(tag_id) = tag_id {
-        filters.push(format!(
-            "id IN (SELECT item_id FROM clipboard_item_tags WHERE tag_id = {})",
-            tag_id
-        ));
-    }
-    sql.push_str(" WHERE ");
-    sql.push_str(&filters.join(" AND "));
-    sql.push_str(" ORDER BY last_used_at DESC, created_at DESC LIMIT ?2 OFFSET ?3");
-
-    let pattern = format!("%{}%", query);
-    let mut stmt = conn.prepare(&sql)?;
-    let mut items = stmt
-        .query_map(rusqlite::params![pattern, limit, offset], |row| {
-            Ok(row_to_productized_item(row))
-        })?
-        .collect::<Result<Vec<_>, _>>()?;
-    hydrate_tags(&conn, &mut items)?;
-    Ok(items)
+    let mut spec = ClipboardQuerySpec::new(limit, offset);
+    spec.text_query = Some(query.to_string());
+    spec.content_type = content_type.map(|value| value.to_string());
+    spec.favorite_only = favorite_only;
+    spec.tag_id = tag_id;
+    clipboard_query::fetch_items_with_tags(db, &spec)
 }
 
 pub fn search_advanced(
     db: &Database,
     query: AdvancedSearchQuery,
 ) -> Result<Vec<ClipboardItem>, AppError> {
-    let conn = db.get_connection()?;
-    let mut sql = select_sql();
-    let mut filters: Vec<String> = Vec::new();
-
-    let trimmed = query.query.trim();
+    let trimmed = query.query.trim().to_string();
+    let mut spec = ClipboardQuerySpec::new(query.limit, query.offset);
     if !trimmed.is_empty() {
-        if query.exact_match {
-            filters.push(format!(
-                "(preview = '{}' OR (content_type != 'image' AND content = '{}'))",
-                escape_sql_literal(trimmed),
-                escape_sql_literal(trimmed)
-            ));
-        } else {
-            filters.push(format!(
-                "(preview LIKE '%{}%' OR (content_type != 'image' AND content LIKE '%{}%'))",
-                escape_sql_literal(trimmed),
-                escape_sql_literal(trimmed)
-            ));
-        }
+        spec.text_query = Some(trimmed);
     }
-
-    if let Some(content_type) = query.content_type.as_deref() {
-        filters.push(format!(
-            "content_type = '{}'",
-            escape_sql_literal(content_type)
-        ));
-    }
-    if query.favorite_only {
-        filters.push("is_favorited = 1".to_string());
-    }
-    if let Some(sensitive_only) = query.sensitive_only {
-        filters.push(format!("is_sensitive = {}", sensitive_only as i64));
-    }
-    if let Some(tag_id) = query.tag_id {
-        filters.push(format!(
-            "id IN (SELECT item_id FROM clipboard_item_tags WHERE tag_id = {})",
-            tag_id
-        ));
-    }
-    if let Some(created_after) = query.created_after {
-        filters.push(format!("created_at >= {}", created_after));
-    }
-    if let Some(created_before) = query.created_before {
-        filters.push(format!("created_at <= {}", created_before));
-    }
-
-    if !filters.is_empty() {
-        sql.push_str(" WHERE ");
-        sql.push_str(&filters.join(" AND "));
-    }
-    sql.push_str(" ORDER BY last_used_at DESC, created_at DESC LIMIT ?1 OFFSET ?2");
-
-    let mut stmt = conn.prepare(&sql)?;
-    let mut items = stmt
-        .query_map(rusqlite::params![query.limit, query.offset], |row| {
-            Ok(row_to_productized_item(row))
-        })?
-        .collect::<Result<Vec<_>, _>>()?;
-    hydrate_tags(&conn, &mut items)?;
-    Ok(items)
+    spec.exact_match = query.exact_match;
+    spec.content_type = query.content_type;
+    spec.favorite_only = query.favorite_only;
+    spec.sensitive_only = query.sensitive_only;
+    spec.tag_id = query.tag_id;
+    spec.created_after = query.created_after;
+    spec.created_before = query.created_before;
+    clipboard_query::fetch_items_with_tags(db, &spec)
 }
 
 pub fn list_tags(db: &Database) -> Result<Vec<Tag>, AppError> {
@@ -398,32 +299,6 @@ pub fn detect_sensitive(content_type: &str, content: &str) -> Option<String> {
     None
 }
 
-fn select_sql() -> String {
-    "SELECT id, content_type, content, preview, hash, size, metadata, is_favorited,
-            created_at, last_used_at, is_sensitive, sensitivity_reason
-     FROM clipboard_items"
-        .to_string()
-}
-
-pub fn hydrate_tags(
-    conn: &rusqlite::Connection,
-    items: &mut [ClipboardItem],
-) -> Result<(), AppError> {
-    let mut stmt = conn.prepare(
-        "SELECT t.id, t.name, t.color, t.created_at
-         FROM tags t
-         JOIN clipboard_item_tags it ON it.tag_id = t.id
-         WHERE it.item_id = ?1
-         ORDER BY t.name COLLATE NOCASE",
-    )?;
-    for item in items {
-        item.tags = stmt
-            .query_map([item.id], tag_from_row)?
-            .collect::<Result<Vec<_>, _>>()?;
-    }
-    Ok(())
-}
-
 pub fn list_tags_locked(conn: &rusqlite::Connection) -> Result<Vec<Tag>, AppError> {
     let mut stmt =
         conn.prepare("SELECT id, name, color, created_at FROM tags ORDER BY name COLLATE NOCASE")?;
@@ -452,41 +327,10 @@ fn tag_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Tag> {
     })
 }
 
-pub fn row_to_productized_item(row: &rusqlite::Row<'_>) -> ClipboardItem {
-    let content_type_str: String = row.get(1).unwrap_or_default();
-    ClipboardItem {
-        id: row.get(0).unwrap_or(0),
-        content_type: parse_content_type(&content_type_str),
-        content: row.get(2).unwrap_or_default(),
-        preview: row.get(3).unwrap_or(None),
-        hash: row.get(4).unwrap_or_default(),
-        size: row.get(5).unwrap_or(0),
-        metadata: row.get(6).unwrap_or(None),
-        is_favorited: row.get::<_, i64>(7).unwrap_or(0) != 0,
-        created_at: row.get(8).unwrap_or(0),
-        last_used_at: row.get(9).unwrap_or(0),
-        is_sensitive: row.get::<_, i64>(10).unwrap_or(0) != 0,
-        sensitivity_reason: row.get(11).unwrap_or(None),
-        tags: Vec::new(),
-    }
-}
-
-fn parse_content_type(value: &str) -> ContentType {
-    match value {
-        "image" => ContentType::Image,
-        "file" => ContentType::File,
-        _ => ContentType::Text,
-    }
-}
-
 fn has_long_token(content: &str) -> bool {
     content
         .split(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '-' && c != '.')
         .any(|part| part.len() >= 32 && part.chars().filter(|c| c.is_ascii_digit()).count() >= 4)
-}
-
-fn escape_sql_literal(value: &str) -> String {
-    value.replace('\'', "''")
 }
 
 fn validate_source_rule_input(input: &SourceRuleInput) -> Result<(), AppError> {
@@ -540,7 +384,7 @@ fn now_millis() -> i64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::database::types::{NewClipboardItem, SnippetInput, SourceRuleInput};
+    use crate::database::types::{ContentType, NewClipboardItem, SnippetInput, SourceRuleInput};
     use rusqlite::Connection;
     use sha2::{Digest, Sha256};
 
@@ -687,6 +531,8 @@ mod tests {
 
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].id, newer.id);
+        assert_eq!(results[0].tags.len(), 1);
+        assert_eq!(results[0].tags[0].name, "Work");
     }
 
     #[test]
