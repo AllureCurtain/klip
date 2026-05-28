@@ -1,22 +1,47 @@
 # Klip Roadmap
 
-## MVP: Windows v0.1
+Klip 当前先做一个可靠的 Windows 本地剪贴板管理器。路线图不再把云同步、插件市场、账号体系或完整跨平台体验放进 MVP 里。那些能力可以以后讨论，但现在不应该影响原型判断。
 
-- Stabilize clipboard capture for text, image, and file paths.
-- Keep global hotkeys, quick paste, tray actions, and settings reliable.
-- Provide tags, favorites, snippets, advanced search, sensitive-content controls, import/export, and backup/restore in the Windows-first local product.
-- Support monitoring pause, timed privacy mode, and Windows foreground-source ignore rules.
-- Align docs, CI, linting, formatting, and tests with the current code.
-- Maintain a desktop E2E smoke test for copy, search, and paste behavior.
-- Keep the tag/manual Release workflow able to build Windows installer artifacts.
-- Report release readiness for Windows signing inputs and update feed URL without requiring real credentials in local verification.
-- Validate installer behavior, especially startup launch and tray persistence.
+## Windows MVP
 
-## Post-MVP
+当前 MVP 的目标是让下面这些小功能稳定、顺手、可验证：
 
-- macOS and Linux behavior parity.
-- Broader installed-build validation for import/export, backup/restore, sensitive content rules, source rules, and advanced search.
-- Real database-at-rest encryption beyond the current local readiness setting.
-- Hosted update feed integration and updater client behavior.
-- Optional sync service beyond the current local sync folder setting.
-- Plugin runtime and marketplace beyond the current local plugin folder setting.
+- 复制文本、图片、文件路径后能进入历史记录。
+- 打开窗口后能快速搜索、筛选和选择历史条目。
+- 点击条目或使用 `Ctrl+Alt+1` 到 `Ctrl+Alt+9` 能恢复粘贴。
+- 应用能在托盘常驻，不占用默认工作流。
+- 历史记录、标签、收藏、片段和设置都保存在本机。
+- 用户能暂停监听，或临时开启隐私模式。
+- 敏感内容默认遮罩，并可选择跳过保存。
+- JSON / CSV 导入导出和数据库备份恢复可用于本地迁移和自救。
+
+这些能力已经进入当前代码库。接下来的 MVP 工作应主要围绕回归测试、真实使用反馈和文档准确性展开。
+
+## 近期只做这些
+
+| 方向 | 说明 |
+|------|------|
+| 文档收敛 | README、PRD、开发文档和发布文档要清楚说明当前能做什么、不能做什么 |
+| 核心路径回归 | 复制、搜索、粘贴、快捷键、托盘、隐私状态和设置保存不能回退 |
+| 小缺陷修复 | 只修真实影响 MVP 使用的问题，不做大功能扩展 |
+| 安装说明 | 让 Windows 用户知道如何安装、启动、遇到 SmartScreen 提示时怎么理解 |
+
+## 暂不进入 MVP
+
+| 能力 | 放到以后原因 |
+|------|--------------|
+| macOS / Linux 完整体验 | 需要真实桌面环境矩阵验证，当前先保持 Windows-first |
+| 云同步 | 会引入账号、冲突处理、服务端和隐私边界 |
+| 插件运行时和插件市场 | 会显著扩大安全、发布和兼容性成本 |
+| 托管更新源和应用内自动更新 | 当前可通过 GitHub Release 手动发布和安装 |
+| 真实数据库加密迁移 | 需要密钥管理、恢复策略和兼容迁移设计 |
+| AI 分类或自动摘要 | 不属于剪贴板 MVP 的核心闭环 |
+
+## 判断新需求是否该做
+
+一个需求要进入当前阶段，至少满足下面两点：
+
+- 它直接改善复制、搜索、找回、粘贴、隐私控制或本地数据可靠性。
+- 它可以用小范围测试验证，不需要引入账号、云服务、插件系统或跨平台承诺。
+
+不满足这两点的需求先记录，不急着做。

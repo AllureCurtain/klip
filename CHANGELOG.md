@@ -31,6 +31,8 @@
 
 ### Changed
 
+- README now presents Klip as a Windows-first local clipboard MVP and clearly separates current features from post-MVP services.
+- Roadmap, PRD, and documentation index now avoid treating cloud sync, plugins, hosted updates, cross-platform parity, and real encryption migration as current MVP work.
 - Documentation now describes search as keyword contains matching and aligns PRD window minimums with the packaged Tauri window.
 - Data Management path inputs now expose accessible labels for assistive technology.
 - Dialog close actions now use the active interface language.

@@ -1,108 +1,209 @@
 # Klip
 
-> A modern, lightweight clipboard manager built with Tauri + React + Rust.
+<p align="center">
+  <strong>Windows-first local clipboard manager</strong>
+</p>
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-Windows%20first-blue.svg)]()
+<p align="center">
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
+  <img alt="Version" src="https://img.shields.io/badge/version-0.1.2-2563eb">
+  <img alt="Platform" src="https://img.shields.io/badge/platform-Windows%20first-0f766e">
+  <img alt="Tauri" src="https://img.shields.io/badge/Tauri-2.x-24c8db">
+  <img alt="React" src="https://img.shields.io/badge/React-19-61dafb">
+  <img alt="Rust" src="https://img.shields.io/badge/Rust-backend-b7410e">
+</p>
 
-**Klip** 是一个当前以 Windows 为主要交付目标的剪贴板管理器，`v0.1.2` 已发布，帮助你高效管理剪贴板历史记录。macOS / Linux 支持作为后续阶段完善。
+Klip 是一个本地剪贴板管理器。它解决的是一个很具体的问题：系统剪贴板只能记住最近一次复制，而日常写作、开发、整理资料时，经常需要找回前几次复制过的内容。
 
-## 特性
+当前版本以 Windows 为主要交付目标。数据保存在本机 SQLite 数据库里，不需要账号，也不会上传到云端。
 
-- **历史记录** - 自动保存最近 100 条剪贴板内容
-- **多格式支持** - 支持文本、图片、文件路径
-- **标签与分组** - 按标签和分组组织历史内容
-- **片段管理** - 在设置中维护常用短语、命令和模板，并可一键复制
-- **导入导出** - 支持 JSON / CSV 导入和导出
-- **备份与恢复** - 支持数据库备份、恢复和恢复前自动备份
-- **敏感内容保护** - 自动标记并遮罩密码、API key 等内容
-- **来源忽略规则** - Windows 上可按前台进程或窗口标题跳过采集
-- **快捷键操作** - `Ctrl+Alt+K` 唤起，`Ctrl+Alt+1~9` 快速粘贴
-- **关键词搜索** - 支持类型、标签、收藏、敏感、精确匹配和日期范围过滤
-- **系统托盘** - 后台常驻，不占用任务栏
-- **本地存储** - 数据完全本地化，隐私安全
-- **开机自启** - 可在设置中开启/关闭，安装包阶段重点验证
-- **轻量高效** - 以低内存占用和快速启动为目标
+## 当前状态
+
+- 当前公开版本：`v0.1.2`
+- 当前交付平台：Windows 10+
+- 当前产品形态：本地单机剪贴板管理器
+- macOS / Linux：已有部分代码基础，但不作为当前 MVP 交付承诺
+- 云同步、插件市场、自动更新服务、真实数据库加密迁移：当前不包含
+
+## 核心功能
+
+### 记录和找回
+
+- 自动记录文本、图片和文件路径剪贴板内容
+- 相同内容去重，避免历史列表重复膨胀
+- 支持关键词搜索、类型筛选、收藏筛选、标签筛选
+- 支持敏感内容、精确匹配和日期范围等高级筛选
+
+### 快速粘贴
+
+- `Ctrl+Alt+K` 唤起或隐藏主窗口
+- `Ctrl+Alt+1` 到 `Ctrl+Alt+9` 快速粘贴列表前 9 条
+- 点击历史条目可恢复到系统剪贴板并粘贴
+- 系统托盘常驻，关闭窗口后仍可继续监听
+
+### 整理和复用
+
+- 收藏常用历史记录
+- 给历史记录添加标签
+- 在设置中维护常用片段，例如命令、短语、模板
+- 支持批量选择后收藏、打标签或删除
+
+### 隐私和控制
+
+- 数据只保存在本机
+- 默认遮罩已识别的敏感内容预览
+- 可选择跳过密码、密钥、高熵 Token 等敏感文本
+- 可暂停剪贴板监听
+- 可开启 15 分钟隐私模式
+- Windows 上可按前台进程或窗口标题设置来源忽略规则
+
+### 数据管理
+
+- JSON / CSV 导入导出
+- SQLite 数据库备份和恢复
+- 恢复前自动备份当前数据库
+- 数据库 schema 版本检查
+- 损坏数据库会被保留，应用会用干净 schema 重新启动
+
+## 不在当前 MVP 范围内
+
+这些配置或文档入口可能已经存在，但它们只是为发布或后续集成预留，不代表功能已经上线：
+
+| 能力 | 当前状态 |
+|------|----------|
+| macOS / Linux 完整体验 | 后续阶段 |
+| 云同步服务 | 不包含 |
+| 插件运行时和插件市场 | 不包含 |
+| 托管更新源和应用内自动更新 | 不包含 |
+| 真实数据库加密迁移 | 不包含 |
+| 账号系统 | 不包含 |
 
 ## 安装
 
 ### Windows
-下载 `.msi` 或 `.exe` 安装包
 
-### macOS
-后续阶段提供
+从 GitHub Releases 下载 `v0.1.2` 的 Windows 安装包：
 
-### Linux
-后续阶段提供
+```text
+https://github.com/AllureCurtain/klip/releases
+```
 
-## 快速开始
+当前安装包尚未绑定公开代码签名证书。Windows 可能显示 SmartScreen 或未知发布者提示，这是当前发布阶段的已知边界。
 
-1. 安装 Klip
-2. 应用自动在后台运行
-3. 按 `Ctrl+Alt+K` 唤起窗口
-4. 使用 `Ctrl+Alt+1` ~ `Ctrl+Alt+9` 快速粘贴前 9 条记录
+### macOS / Linux
 
-## 配置与数据
+暂不作为当前 MVP 交付平台。
 
-当前版本将历史记录、标签、片段、来源忽略规则和应用配置统一存储在本地 SQLite 数据库 `klip.db` 中，配置项位于 `app_config` 表。
+## 使用方式
 
-- Windows: `%APPDATA%\com.klip.app\klip.db`
-- macOS: `~/Library/Application Support/com.klip.app/klip.db`（后续阶段）
-- Linux: `~/.local/share/com.klip.app/klip.db`（后续阶段）
+1. 安装并启动 Klip。
+2. 复制文本、图片或文件。
+3. 按 `Ctrl+Alt+K` 打开历史窗口。
+4. 搜索、筛选或直接点击历史条目进行粘贴。
+5. 常用内容可以收藏、加标签，或整理成片段。
 
-其中默认热键为 `Ctrl+Alt+K` 和 `Ctrl+Alt+1~9`。修改 `hotkey_toggle_window`、`hotkey_quick_paste_prefix` 后，后端会立即重载热键；`auto_start` 会同步系统开机自启动状态并持久化到数据库。
+## 默认快捷键
+
+| 快捷键 | 作用 |
+|--------|------|
+| `Ctrl+Alt+K` | 显示或隐藏主窗口 |
+| `Ctrl+Alt+1` 到 `Ctrl+Alt+9` | 快速粘贴前 9 条可见历史记录 |
+
+窗口快捷键支持在设置中改为 `Ctrl+Alt+<A-Z>` 范围内的组合。快速粘贴目前使用 `Ctrl+Alt` 作为数字键前缀。
+
+## 数据位置
+
+Klip 将历史记录、标签、片段、来源规则和设置保存在本地 SQLite 数据库 `klip.db` 中。
+
+| 平台 | 数据库位置 |
+|------|------------|
+| Windows | `%APPDATA%\com.klip.app\klip.db` |
+| macOS | 后续阶段 |
+| Linux | 后续阶段 |
+
+## 本地开发
+
+环境要求：
+
+- Node.js 24.x
+- pnpm 10.x
+- Rust 1.95+
+- Windows 上运行桌面 E2E 需要 `tauri-driver` 和 Microsoft Edge WebDriver
+
+常用命令：
+
+```powershell
+pnpm install
+pnpm tauri:dev
+pnpm test -- --run
+pnpm lint
+pnpm build
+cd src-tauri
+cargo test
+```
+
+完整本地验证：
+
+```powershell
+pnpm verify
+pnpm e2e
+```
+
+`pnpm verify` 会执行前端 lint、Vitest、生产构建、Rust 格式检查、Clippy 和 Rust 测试。`pnpm e2e` 会启动 Tauri WebDriver，覆盖复制、搜索、点击条目恢复剪贴板的桌面流程。
 
 ## 技术栈
 
-- **前端**: React 19 + TypeScript 5 + Vite
-- **UI**: Shadcn/ui + Tailwind CSS
-- **状态管理**: Zustand
-- **桌面框架**: Tauri 2.0
-- **后端**: Rust
-- **数据库**: SQLite
-
-## 文档
-
-- [产品需求文档](docs/PRD.md)
-- [架构设计](docs/ARCHITECTURE.md)
-- [开发指南](docs/DEVELOPMENT.md)
-- [API 文档](docs/API.md)
-- [数据库设计](docs/DATABASE.md)
-- [发布检查清单](docs/RELEASE_CHECKLIST.md)
-- [版本记录](CHANGELOG.md)
+| 层 | 技术 |
+|----|------|
+| 桌面框架 | Tauri 2 |
+| 前端 | React 19, TypeScript, Vite |
+| 样式 | Tailwind CSS, 本地 UI 组件 |
+| 状态管理 | Zustand |
+| 后端 | Rust |
+| 数据库 | SQLite, rusqlite |
+| 剪贴板 | arboard, clipboard-master, clipboard-win |
+| 测试 | Vitest, Testing Library, Selenium WebDriver |
 
 ## 发布验证
 
-本地验证当前 Windows-first MVP 候选版本：
+Windows 发布前常用命令：
 
-```bash
+```powershell
 pnpm release:readiness
 pnpm release:verify -SkipBundle
 pnpm release:verify
 pnpm release:smoke
 ```
 
-`pnpm release:readiness` 会检查 Windows 签名输入和更新源 URL 是否已配置。可通过 `KLIP_WINDOWS_CERTIFICATE_THUMBPRINT`、`KLIP_WINDOWS_CERTIFICATE_PATH`、`KLIP_WINDOWS_CERTIFICATE_PASSWORD`、`KLIP_WINDOWS_TIMESTAMP_URL` 和 `KLIP_UPDATE_FEED_URL` 提供发布环境配置；脚本不会验证真实证书可用性，也不会访问托管更新源。
+`pnpm release:readiness` 只检查签名和更新源配置是否存在，不验证真实证书，也不会访问托管更新源。
 
-当前仓库提供签名/更新配置就绪检查和设置项，但不包含代码签名证书、托管更新源、云同步服务或真实插件市场。未配置签名时，Windows 可能显示 SmartScreen 或未知发布者提示；未配置更新源时，发布更新仍通过 GitHub Release 或手动下载安装包完成。
+可用的发布环境变量：
 
-## 桌面 E2E 测试
+| 变量 | 用途 |
+|------|------|
+| `KLIP_WINDOWS_CERTIFICATE_THUMBPRINT` | 使用系统证书存储中的代码签名证书 |
+| `KLIP_WINDOWS_CERTIFICATE_PATH` | 使用本地 PFX 证书文件 |
+| `KLIP_WINDOWS_CERTIFICATE_PASSWORD` | PFX 证书密码 |
+| `KLIP_WINDOWS_TIMESTAMP_URL` | 签名时间戳服务 |
+| `KLIP_UPDATE_FEED_URL` | 后续更新源配置 |
 
-E2E 使用 Tauri WebDriver + Selenium，覆盖文本复制、搜索和点击条目恢复剪贴板的核心流程：
+## 文档
 
-```powershell
-pnpm e2e
-```
-
-运行前需要安装 `tauri-driver` 和 Microsoft Edge WebDriver。详情见 [E2E README](e2e/README.md)。
-
-## GitHub Release
-
-`.github/workflows/release.yml` 支持 tag `v*` 触发或手动触发，使用 `tauri-apps/tauri-action` 构建 Windows 安装产物并创建 GitHub Release。当前公开版本为 `v0.1.2`。
+| 文档 | 内容 |
+|------|------|
+| [产品需求文档](docs/PRD.md) | MVP 功能范围和验收口径 |
+| [架构设计](docs/ARCHITECTURE.md) | 前端、后端、数据库和 Tauri 模块划分 |
+| [数据库设计](docs/DATABASE.md) | 表结构、迁移和数据恢复策略 |
+| [API 文档](docs/API.md) | Tauri IPC 命令和事件 |
+| [开发指南](docs/DEVELOPMENT.md) | 开发环境、脚本和代码规范 |
+| [发布检查清单](docs/RELEASE_CHECKLIST.md) | Windows 安装包发布前检查 |
+| [版本记录](CHANGELOG.md) | 已发布版本和未发布变更 |
 
 ## 贡献
 
-欢迎贡献！请阅读 [贡献指南](CONTRIBUTING.md)。
+欢迎提交 issue 和 pull request。开始前请先阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。
+
+当前阶段更重视小而清晰的改动：剪贴板捕获、搜索、粘贴、隐私控制、数据可靠性、设置体验和文档准确性。大型平台扩展、云服务、插件系统和账号体系暂不进入 MVP。
 
 ## 许可证
 
@@ -110,6 +211,8 @@ pnpm e2e
 
 ## 致谢
 
-- [Tauri](https://tauri.app/) - 跨平台桌面应用框架
-- [Shadcn/ui](https://ui.shadcn.com/) - React 组件库
-- [arboard](https://github.com/1Password/arboard) - Rust 剪贴板库
+- [Tauri](https://tauri.app/)：桌面应用框架
+- [React](https://react.dev/)：前端 UI
+- [Rust](https://www.rust-lang.org/)：本地后端
+- [arboard](https://github.com/1Password/arboard)：跨平台剪贴板基础能力
+- [clipboard-master](https://crates.io/crates/clipboard-master)：Windows 剪贴板事件监听

@@ -1,142 +1,99 @@
-# Klip 项目文档索引
+# Klip 文档索引
 
-> 本文档为项目文档导航，帮助快速了解项目全貌。
+本文档是仓库内文档的入口。Klip 当前是 Windows-first 的本地剪贴板管理器，当前文档优先服务三个问题：
 
-## 项目概述
+1. 当前 MVP 到底包含什么。
+2. 本地开发、验证和发布怎么做。
+3. 哪些能力只是后续方向，不应被当成当前承诺。
 
-**Klip** 是一个当前以 Windows 为主要交付目标的剪贴板管理器，使用 Tauri + React + Rust 构建。
+## 当前项目状态
 
-- **名称**: Klip
-- **定位**: 轻量、高效、隐私安全的剪贴板管理工具
-- **技术栈**: Tauri 2.0 + React 19 + Rust + SQLite
+| 项目 | 状态 |
+|------|------|
+| 当前公开版本 | `v0.1.2` |
+| 当前交付平台 | Windows 10+ |
+| 当前产品形态 | 本地单机剪贴板管理器 |
+| 数据存储 | 本机 SQLite 数据库 |
+| macOS / Linux | 后续阶段，不作为当前 MVP 交付 |
+| 云同步 / 插件 / 账号 | 不在当前 MVP 范围内 |
 
-## 快速导航
+当前 MVP 的核心链路已经齐全：复制内容、记录历史、搜索筛选、恢复粘贴、托盘常驻、快捷键操作、本地数据管理和基础隐私控制。
 
-### 核心文档 (必读)
+## 推荐阅读顺序
 
-| 文档 | 内容 | 适合人群 |
+| 顺序 | 文档 | 适合场景 |
 |------|------|----------|
-| [README.md](../README.md) | 项目简介、安装使用 | 所有人 |
-| [PRD.md](PRD.md) | 产品需求、功能定义 | 产品/开发 |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | 技术架构、模块设计 | 开发者 |
-| [DATABASE.md](DATABASE.md) | 数据库表结构、查询 | 开发者 |
-| [API.md](API.md) | IPC 接口、数据类型 | 开发者 |
-| [DEVELOPMENT.md](DEVELOPMENT.md) | 开发环境、代码规范 | 开发者 |
-| [RELEASE_HANDOFF.md](RELEASE_HANDOFF.md) | v0.1.0 历史发布接续状态与剩余验收 | 发布执行者 |
-| [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) | Windows 安装包发布验收清单 | 发布执行者 |
+| 1 | [README.md](../README.md) | 先了解项目是什么、能做什么、不能做什么 |
+| 2 | [PRD.md](PRD.md) | 确认 MVP 功能范围和验收口径 |
+| 3 | [ARCHITECTURE.md](ARCHITECTURE.md) | 理解前端、后端、Tauri 和数据库模块 |
+| 4 | [DATABASE.md](DATABASE.md) | 查看表结构、迁移和数据恢复策略 |
+| 5 | [API.md](API.md) | 查看 Tauri IPC 命令、事件和类型 |
+| 6 | [DEVELOPMENT.md](DEVELOPMENT.md) | 搭建开发环境并运行验证脚本 |
+| 7 | [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) | 做 Windows 安装包发布前检查 |
+| 8 | [ROADMAP.md](ROADMAP.md) | 查看当前边界和后续方向 |
 
-### 文档阅读顺序
+历史交接类文档保留在仓库中，主要用于回看某个阶段的上下文：
 
-```
-新开发者推荐阅读顺序:
+| 文档 | 用途 |
+|------|------|
+| [NEXT_HANDOFF.md](NEXT_HANDOFF.md) | 主窗口轻量化阶段的交接记录 |
+| [RELEASE_HANDOFF.md](RELEASE_HANDOFF.md) | 早期发布流程和剩余验收记录 |
+| [DEVELOPMENT_REPORT.md](DEVELOPMENT_REPORT.md) | 较完整的阶段开发报告 |
+| [superpowers/plans](superpowers/plans) | 已执行或历史保留的实现计划 |
 
-1. README.md      → 了解项目是什么
-2. PRD.md         → 了解要做什么功能
-3. ARCHITECTURE.md → 了解技术架构
-4. DATABASE.md    → 了解数据存储
-5. API.md         → 了解接口定义
-6. DEVELOPMENT.md → 开始开发
-```
+## MVP 功能完成情况
 
-## 项目状态
+| 能力 | 当前状态 |
+|------|----------|
+| 剪贴板历史记录 | 已实现，支持文本、图片和文件路径 |
+| 快捷键唤起 | 已实现，默认 `Ctrl+Alt+K` |
+| 快速粘贴 | 已实现，默认 `Ctrl+Alt+1` 到 `Ctrl+Alt+9` |
+| 搜索和筛选 | 已实现，支持关键词、类型、标签、收藏和高级筛选 |
+| 托盘常驻 | 已实现 |
+| 本地存储 | 已实现，使用 SQLite |
+| 标签和收藏 | 已实现 |
+| 片段管理 | 已实现，位于 Settings -> Data |
+| 导入导出 | 已实现，支持 JSON / CSV |
+| 备份恢复 | 已实现，含恢复前备份 |
+| 敏感内容保护 | 已实现，支持标记、遮罩和跳过策略 |
+| 监听暂停 / 隐私模式 | 已实现，并在主窗口显示状态 |
+| Windows 来源忽略规则 | 已实现 |
+| 外部服务能力 | 不在当前 MVP 范围内 |
 
-### 当前阶段
+## 常用开发命令
 
-**Phase 1: Windows-first MVP 收敛阶段**
-
-- 当前公开版本: `v0.1.2`
-- Windows Release: 已发布 MSI / NSIS 安装包
-
-### 已完成工作
-
-- [x] 项目命名: Klip
-- [x] 技术选型确认
-- [x] 功能范围定义 (Phase 1 MVP)
-- [x] 架构设计
-- [x] 数据库设计
-- [x] API 设计
-- [x] 核心文档编写
-- [x] 剪贴板历史记录（事件监听）
-- [x] 全局快捷键（Ctrl+Alt+K）
-- [x] 快速数字键粘贴（Ctrl+Alt+1-9）
-- [x] 关键词搜索功能
-- [x] 删除历史记录
-- [x] 系统托盘常驻
-- [x] 本地 SQLite 存储
-- [x] 应用配置持久化
-- [x] 开机自启动（设置与后端同步已接入，安装包阶段继续重点验证）
-- [x] 失焦自动隐藏
-- [x] 标签、JSON/CSV 导入导出、数据库备份/恢复
-- [x] 敏感内容标记、跳过策略和默认预览遮罩
-- [x] schema 版本门禁、轻量迁移、损坏数据库保留与干净重建
-
-### 后续工作
-
-| 功能 | 状态 | 优先级 |
-|------|------|--------|
-| macOS / Linux 后端补齐 | 规划中 | P1 |
-| 数据能力安装包实机验收 | 规划中 | P1 |
-| 测试脚本与工具链清理 | 规划中 | P2 |
-
-## 技术决策摘要
-
-### 关键决策
-
-| 决策点 | 选择 | 理由 |
-|--------|------|------|
-| 包管理器 | pnpm | 节省空间、安装快、更安全 |
-| 桌面框架 | Tauri 2.0 | 轻量 (10MB)、安全、跨平台 |
-| 前端框架 | React 19 | 生态成熟、Tauri 支持 |
-| UI 组件 | Shadcn/ui | 无样式依赖、可定制 |
-| 状态管理 | Zustand | 简单高效、TypeScript 友好 |
-| 后端语言 | Rust | 性能好、安全、Tauri 原生 |
-| 数据库 | SQLite | 本地存储、零配置、隐私安全 |
-| 剪贴板监听 | clipboard-master (事件驱动) | 低延迟、不阻塞、Windows 原生 |
-
-### 性能目标
-
-| 指标 | 目标值 |
-|------|--------|
-| 启动时间 | < 1s |
-| 内存占用 | < 50MB |
-| 安装包大小 | < 10MB |
-| 剪贴板监听延迟 | < 100ms |
-
-## 开发指南
-
-### 环境要求
-
-- Node.js 24.x (LTS)
-- pnpm 10.x
-- Rust 1.95+
-
-### 快速开始
-
-```bash
-# 安装依赖
+```powershell
 pnpm install
-
-# 启动开发
-pnpm tauri dev
-
-# 构建
-pnpm tauri build
+pnpm tauri:dev
+pnpm test -- --run
+pnpm lint
+pnpm build
+cd src-tauri
+cargo test
 ```
 
-### 项目结构
+完整验证：
 
-```
-klip/
-├── src/           # React 前端
-├── src-tauri/     # Rust 后端
-└── docs/          # 文档
+```powershell
+pnpm verify
+pnpm e2e
 ```
 
-## 联系与贡献
+`pnpm verify` 覆盖前端 lint、Vitest、生产构建、Rust 格式检查、Clippy 和 Rust 测试。`pnpm e2e` 需要真实 Windows 桌面会话、`tauri-driver` 和 Microsoft Edge WebDriver。
 
-- **许可证**: MIT
-- **贡献指南**: [CONTRIBUTING.md](../CONTRIBUTING.md)
+## 后续方向
 
----
+当前不建议继续扩大功能面。更合适的工作是：
 
-> 最后更新: 2026-05-22 (v0.1.2 已发布)
+- 修正文档中不准确或过度承诺的地方。
+- 改进 README、发布说明和安装说明。
+- 补充小范围回归测试，保护复制、搜索、粘贴、隐私状态和设置页折叠这些核心路径。
+- 修复真实使用中暴露的剪贴板捕获、窗口行为、托盘或快捷键问题。
+
+云同步、插件市场、账号体系、完整跨平台体验和真实数据库加密迁移都应留到 MVP 之后。
+
+## 项目信息
+
+- 许可证：[MIT](../LICENSE)
+- 贡献指南：[CONTRIBUTING.md](../CONTRIBUTING.md)
+- 最后更新：2026-05-28
