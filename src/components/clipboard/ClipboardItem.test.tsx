@@ -204,6 +204,44 @@ describe('ClipboardItem', () => {
     expect(screen.queryByText('password=super-secret')).toBeNull();
   });
 
+  it('exposes full text content on hover without changing the compact row layout', () => {
+    render(
+      <ClipboardItem
+        item={makeTextItem({
+          content: 'a long clipboard value that should remain readable on hover',
+          preview: 'a long clipboard value',
+        })}
+        index={1}
+        isSelected={false}
+      />
+    );
+
+    const preview = screen.getByText('a long clipboard value');
+
+    expect(preview.getAttribute('title')).toBe(
+      'a long clipboard value that should remain readable on hover'
+    );
+    expect(preview.className).toContain('group-hover:text-foreground');
+    expect(preview.className).toContain('truncate');
+  });
+
+  it('does not leak masked sensitive text through hover titles', () => {
+    render(
+      <ClipboardItem
+        item={makeTextItem({
+          content: 'password=super-secret',
+          preview: 'password=super-secret',
+          is_sensitive: true,
+          sensitivity_reason: 'credential keyword',
+        })}
+        index={1}
+        isSelected={false}
+      />
+    );
+
+    expect(screen.getByText('已隐藏敏感内容').getAttribute('title')).toBeNull();
+  });
+
   it('shows sensitive text previews when masking is disabled', () => {
     useConfigStore.setState((state) => ({
       config: { ...state.config, mask_sensitive_previews: false },

@@ -291,12 +291,18 @@ export function ClipboardItem({
     }
 
     switch (item.content_type) {
-      case 'text':
+      case 'text': {
+        const displayText = truncate(item.preview || item.content, 80);
+        const fullText = item.content || item.preview || '';
         return (
-          <span className="text-xs text-foreground truncate block font-mono">
-            {truncate(item.preview || item.content, 80)}
+          <span
+            className="block truncate font-mono text-xs text-foreground/90 transition-colors duration-150 group-hover:text-foreground group-hover:underline group-hover:decoration-border group-hover:underline-offset-2"
+            title={fullText}
+          >
+            {displayText}
           </span>
         );
+      }
       case 'image':
         return (
           <div className="flex items-center gap-2 min-w-0">
@@ -314,7 +320,12 @@ export function ClipboardItem({
               />
             </button>
             <div className="flex flex-col min-w-0">
-              <span className="text-xs text-muted-foreground truncate">{item.preview}</span>
+              <span
+                className="truncate text-xs text-muted-foreground transition-colors duration-150 group-hover:text-foreground"
+                title={item.preview ?? undefined}
+              >
+                {item.preview}
+              </span>
             </div>
           </div>
         );
