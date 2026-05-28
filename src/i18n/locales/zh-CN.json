@@ -11,6 +11,12 @@
     "loading": "加载中...",
     "errorLabel": "错误"
   },
+  "captureStatus": {
+    "monitorPaused": "监听已暂停",
+    "resume": "恢复",
+    "privacyActive": "隐私模式剩余 {{minutes}} 分钟",
+    "endPrivacy": "结束"
+  },
   "header": {
     "searchPlaceholder": "搜索剪贴板历史...",
     "toggleTheme": "切换主题",

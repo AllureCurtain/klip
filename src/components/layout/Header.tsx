@@ -20,6 +20,7 @@ import { useThemeStore, useClipboardStore, useProductivityStore } from '@/stores
 import { cn } from '@/lib/utils';
 import { HeaderMoreMenu } from './HeaderMoreMenu';
 import { SelectionToolbar } from './SelectionToolbar';
+import { CaptureStatusBar } from './CaptureStatusBar';
 import type { ClipboardQueryOptions, Tag } from '@/types';
 
 export type HeaderAdvancedFilters = Pick<
@@ -243,6 +244,13 @@ export function Header({
             </button>
           ))}
         </div>
+
+        <CaptureStatusBar
+          monitorEnabled={monitorEnabled}
+          privacyModeUntil={privacyModeUntil}
+          onResumeMonitoring={() => setMonitorEnabled(true)}
+          onEndPrivacyMode={() => setPrivacyModeForMinutes(0)}
+        />
 
         {selectionMode && (
           <SelectionToolbar

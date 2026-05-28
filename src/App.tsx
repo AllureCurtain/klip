@@ -8,6 +8,7 @@ import type { HeaderAdvancedFilters } from './components/layout/Header';
 import { ClipboardList } from './components/clipboard/ClipboardList';
 import { EmptyState } from './components/layout/EmptyState';
 import { SettingsView, type SettingsTab } from './components/settings/SettingsView';
+import { useProductivityStore } from './stores/productivityStore';
 import {
   onClipboardCleared,
   onConfigChanged,
@@ -52,10 +53,12 @@ function App() {
   const [searchDebounceMs, setSearchDebounceMs] = useState(DEFAULT_SEARCH_DEBOUNCE_MS);
   const [view, setView] = useState<AppView>('clipboard');
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('general');
+  const fetchProductivity = useProductivityStore((state) => state.fetchProductivity);
 
   useEffect(() => {
     fetchItems();
     fetchTags();
+    fetchProductivity();
 
     configApi.get('search_debounce_ms').then((value) => {
       if (value) {
@@ -84,6 +87,11 @@ function App() {
         }
       } else if (key === 'language' && SUPPORTED_LANGUAGES.includes(value as SupportedLanguage)) {
         setLanguage(value as SupportedLanguage);
+      } else if (
+        key === 'clipboard_monitor_enabled' ||
+        key === 'privacy_mode_until'
+      ) {
+        void fetchProductivity();
       }
     });
 
@@ -103,7 +111,7 @@ function App() {
       unlistenSettingsPromise.then((fn) => fn());
       unlistenAboutPromise.then((fn) => fn());
     };
-  }, [fetchItems, fetchTags, setItems]);
+  }, [fetchItems, fetchProductivity, fetchTags, setItems]);
 
   useEffect(() => {
     const unlistenPromise = listen<ClipboardItem>('clipboard-updated', (event) => {

@@ -318,6 +318,58 @@ describe('Header', () => {
     expect(storeMocks.setPrivacyModeForMinutes).toHaveBeenCalledWith(15);
   });
 
+  it('shows paused monitoring status in the header', () => {
+    storeMocks.monitorEnabled = false;
+
+    render(
+      <HeaderWithSelection
+        searchQuery=""
+        onSearchChange={vi.fn()}
+        contentType={null}
+        onContentTypeChange={vi.fn()}
+        showFavorites={false}
+        onShowFavoritesChange={vi.fn()}
+        tags={[]}
+        selectedTagId={null}
+        onSelectedTagChange={vi.fn()}
+        selectionMode={false}
+        onSelectionModeChange={vi.fn()}
+        onSettingsOpen={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('监听已暂停')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: '恢复' }));
+    expect(storeMocks.setMonitorEnabled).toHaveBeenCalledWith(true);
+  });
+
+  it('shows active privacy mode in the header', () => {
+    storeMocks.privacyModeUntil = Date.now() + 15 * 60_000;
+
+    render(
+      <HeaderWithSelection
+        searchQuery=""
+        onSearchChange={vi.fn()}
+        contentType={null}
+        onContentTypeChange={vi.fn()}
+        showFavorites={false}
+        onShowFavoritesChange={vi.fn()}
+        tags={[]}
+        selectedTagId={null}
+        onSelectedTagChange={vi.fn()}
+        selectionMode={false}
+        onSelectionModeChange={vi.fn()}
+        onSettingsOpen={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText(/隐私模式剩余/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: '结束' }));
+    expect(storeMocks.setPrivacyModeForMinutes).toHaveBeenCalledWith(0);
+  });
+
   it('exposes advanced search filters without crowding the default header', () => {
     const onAdvancedFiltersChange = vi.fn();
 

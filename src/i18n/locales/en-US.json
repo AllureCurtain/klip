@@ -11,6 +11,12 @@
     "loading": "Loading...",
     "errorLabel": "Error"
   },
+  "captureStatus": {
+    "monitorPaused": "Monitoring paused",
+    "resume": "Resume",
+    "privacyActive": "Privacy mode {{minutes}} min",
+    "endPrivacy": "End"
+  },
   "header": {
     "searchPlaceholder": "Search clipboard history...",
     "toggleTheme": "Toggle theme",

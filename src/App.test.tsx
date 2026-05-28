@@ -16,8 +16,15 @@ const storeState = vi.hoisted(() => ({
   clearSelection: vi.fn(),
 }));
 
+const productivityState = vi.hoisted(() => ({
+  fetchProductivity: vi.fn(),
+}));
+
 const tauriMocks = vi.hoisted(() => ({
   clipboardUpdated: undefined as undefined | ((event: { payload: unknown }) => void),
+  configChanged: undefined as
+    | undefined
+    | ((key: string, value: string) => void),
   openSettings: undefined as undefined | (() => void),
   openAbout: undefined as undefined | (() => void),
   listen: vi.fn((event: string, callback: (event: { payload: unknown }) => void) => {
@@ -27,7 +34,10 @@ const tauriMocks = vi.hoisted(() => ({
     return Promise.resolve(vi.fn());
   }),
   onClipboardCleared: vi.fn(() => Promise.resolve(vi.fn())),
-  onConfigChanged: vi.fn(() => Promise.resolve(vi.fn())),
+  onConfigChanged: vi.fn((callback: (key: string, value: string) => void) => {
+    tauriMocks.configChanged = callback;
+    return Promise.resolve(vi.fn());
+  }),
   onOpenSettings: vi.fn((callback: () => void) => {
     tauriMocks.openSettings = callback;
     return Promise.resolve(vi.fn());
@@ -70,6 +80,11 @@ vi.mock('./stores/clipboardStore', () => ({
   useClipboardStore: () => storeState,
 }));
 
+vi.mock('./stores/productivityStore', () => ({
+  useProductivityStore: (selector: (state: typeof productivityState) => unknown) =>
+    selector(productivityState),
+}));
+
 vi.mock('./components/layout/Header', () => ({
   Header: (props: {
     onContentTypeChange: (type: string | null) => void;
@@ -104,7 +119,9 @@ describe('App status states', () => {
     storeState.tags = [];
     storeState.loading = false;
     storeState.error = null;
+    productivityState.fetchProductivity.mockReset();
     tauriMocks.clipboardUpdated = undefined;
+    tauriMocks.configChanged = undefined;
     tauriMocks.openSettings = undefined;
     tauriMocks.openAbout = undefined;
     headerMocks.props = undefined;
@@ -265,5 +282,30 @@ describe('App status states', () => {
     );
 
     vi.useRealTimers();
+  });
+
+  it('loads productivity state on startup for capture status', async () => {
+    render(<App />);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(productivityState.fetchProductivity).toHaveBeenCalledTimes(1);
+  });
+
+  it('refreshes productivity state when capture config changes', async () => {
+    render(<App />);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    productivityState.fetchProductivity.mockClear();
+
+    act(() => {
+      tauriMocks.configChanged?.('privacy_mode_until', '123');
+    });
+
+    expect(productivityState.fetchProductivity).toHaveBeenCalledTimes(1);
   });
 });
