@@ -188,7 +188,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
       config: {
         ...state.config,
         encryption_enabled: value,
-        encryption_status: value ? 'ready' : 'off',
+        encryption_status: value ? 'configured' : 'off',
       },
       hasChanges: true,
     }));
@@ -212,10 +212,9 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     const { config } = get();
     set({ loading: true, error: null });
     try {
-      for (const [key, value] of serializeConfig(config)) {
-        if (key === 'auto_start') continue;
-        await configApi.set(key, value);
-      }
+      await configApi.setMany(
+        serializeConfig(config).filter(([key]) => key !== 'auto_start')
+      );
       set({ loading: false, hasChanges: false });
       return true;
     } catch (error) {

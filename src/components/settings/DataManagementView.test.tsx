@@ -39,6 +39,7 @@ const productivityMocks = vi.hoisted(() => ({
   }>,
   fetchProductivity: vi.fn(),
   createSnippet: vi.fn(),
+  updateSnippet: vi.fn(),
   deleteSnippet: vi.fn(),
   createSourceRule: vi.fn(),
   setSourceRuleEnabled: vi.fn(),
@@ -99,7 +100,11 @@ vi.mock('react-i18next', () => ({
         'settings.data.snippets': 'Snippets',
         'settings.data.snippetTitle': 'Snippet title',
         'settings.data.snippetContent': 'Snippet content',
+        'settings.data.searchSnippets': 'Search snippets',
         'settings.data.createSnippet': 'Create snippet',
+        'settings.data.editSnippet': 'Edit snippet {{title}}',
+        'settings.data.saveSnippet': 'Save snippet',
+        'settings.data.cancelSnippetEdit': 'Cancel edit',
         'settings.data.copySnippet': 'Copy {{title}}',
         'settings.data.deleteSnippet': 'Delete snippet {{title}}',
         'settings.data.sourceRules': 'Source ignore rules',
@@ -113,7 +118,7 @@ vi.mock('react-i18next', () => ({
         'settings.data.updatesEnabled': 'Enable updates',
         'settings.data.updateFeedUrl': 'Update feed URL',
         'settings.data.encryptionEnabled': 'Enable local encryption readiness',
-        'settings.data.encryptionStatus': 'Encryption status: {{status}}',
+        'settings.data.encryptionStatus': 'Encryption readiness: {{status}}',
         'settings.data.syncFolder': 'Sync folder',
         'settings.data.pluginFolder': 'Plugin folder',
         'settings.data.externalReadiness': 'External readiness',
@@ -193,6 +198,15 @@ describe('DataManagementView', () => {
       is_favorited: false,
       created_at: 2,
       updated_at: 2,
+    });
+    productivityMocks.updateSnippet.mockResolvedValue({
+      id: 1,
+      title: 'Deploy updated',
+      content: 'pnpm release:publish',
+      tag_id: null,
+      is_favorited: true,
+      created_at: 1,
+      updated_at: 3,
     });
     productivityMocks.createSourceRule.mockResolvedValue({
       id: 2,
@@ -429,6 +443,58 @@ describe('DataManagementView', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete snippet Deploy' }));
     expect(productivityMocks.deleteSnippet).toHaveBeenCalledWith(1);
+  });
+
+  it('searches and edits snippets inline', async () => {
+    productivityMocks.snippets = [
+      {
+        id: 1,
+        title: 'Deploy',
+        content: 'pnpm release:verify',
+        tag_id: null,
+        is_favorited: true,
+        created_at: 1,
+        updated_at: 1,
+      },
+      {
+        id: 2,
+        title: 'Greeting',
+        content: 'Hello team',
+        tag_id: null,
+        is_favorited: false,
+        created_at: 2,
+        updated_at: 2,
+      },
+    ];
+
+    render(<DataManagementView />);
+
+    fireEvent.change(screen.getByLabelText('Search snippets'), {
+      target: { value: 'release' },
+    });
+
+    expect(screen.getByText('Deploy')).toBeTruthy();
+    expect(screen.queryByText('Greeting')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit snippet Deploy' }));
+    fireEvent.change(screen.getByLabelText('Snippet title'), {
+      target: { value: 'Deploy updated' },
+    });
+    fireEvent.change(screen.getByLabelText('Snippet content'), {
+      target: { value: 'pnpm release:publish' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save snippet' }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(productivityMocks.updateSnippet).toHaveBeenCalledWith(1, {
+      title: 'Deploy updated',
+      content: 'pnpm release:publish',
+      tagId: null,
+      isFavorited: true,
+    });
   });
 
   it('creates and toggles source ignore rules', async () => {

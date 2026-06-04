@@ -9,6 +9,7 @@ const apiMocks = vi.hoisted(() => ({
   systemGetInfo: vi.fn(),
   systemGetDiagnostics: vi.fn(),
   configSet: vi.fn(),
+  configSetMany: vi.fn(),
 }));
 
 const shellMocks = vi.hoisted(() => ({
@@ -23,6 +24,7 @@ vi.mock('@/lib/tauri', () => ({
   configApi: {
     getAll: apiMocks.configGetAll,
     set: apiMocks.configSet,
+    setMany: apiMocks.configSetMany,
   },
   systemApi: {
     getInfo: apiMocks.systemGetInfo,
@@ -222,7 +224,7 @@ describe('SettingsView', () => {
   });
 
   it('saves edits through the store when save is clicked', async () => {
-    apiMocks.configSet.mockResolvedValue(undefined);
+    apiMocks.configSetMany.mockResolvedValue(undefined);
 
     render(<SettingsView onBack={callbacks.onBack} />);
 
@@ -241,13 +243,18 @@ describe('SettingsView', () => {
       await Promise.resolve();
     });
 
-    expect(apiMocks.configSet).toHaveBeenCalledWith('hotkey_toggle_window', 'Ctrl+Alt+Z');
-    expect(apiMocks.configSet).toHaveBeenCalledWith('hotkey_quick_paste_prefix', 'Ctrl+Alt');
+    expect(apiMocks.configSetMany).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        ['hotkey_toggle_window', 'Ctrl+Alt+Z'],
+        ['hotkey_quick_paste_prefix', 'Ctrl+Alt'],
+      ])
+    );
+    expect(apiMocks.configSet).not.toHaveBeenCalled();
     expect(callbacks.onBack).toHaveBeenCalled();
   });
 
   it('keeps settings open and shows the save error when saving fails', async () => {
-    apiMocks.configSet.mockRejectedValue(new Error('Invalid hotkey'));
+    apiMocks.configSetMany.mockRejectedValue(new Error('Invalid hotkey'));
 
     render(<SettingsView onBack={callbacks.onBack} />);
 

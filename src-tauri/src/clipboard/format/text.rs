@@ -43,23 +43,9 @@ impl ClipboardFormatStrategy for TextStrategy {
             metadata: None,
         })
     }
-
-    fn copy_back(&self, content: &[u8], _metadata: Option<&str>) -> Result<(), FormatError> {
-        let text = String::from_utf8(content.to_vec())
-            .map_err(|e| FormatError::CopyBackFailed(e.to_string()))?;
-
-        clipboard_with_retry(|cb| cb.set_text(&text))
-            .map_err(|e| FormatError::CopyBackFailed(e.to_string()))?;
-
-        Ok(())
-    }
-
-    fn generate_preview(&self, content: &[u8], _metadata: Option<&str>) -> String {
-        let text = String::from_utf8_lossy(content);
-        text.chars().take(200).collect()
-    }
 }
 
+#[cfg(not(target_os = "windows"))]
 fn clipboard_with_retry<F, T>(op: F) -> Result<T, String>
 where
     F: Fn(&mut arboard::Clipboard) -> Result<T, arboard::Error>,

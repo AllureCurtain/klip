@@ -418,6 +418,38 @@ describe('Header', () => {
     );
   });
 
+  it('renders advanced date filters as local calendar dates', () => {
+    render(
+      <HeaderWithSelection
+        searchQuery=""
+        onSearchChange={vi.fn()}
+        contentType={null}
+        onContentTypeChange={vi.fn()}
+        showFavorites={false}
+        onShowFavoritesChange={vi.fn()}
+        tags={[]}
+        selectedTagId={null}
+        onSelectedTagChange={vi.fn()}
+        selectionMode={false}
+        onSelectionModeChange={vi.fn()}
+        advancedFilters={{
+          sensitiveOnly: null,
+          exactMatch: false,
+          createdAfter: new Date(2026, 4, 1, 0, 30).getTime(),
+          createdBefore: null,
+        }}
+        onAdvancedFiltersChange={vi.fn()}
+        onSettingsOpen={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '高级搜索' }));
+
+    expect((screen.getByLabelText('开始日期') as HTMLInputElement).value).toBe(
+      '2026-05-01'
+    );
+  });
+
   it('closes the more menu from escape and outside clicks', () => {
     render(
       <HeaderWithSelection
@@ -531,6 +563,7 @@ describe('Header', () => {
 
   it('shows batch actions only after selection mode is enabled', () => {
     storeMocks.selectedIds = [42];
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
 
     const { rerender } = render(
       <HeaderWithSelection
@@ -578,9 +611,37 @@ describe('Header', () => {
     expect(storeMocks.assignTagToSelected).toHaveBeenCalledWith(1);
 
     fireEvent.click(screen.getByRole('button', { name: '删除已选' }));
+    expect(confirmSpy).toHaveBeenCalledWith('确定删除已选择的 1 项吗？');
     expect(storeMocks.deleteSelected).toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: '清除选择' }));
     expect(storeMocks.clearSelection).toHaveBeenCalled();
+  });
+
+  it('does not delete selected items when batch deletion is cancelled', () => {
+    storeMocks.selectedIds = [42, 43];
+    vi.spyOn(window, 'confirm').mockReturnValue(false);
+
+    render(
+      <HeaderWithSelection
+        searchQuery=""
+        onSearchChange={vi.fn()}
+        contentType={null}
+        onContentTypeChange={vi.fn()}
+        showFavorites={false}
+        onShowFavoritesChange={vi.fn()}
+        tags={[]}
+        selectedTagId={null}
+        onSelectedTagChange={vi.fn()}
+        selectionMode
+        onSelectionModeChange={vi.fn()}
+        onSettingsOpen={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '删除已选' }));
+
+    expect(window.confirm).toHaveBeenCalledWith('确定删除已选择的 2 项吗？');
+    expect(storeMocks.deleteSelected).not.toHaveBeenCalled();
   });
 });

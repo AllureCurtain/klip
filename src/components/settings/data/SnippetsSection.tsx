@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ClipboardCopy, Plus, Trash2 } from 'lucide-react';
+import { ClipboardCopy, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { Button, Input } from '@/components/ui';
 import { Label } from '@/components/ui/label';
 import type { Snippet } from '@/types';
@@ -14,6 +14,15 @@ interface SnippetsSectionProps {
     tagId: number | null;
     isFavorited: boolean;
   }) => Promise<Snippet | null>;
+  updateSnippet: (
+    id: number,
+    input: {
+      title: string;
+      content: string;
+      tagId: number | null;
+      isFavorited: boolean;
+    }
+  ) => Promise<Snippet | null>;
   deleteSnippet: (id: number) => Promise<void>;
   setStatus: (status: string) => void;
 }
@@ -21,30 +30,73 @@ interface SnippetsSectionProps {
 export function SnippetsSection({
   snippets,
   createSnippet,
+  updateSnippet,
   deleteSnippet,
   setStatus,
 }: SnippetsSectionProps) {
   const { t } = useTranslation();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [editingSnippet, setEditingSnippet] = useState<Snippet | null>(null);
   const [snippetTitle, setSnippetTitle] = useState('');
   const [snippetContent, setSnippetContent] = useState('');
 
-  const handleCreateSnippet = async () => {
-    const snippet = await createSnippet({
+  const handleSaveSnippet = async () => {
+    const input = {
       title: snippetTitle,
       content: snippetContent,
-      tagId: null,
-      isFavorited: false,
-    });
+      tagId: editingSnippet?.tag_id ?? null,
+      isFavorited: editingSnippet?.is_favorited ?? false,
+    };
+    const snippet = editingSnippet
+      ? await updateSnippet(editingSnippet.id, input)
+      : await createSnippet(input);
     if (snippet) {
-      setSnippetTitle('');
-      setSnippetContent('');
-      setStatus(t('settings.data.snippetCreated', { title: snippet.title }));
+      resetSnippetForm();
+      setStatus(
+        t(
+          editingSnippet
+            ? 'settings.data.snippetUpdated'
+            : 'settings.data.snippetCreated',
+          { title: snippet.title }
+        )
+      );
     }
   };
+
+  const startEditingSnippet = (snippet: Snippet) => {
+    setEditingSnippet(snippet);
+    setSnippetTitle(snippet.title);
+    setSnippetContent(snippet.content);
+  };
+
+  const resetSnippetForm = () => {
+    setEditingSnippet(null);
+    setSnippetTitle('');
+    setSnippetContent('');
+  };
+
+  const normalizedQuery = searchQuery.trim().toLocaleLowerCase();
+  const visibleSnippets = normalizedQuery
+    ? snippets.filter((snippet) =>
+        `${snippet.title}\n${snippet.content}`
+          .toLocaleLowerCase()
+          .includes(normalizedQuery)
+      )
+    : snippets;
 
   return (
     <section className="space-y-2">
       <Label className="text-xs">{t('settings.data.snippets')}</Label>
+      <Label htmlFor="snippet-search" className="sr-only">
+        {t('settings.data.searchSnippets')}
+      </Label>
+      <Input
+        id="snippet-search"
+        value={searchQuery}
+        onChange={(event) => setSearchQuery(event.target.value)}
+        placeholder={t('settings.data.searchSnippets')}
+        className="h-7 text-xs"
+      />
       <div className="grid gap-2">
         <Label htmlFor="snippet-title" className="sr-only">
           {t('settings.data.snippetTitle')}
@@ -69,15 +121,28 @@ export function SnippetsSection({
         <Button
           size="sm"
           className="h-7 justify-self-start text-xs"
-          onClick={handleCreateSnippet}
+          onClick={handleSaveSnippet}
           disabled={snippetTitle.trim() === '' || snippetContent.trim() === ''}
         >
           <Plus className="h-3 w-3" />
-          {t('settings.data.createSnippet')}
+          {editingSnippet
+            ? t('settings.data.saveSnippet')
+            : t('settings.data.createSnippet')}
         </Button>
+        {editingSnippet && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 justify-self-start text-xs"
+            onClick={resetSnippetForm}
+          >
+            <X className="h-3 w-3" />
+            {t('settings.data.cancelSnippetEdit')}
+          </Button>
+        )}
       </div>
       <div className="space-y-1">
-        {snippets.map((snippet) => (
+        {visibleSnippets.map((snippet) => (
           <div
             key={snippet.id}
             className="flex items-center gap-2 rounded-md border bg-muted/20 px-2 py-1.5"
@@ -96,6 +161,15 @@ export function SnippetsSection({
               onClick={() => void copyText(snippet.content)}
             >
               <ClipboardCopy className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-7"
+              aria-label={t('settings.data.editSnippet', { title: snippet.title })}
+              onClick={() => startEditingSnippet(snippet)}
+            >
+              <Pencil className="h-3.5 w-3.5" />
             </Button>
             <Button
               variant="ghost"

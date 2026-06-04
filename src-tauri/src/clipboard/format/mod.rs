@@ -8,8 +8,6 @@ pub trait ClipboardFormatStrategy: Send + Sync {
     fn content_type(&self) -> ContentType;
     fn detect(&self) -> bool;
     fn extract(&self) -> Result<ExtractedContent, FormatError>;
-    fn copy_back(&self, content: &[u8], metadata: Option<&str>) -> Result<(), FormatError>;
-    fn generate_preview(&self, content: &[u8], metadata: Option<&str>) -> String;
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -20,8 +18,6 @@ pub enum FormatError {
     DetectionFailed(String),
     #[error("content extraction failed: {0}")]
     ExtractionFailed(String),
-    #[error("copy back failed: {0}")]
-    CopyBackFailed(String),
     #[error("encoding failed: {0}")]
     EncodingFailed(String),
     #[error("content too large: {0} bytes")]
@@ -36,12 +32,6 @@ pub struct ExtractedContent {
     pub hash: String,
     pub size: i64,
     pub metadata: Option<String>,
-}
-
-#[derive(serde::Deserialize)]
-pub struct ImageDimensions {
-    pub width: u32,
-    pub height: u32,
 }
 
 pub struct FormatStrategyRegistry {

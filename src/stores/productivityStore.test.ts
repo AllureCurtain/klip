@@ -95,6 +95,28 @@ describe('productivityStore', () => {
     expect(useProductivityStore.getState().sourceRules[0].enabled).toBe(false);
   });
 
+  it('updates snippets in place', async () => {
+    useProductivityStore.setState({ snippets: [makeSnippet({ id: 7 })] });
+    vi.mocked(productApi.updateSnippet).mockResolvedValue(
+      makeSnippet({ id: 7, title: 'Deploy updated', content: 'pnpm deploy' })
+    );
+
+    await useProductivityStore.getState().updateSnippet(7, {
+      title: 'Deploy updated',
+      content: 'pnpm deploy',
+      tagId: null,
+      isFavorited: false,
+    });
+
+    expect(productApi.updateSnippet).toHaveBeenCalledWith(7, {
+      title: 'Deploy updated',
+      content: 'pnpm deploy',
+      tagId: null,
+      isFavorited: false,
+    });
+    expect(useProductivityStore.getState().snippets[0].title).toBe('Deploy updated');
+  });
+
   it('persists monitor pause and timed privacy mode', async () => {
     vi.mocked(configApi.set).mockResolvedValue(undefined);
 

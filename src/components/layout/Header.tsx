@@ -120,6 +120,12 @@ export function Header({
   };
 
   const selectedCount = selectedIds.length;
+  const handleDeleteSelected = () => {
+    if (selectedCount === 0) return;
+    if (window.confirm(t('header.deleteSelectedConfirm', { count: selectedCount }))) {
+      void deleteSelected();
+    }
+  };
 
   return (
     <>
@@ -258,7 +264,7 @@ export function Header({
             tags={tags}
             onFavoriteSelected={() => setFavoriteForSelected(true)}
             onAssignTagToSelected={assignTagToSelected}
-            onDeleteSelected={deleteSelected}
+            onDeleteSelected={handleDeleteSelected}
             onClearSelection={clearSelection}
           />
         )}
@@ -329,7 +335,10 @@ function DateField({ id, label, value, endOfDay = false, onChange }: DateFieldPr
 function toDateInputValue(value: number): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
-  return date.toISOString().slice(0, 10);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 function dateInputToMillis(value: string, endOfDay: boolean): number | null {

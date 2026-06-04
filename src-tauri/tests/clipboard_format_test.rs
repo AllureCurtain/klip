@@ -44,13 +44,14 @@ fn strategy_priority_is_image_file_text() {
 }
 
 #[test]
-fn text_strategy_copy_back() {
+fn writer_copies_text_back_to_clipboard() {
     let _guard = clipboard_test_lock();
     use klip::clipboard::format::text::TextStrategy;
+    use klip::clipboard::writer::copy_to_clipboard;
     let strategy = TextStrategy;
-    let test_data = b"Hello, Klip!";
+    let test_data = "Hello, Klip!";
 
-    let result = strategy.copy_back(test_data, None);
+    let result = copy_to_clipboard(test_data, &ContentType::Text, None);
     // This test requires clipboard access; in CI it may fail
     if result.is_ok() {
         // Verify we can read it back

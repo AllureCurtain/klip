@@ -1,7 +1,6 @@
-use image::GenericImageView;
 use sha2::{Digest, Sha256};
 
-use super::{ClipboardFormatStrategy, ContentType, ExtractedContent, FormatError, ImageDimensions};
+use super::{ClipboardFormatStrategy, ContentType, ExtractedContent, FormatError};
 
 const MAX_IMAGE_SIZE: usize = 5 * 1024 * 1024;
 
@@ -101,61 +100,6 @@ impl ClipboardFormatStrategy for ImageStrategy {
                 size,
                 metadata: Some(metadata),
             })
-        }
-    }
-
-    fn copy_back(&self, content: &[u8], metadata: Option<&str>) -> Result<(), FormatError> {
-        let img = image::load_from_memory(content)
-            .map_err(|e| FormatError::CopyBackFailed(e.to_string()))?;
-
-        let (w, h) = if let Some(meta_str) = metadata {
-            serde_json::from_str::<ImageDimensions>(meta_str)
-                .map(|m| (m.width as usize, m.height as usize))
-                .unwrap_or_else(|_| {
-                    let dims = img.dimensions();
-                    (dims.0 as usize, dims.1 as usize)
-                })
-        } else {
-            let dims = img.dimensions();
-            (dims.0 as usize, dims.1 as usize)
-        };
-
-        let rgba = img.to_rgba8();
-        let raw = arboard::ImageData {
-            width: w,
-            height: h,
-            bytes: rgba.as_raw().clone().into(),
-        };
-
-        clipboard_set_image_with_retry(raw)
-            .map_err(|e| FormatError::CopyBackFailed(e.to_string()))?;
-
-        Ok(())
-    }
-
-    fn generate_preview(&self, _content: &[u8], metadata: Option<&str>) -> String {
-        if let Some(meta_str) = metadata {
-            if let Ok(meta) = serde_json::from_str::<ImageDimensions>(meta_str) {
-                return format!("图片 {}x{}", meta.width, meta.height);
-            }
-        }
-        "图片".to_string()
-    }
-}
-
-fn clipboard_set_image_with_retry(img_data: arboard::ImageData) -> Result<(), arboard::Error> {
-    let mut attempts = 0;
-    loop {
-        let mut cb = arboard::Clipboard::new()?;
-        match cb.set_image(img_data.clone()) {
-            Ok(()) => return Ok(()),
-            Err(e) => {
-                attempts += 1;
-                if attempts >= 5 {
-                    return Err(e);
-                }
-                std::thread::sleep(std::time::Duration::from_millis(30));
-            }
         }
     }
 }

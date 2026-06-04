@@ -1,0 +1,35 @@
+name: Desktop E2E
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 18 * * *"
+
+jobs:
+  windows-e2e:
+    name: Windows desktop E2E
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - run: pnpm install --frozen-lockfile
+      - run: cargo install tauri-driver --locked
+      - name: Add Edge WebDriver to PATH
+        shell: pwsh
+        run: |
+          $driver = Get-ChildItem "C:\Program Files (x86)\Microsoft\EdgeWebDriver" -Filter msedgedriver.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $driver) {
+            $driver = Get-ChildItem "C:\SeleniumWebDrivers" -Filter msedgedriver.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          }
+          if (-not $driver) {
+            throw "msedgedriver.exe was not found on the runner"
+          }
+          $driver.Directory.FullName | Out-File -FilePath $env:GITHUB_PATH -Append
+      - run: pnpm e2e

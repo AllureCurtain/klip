@@ -5,6 +5,7 @@ pub use productization::*;
 use crate::config::registry::{self, RuntimeEffect};
 use crate::database::{self, ClipboardItem, DiagnosticsInfo, SystemInfo};
 use crate::AppError;
+use serde::Deserialize;
 use tauri::{Emitter, Manager, State};
 #[cfg(not(target_os = "linux"))]
 use tauri_plugin_autostart::ManagerExt;
@@ -126,9 +127,86 @@ pub fn set_config(
     Ok(())
 }
 
+#[derive(Debug, Deserialize)]
+pub struct ConfigUpdate {
+    pub key: String,
+    pub value: String,
+}
+
+#[tauri::command]
+pub fn set_config_many(
+    app: tauri::AppHandle,
+    db: State<'_, database::Database>,
+    entries: Vec<ConfigUpdate>,
+) -> Result<(), AppError> {
+    let normalized = normalize_config_updates(entries)?;
+    let previous_hotkeys = previous_hotkey_values(&db, &normalized)?;
+    let has_window_size_effect = normalized
+        .iter()
+        .any(|(descriptor, _)| descriptor.effect == RuntimeEffect::WindowSize);
+    let has_hotkey_effect = normalized
+        .iter()
+        .any(|(descriptor, _)| descriptor.effect == RuntimeEffect::HotkeyReload);
+    let persisted_entries = normalized
+        .iter()
+        .map(|(descriptor, value)| (descriptor.key.to_string(), value.clone()))
+        .collect::<Vec<_>>();
+
+    database::config::set_many(&db, &persisted_entries)?;
+
+    if has_window_size_effect {
+        apply_window_size_from_config(&app, &db)?;
+    }
+
+    if has_hotkey_effect {
+        if let Err(err) = crate::hotkey::manager::reload_hotkeys(&app) {
+            rollback_hotkey_values(&app, &db, previous_hotkeys)?;
+            return Err(AppError::Hotkey(format!(
+                "Failed to reload hotkeys: {}",
+                err
+            )));
+        }
+    }
+
+    for (key, value) in persisted_entries {
+        let _ = app.emit(
+            "config-changed",
+            serde_json::json!({ "key": key, "value": value }),
+        );
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 fn normalize_config_value(key: &str, value: String) -> Result<String, AppError> {
     registry::require_descriptor(key)?.normalize(&value)
+}
+
+fn normalize_config_updates(
+    entries: Vec<ConfigUpdate>,
+) -> Result<Vec<(&'static registry::ConfigDescriptor, String)>, AppError> {
+    entries
+        .into_iter()
+        .map(|entry| {
+            let descriptor = registry::require_descriptor(&entry.key)?;
+            let value = descriptor.normalize(&entry.value)?;
+            Ok((descriptor, value))
+        })
+        .collect()
+}
+
+fn previous_hotkey_values(
+    db: &database::Database,
+    normalized: &[(&'static registry::ConfigDescriptor, String)],
+) -> Result<Vec<(&'static registry::ConfigDescriptor, Option<String>)>, AppError> {
+    normalized
+        .iter()
+        .filter(|(descriptor, _)| descriptor.effect == RuntimeEffect::HotkeyReload)
+        .map(|(descriptor, _)| {
+            database::config::get(db, descriptor.key).map(|value| (*descriptor, value))
+        })
+        .collect()
 }
 
 fn apply_window_size_from_config(
@@ -146,6 +224,24 @@ fn rollback_hotkey_config(
 ) -> Result<(), AppError> {
     let rollback_value = previous_value.unwrap_or_else(|| descriptor.default_value.to_string());
     let _ = database::config::set(db, descriptor.key, &rollback_value);
+
+    let toggle = database::config::get(db, registry::KEY_HOTKEY_TOGGLE_WINDOW)?
+        .unwrap_or_else(|| registry::DEFAULT_TOGGLE_HOTKEY.to_string());
+    let quick_paste_prefix = database::config::get(db, registry::KEY_HOTKEY_QUICK_PASTE_PREFIX)?
+        .unwrap_or_else(|| registry::DEFAULT_QUICK_PASTE_PREFIX.to_string());
+    let _ = crate::hotkey::manager::reload_hotkeys_from_values(app, &toggle, &quick_paste_prefix);
+    Ok(())
+}
+
+fn rollback_hotkey_values(
+    app: &tauri::AppHandle,
+    db: &database::Database,
+    previous_values: Vec<(&'static registry::ConfigDescriptor, Option<String>)>,
+) -> Result<(), AppError> {
+    for (descriptor, previous_value) in previous_values {
+        let rollback_value = previous_value.unwrap_or_else(|| descriptor.default_value.to_string());
+        let _ = database::config::set(db, descriptor.key, &rollback_value);
+    }
 
     let toggle = database::config::get(db, registry::KEY_HOTKEY_TOGGLE_WINDOW)?
         .unwrap_or_else(|| registry::DEFAULT_TOGGLE_HOTKEY.to_string());
@@ -243,7 +339,7 @@ pub fn is_auto_start_enabled(app: tauri::AppHandle) -> Result<bool, AppError> {
 pub fn get_system_info() -> Result<SystemInfo, AppError> {
     Ok(SystemInfo {
         platform: platform_name().to_string(),
-        version: env!("CARGO_PKG_VERSION").to_string(),
+        version: system_version(),
         app_version: env!("CARGO_PKG_VERSION").to_string(),
     })
 }
@@ -291,6 +387,52 @@ fn platform_name() -> &'static str {
     }
 }
 
+fn system_version() -> String {
+    platform_system_version().unwrap_or_else(|| platform_name().to_string())
+}
+
+#[cfg(target_os = "windows")]
+fn platform_system_version() -> Option<String> {
+    std::process::Command::new("cmd")
+        .args(["/C", "ver"])
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .and_then(|output| String::from_utf8(output.stdout).ok())
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
+#[cfg(target_os = "macos")]
+fn platform_system_version() -> Option<String> {
+    std::process::Command::new("sw_vers")
+        .arg("-productVersion")
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .and_then(|output| String::from_utf8(output.stdout).ok())
+        .map(|value| format!("macOS {}", value.trim()))
+        .filter(|value| value.trim() != "macOS")
+}
+
+#[cfg(target_os = "linux")]
+fn platform_system_version() -> Option<String> {
+    std::fs::read_to_string("/etc/os-release")
+        .ok()
+        .and_then(|content| {
+            content
+                .lines()
+                .find_map(|line| line.strip_prefix("PRETTY_NAME="))
+                .map(|value| value.trim_matches('"').to_string())
+        })
+        .filter(|value| !value.is_empty())
+}
+
+#[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+fn platform_system_version() -> Option<String> {
+    None
+}
+
 fn build_diagnostics_paths(data_dir: &std::path::Path) -> DiagnosticsPaths {
     #[cfg(target_os = "linux")]
     let log_dir = crate::platform::linux::log_dir();
@@ -324,6 +466,14 @@ mod tests {
             platform_name(),
             "windows" | "macos" | "linux" | "unknown"
         ));
+    }
+
+    #[test]
+    fn system_info_reports_os_version_separately_from_app_version() {
+        let info = get_system_info().unwrap();
+
+        assert!(!info.version.trim().is_empty());
+        assert_ne!(info.version, info.app_version);
     }
 
     #[test]

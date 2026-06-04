@@ -115,65 +115,6 @@ impl ClipboardFormatStrategy for FileStrategy {
             metadata: Some(metadata),
         })
     }
-
-    fn copy_back(&self, content: &[u8], _metadata: Option<&str>) -> Result<(), FormatError> {
-        let paths: Vec<String> = serde_json::from_slice(content)
-            .map_err(|e| FormatError::CopyBackFailed(e.to_string()))?;
-
-        #[cfg(target_os = "windows")]
-        {
-            let path_refs: Vec<&str> = paths.iter().map(|s| s.as_str()).collect();
-            set_file_list_with_retry(&path_refs)?;
-        }
-
-        #[cfg(not(target_os = "windows"))]
-        {
-            let _ = paths;
-            Err(FormatError::CopyBackFailed(
-                "file copy back not supported on this platform".into(),
-            ))
-        }
-
-        #[cfg(target_os = "windows")]
-        {
-            Ok(())
-        }
-    }
-
-    fn generate_preview(&self, content: &[u8], metadata: Option<&str>) -> String {
-        // Prefer the rich metadata if available.
-        if let Some(meta_str) = metadata {
-            if let Ok(m) = serde_json::from_str::<FileMetadata>(meta_str) {
-                return preview_from_counts(m.file_count, m.dir_count, m.items.first());
-            }
-        }
-
-        // Fall back to re-deriving from the path list.
-        if let Ok(paths) = serde_json::from_slice::<Vec<String>>(content) {
-            return build_preview(&paths, paths.len() as u64, 0);
-        }
-
-        "文件".to_string()
-    }
-}
-
-#[derive(serde::Deserialize)]
-struct FileMetadata {
-    file_count: u64,
-    #[serde(default)]
-    dir_count: u64,
-    #[serde(default)]
-    items: Vec<FileMetaItem>,
-}
-
-#[derive(serde::Deserialize)]
-struct FileMetaItem {
-    name: String,
-    /// Present in the JSON for the frontend's icon decision; not read on
-    /// the Rust side, but kept here so the deserializer doesn't drop it.
-    #[allow(dead_code)]
-    #[serde(default)]
-    is_dir: bool,
 }
 
 /// Build a human-readable preview line for the clipboard list view.
@@ -184,15 +125,6 @@ fn build_preview(paths: &[String], file_count: u64, dir_count: u64) -> String {
             .file_name()
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_else(|| paths[0].clone());
-    }
-    format_counts(file_count, dir_count)
-}
-
-fn preview_from_counts(file_count: u64, dir_count: u64, first: Option<&FileMetaItem>) -> String {
-    if file_count + dir_count == 1 {
-        if let Some(item) = first {
-            return item.name.clone();
-        }
     }
     format_counts(file_count, dir_count)
 }
@@ -254,44 +186,6 @@ fn read_file_paths_with_retry() -> Result<Vec<String>, FormatError> {
     #[cfg(not(target_os = "windows"))]
     {
         Ok(Vec::new())
-    }
-}
-
-#[cfg(target_os = "windows")]
-fn set_file_list_with_retry(paths: &[&str]) -> Result<(), FormatError> {
-    let mut attempts = 0;
-    loop {
-        match clipboard_win::raw::open() {
-            Ok(()) => {
-                let result = clipboard_win::raw::set_file_list(paths);
-                if let Err(e) = clipboard_win::raw::close() {
-                    tracing::warn!("Failed to close clipboard: {}", e);
-                }
-                match result {
-                    Ok(()) => return Ok(()),
-                    Err(e) => {
-                        attempts += 1;
-                        if attempts >= 10 {
-                            return Err(FormatError::CopyBackFailed(format!(
-                                "failed to set file list after {} retries: {}",
-                                attempts, e
-                            )));
-                        }
-                        std::thread::sleep(std::time::Duration::from_millis(50));
-                    }
-                }
-            }
-            Err(e) => {
-                attempts += 1;
-                if attempts >= 10 {
-                    return Err(FormatError::CopyBackFailed(format!(
-                        "failed to open clipboard after {} retries: {}",
-                        attempts, e
-                    )));
-                }
-                std::thread::sleep(std::time::Duration::from_millis(50));
-            }
-        }
     }
 }
 

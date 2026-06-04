@@ -2,7 +2,11 @@ use base64::Engine;
 use image::GenericImageView;
 
 #[cfg(target_os = "windows")]
-use crate::clipboard::format::ImageDimensions;
+#[derive(serde::Deserialize)]
+struct ImageDimensions {
+    width: u32,
+    height: u32,
+}
 
 #[cfg(target_os = "windows")]
 const KLIP_IGNORE_FORMAT: &str = "Clipboard Viewer Ignore";

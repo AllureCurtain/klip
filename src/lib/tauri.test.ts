@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { clipboardApi, productApi } from './tauri';
+import { clipboardApi, configApi, productApi } from './tauri';
 import { invoke } from '@tauri-apps/api/core';
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -71,6 +71,22 @@ describe('tauri API wrappers', () => {
     expect(invoke).toHaveBeenNthCalledWith(3, 'set_source_rule_enabled', {
       id: 3,
       enabled: false,
+    });
+  });
+
+  it('wraps batch config persistence with typed entries', async () => {
+    vi.mocked(invoke).mockResolvedValue(undefined);
+
+    await configApi.setMany([
+      ['window_width', '640'],
+      ['window_height', '720'],
+    ]);
+
+    expect(invoke).toHaveBeenCalledWith('set_config_many', {
+      entries: [
+        { key: 'window_width', value: '640' },
+        { key: 'window_height', value: '720' },
+      ],
     });
   });
 });

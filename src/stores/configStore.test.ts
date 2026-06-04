@@ -29,6 +29,7 @@ vi.mock('@/lib/tauri', () => ({
   configApi: {
     getAll: vi.fn(),
     set: vi.fn(),
+    setMany: vi.fn(),
   },
   systemApi: {
     getInfo: vi.fn(),
@@ -77,11 +78,13 @@ describe('configStore', () => {
 
   it('persists sensitive preview masking with other config changes', async () => {
     useConfigStore.getState().setMaskSensitivePreviews(false);
-    vi.mocked(configApi.set).mockResolvedValue(undefined);
+    vi.mocked(configApi.setMany).mockResolvedValue(undefined);
 
     await useConfigStore.getState().saveChanges();
 
-    expect(configApi.set).toHaveBeenCalledWith('mask_sensitive_previews', 'false');
+    expect(configApi.setMany).toHaveBeenCalledWith(
+      expect.arrayContaining([['mask_sensitive_previews', 'false']])
+    );
   });
 
   it('loads product readiness config with stable defaults', async () => {
@@ -91,7 +94,7 @@ describe('configStore', () => {
       updates_enabled: 'true',
       update_feed_url: 'https://updates.example.test/klip.json',
       encryption_enabled: 'true',
-      encryption_status: 'ready',
+      encryption_status: 'configured',
       sync_folder: 'C:\\Klip Sync',
       plugin_folder: 'C:\\Klip Plugins',
     });
@@ -105,13 +108,13 @@ describe('configStore', () => {
       'https://updates.example.test/klip.json'
     );
     expect(useConfigStore.getState().config.encryption_enabled).toBe(true);
-    expect(useConfigStore.getState().config.encryption_status).toBe('ready');
+    expect(useConfigStore.getState().config.encryption_status).toBe('configured');
     expect(useConfigStore.getState().config.sync_folder).toBe('C:\\Klip Sync');
     expect(useConfigStore.getState().config.plugin_folder).toBe('C:\\Klip Plugins');
   });
 
   it('persists update, encryption, sync, plugin, and monitoring readiness settings', async () => {
-    vi.mocked(configApi.set).mockResolvedValue(undefined);
+    vi.mocked(configApi.setMany).mockResolvedValue(undefined);
 
     useConfigStore.getState().setClipboardMonitorEnabled(false);
     useConfigStore.getState().setUpdatesEnabled(true);
@@ -122,22 +125,37 @@ describe('configStore', () => {
 
     await useConfigStore.getState().saveChanges();
 
-    expect(configApi.set).toHaveBeenCalledWith('clipboard_monitor_enabled', 'false');
-    expect(configApi.set).toHaveBeenCalledWith('updates_enabled', 'true');
-    expect(configApi.set).toHaveBeenCalledWith(
-      'update_feed_url',
-      'https://updates.example.test/klip.json'
+    expect(configApi.setMany).toHaveBeenCalledTimes(1);
+    expect(configApi.setMany).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        ['clipboard_monitor_enabled', 'false'],
+        ['updates_enabled', 'true'],
+        ['update_feed_url', 'https://updates.example.test/klip.json'],
+        ['encryption_enabled', 'true'],
+        ['sync_folder', 'C:\\Klip Sync'],
+        ['plugin_folder', 'C:\\Klip Plugins'],
+      ])
     );
-    expect(configApi.set).toHaveBeenCalledWith('encryption_enabled', 'true');
-    expect(configApi.set).toHaveBeenCalledWith('sync_folder', 'C:\\Klip Sync');
-    expect(configApi.set).toHaveBeenCalledWith('plugin_folder', 'C:\\Klip Plugins');
+    expect(configApi.set).not.toHaveBeenCalled();
   });
 
   it('does not persist the legacy tray visibility key as a runtime setting', async () => {
-    vi.mocked(configApi.set).mockResolvedValue(undefined);
+    vi.mocked(configApi.setMany).mockResolvedValue(undefined);
 
     await useConfigStore.getState().saveChanges();
 
-    expect(configApi.set).not.toHaveBeenCalledWith('show_in_tray', expect.any(String));
+    expect(configApi.setMany).toHaveBeenCalledWith(
+      expect.not.arrayContaining([['show_in_tray', expect.any(String)]])
+    );
+  });
+
+  it('does not include autostart in batch config saves because it has its own OS side effect', async () => {
+    vi.mocked(configApi.setMany).mockResolvedValue(undefined);
+
+    await useConfigStore.getState().saveChanges();
+
+    expect(configApi.setMany).toHaveBeenCalledWith(
+      expect.not.arrayContaining([['auto_start', expect.any(String)]])
+    );
   });
 });

@@ -385,6 +385,28 @@ fn validate_backup_database(path: &Path) -> Result<(), AppError> {
         }
     }
 
+    require_table_columns(
+        &conn,
+        "clipboard_items",
+        &[
+            "id",
+            "content_type",
+            "content",
+            "preview",
+            "hash",
+            "size",
+            "metadata",
+            "is_favorited",
+            "created_at",
+            "last_used_at",
+            "is_sensitive",
+            "sensitivity_reason",
+        ],
+    )?;
+    require_table_columns(&conn, "tags", &["id", "name", "color", "created_at"])?;
+    require_table_columns(&conn, "clipboard_item_tags", &["item_id", "tag_id"])?;
+    require_table_columns(&conn, "app_config", &["key", "value", "updated_at"])?;
+
     let backup_version = conn
         .query_row(
             "SELECT value FROM app_config WHERE key = 'db_version'",
@@ -405,6 +427,36 @@ fn validate_backup_database(path: &Path) -> Result<(), AppError> {
     }
 
     Ok(())
+}
+
+fn require_table_columns(
+    conn: &Connection,
+    table: &str,
+    required_columns: &[&str],
+) -> Result<(), AppError> {
+    let mut stmt = conn
+        .prepare(&format!("PRAGMA table_info({})", table))
+        .map_err(|e| AppError::InvalidInput(format!("invalid backup database: {}", e)))?;
+    let existing = stmt
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(|e| AppError::InvalidInput(format!("invalid backup database: {}", e)))?
+        .collect::<Result<std::collections::HashSet<_>, _>>()
+        .map_err(|e| AppError::InvalidInput(format!("invalid backup database: {}", e)))?;
+    let missing = required_columns
+        .iter()
+        .filter(|column| !existing.contains(**column))
+        .copied()
+        .collect::<Vec<_>>();
+
+    if missing.is_empty() {
+        return Ok(());
+    }
+
+    Err(AppError::InvalidInput(format!(
+        "backup database table {} is missing required columns: {}",
+        table,
+        missing.join(", ")
+    )))
 }
 
 fn pre_restore_backup_path(db_path: &Path) -> PathBuf {
@@ -661,5 +713,64 @@ mod tests {
             Err(AppError::InvalidInput(message)) if message.contains("newer database schema")
         ));
         assert_eq!(count_items(&current_path), 1);
+    }
+
+    #[test]
+    fn restore_rejects_backup_missing_required_columns_before_mutating_current_database() {
+        let dir = temp_dir("missing-columns-restore");
+        let current_path = dir.join("current.db");
+        let restore_path = dir.join("restore.db");
+
+        let current = create_db(&current_path);
+        insert_text(&current, "keep-current-data");
+
+        let restore_conn = Connection::open(&restore_path).unwrap();
+        restore_conn
+            .execute_batch(
+                "PRAGMA foreign_keys=ON;
+                 CREATE TABLE clipboard_items (
+                     id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                     content_type    TEXT NOT NULL,
+                     content         TEXT NOT NULL,
+                     preview         TEXT,
+                     hash            TEXT NOT NULL UNIQUE,
+                     size            INTEGER NOT NULL DEFAULT 0,
+                     metadata        TEXT,
+                     is_favorited    INTEGER NOT NULL DEFAULT 0,
+                     created_at      INTEGER NOT NULL,
+                     last_used_at    INTEGER NOT NULL
+                 );
+                 CREATE TABLE tags (
+                     id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                     name        TEXT NOT NULL UNIQUE,
+                     color       TEXT,
+                     created_at  INTEGER NOT NULL
+                 );
+                 CREATE TABLE clipboard_item_tags (
+                     item_id INTEGER NOT NULL,
+                     tag_id  INTEGER NOT NULL,
+                     PRIMARY KEY (item_id, tag_id)
+                 );
+                 CREATE TABLE app_config (
+                     key         TEXT PRIMARY KEY,
+                     value       TEXT NOT NULL,
+                     updated_at  INTEGER NOT NULL
+                 );
+                 INSERT INTO app_config (key, value, updated_at) VALUES ('db_version', '3', 1);",
+            )
+            .unwrap();
+        drop(restore_conn);
+
+        let result = restore_database(&current, &current_path, restore_path.to_str().unwrap());
+
+        assert!(matches!(
+            result,
+            Err(AppError::InvalidInput(message))
+                if message.contains("clipboard_items")
+                    && message.contains("is_sensitive")
+                    && message.contains("sensitivity_reason")
+        ));
+        assert_eq!(count_items(&current_path), 1);
+        assert_eq!(first_content(&current_path), "keep-current-data");
     }
 }

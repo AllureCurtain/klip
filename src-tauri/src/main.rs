@@ -178,6 +178,7 @@ fn main() {
             commands::get_config,
             commands::get_all_config,
             commands::set_config,
+            commands::set_config_many,
             commands::toggle_window,
             commands::show_window,
             commands::hide_window,

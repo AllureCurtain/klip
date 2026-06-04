@@ -175,6 +175,11 @@ export const configApi = {
 
   set: (key: string, value: string) =>
     invoke('set_config', { key, value }),
+
+  setMany: (entries: Array<[string, string]>) =>
+    invoke('set_config_many', {
+      entries: entries.map(([key, value]) => ({ key, value })),
+    }),
 };
 
 // 系统 API

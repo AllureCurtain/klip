@@ -22,6 +22,7 @@ export function DataManagementView() {
     sourceRules,
     fetchProductivity,
     createSnippet,
+    updateSnippet,
     deleteSnippet,
     createSourceRule,
     setSourceRuleEnabled,
@@ -53,6 +54,7 @@ export function DataManagementView() {
       <SnippetsSection
         snippets={snippets}
         createSnippet={createSnippet}
+        updateSnippet={updateSnippet}
         deleteSnippet={deleteSnippet}
         setStatus={actions.setStatus}
       />
