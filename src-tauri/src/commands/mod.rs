@@ -6,7 +6,7 @@ use crate::config::registry::{self, RuntimeEffect};
 use crate::database::{self, ClipboardItem, DiagnosticsInfo, SystemInfo};
 use crate::AppError;
 use serde::Deserialize;
-use tauri::{Emitter, Manager, State};
+use tauri::{Emitter, State};
 #[cfg(not(target_os = "linux"))]
 use tauri_plugin_autostart::ManagerExt;
 
@@ -346,18 +346,7 @@ pub fn get_system_info() -> Result<SystemInfo, AppError> {
 
 #[tauri::command]
 pub fn get_diagnostics_info(app: tauri::AppHandle) -> Result<DiagnosticsInfo, AppError> {
-    #[cfg(target_os = "linux")]
-    let data_dir = crate::platform::linux::data_dir();
-
-    #[cfg(not(target_os = "linux"))]
-    let data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| AppError::System(format!("Failed to resolve app data dir: {}", e)))?;
-
-    #[cfg(target_os = "linux")]
-    let _ = app;
-
+    let data_dir = database::app_data_dir(&app)?;
     let paths = build_diagnostics_paths(&data_dir);
 
     Ok(DiagnosticsInfo {

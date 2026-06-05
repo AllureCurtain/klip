@@ -11,6 +11,8 @@ use tracing_appender::non_blocking::WorkerGuard;
 /// non-blocking appender needs to flush buffered log entries.
 struct LogGuardHolder(#[allow(dead_code)] WorkerGuard);
 
+const ENV_KLIP_LOG_DIR: &str = "KLIP_LOG_DIR";
+
 fn main() {
     eprintln!("Starting Klip...");
 
@@ -294,17 +296,23 @@ fn init_tracing(app: &tauri::AppHandle) -> WorkerGuard {
     use tracing_appender::rolling::{RollingFileAppender, Rotation};
     use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
-    #[cfg(target_os = "linux")]
-    let log_dir = klip::platform::linux::log_dir();
+    let log_dir = std::env::var_os(ENV_KLIP_LOG_DIR)
+        .filter(|value| !value.is_empty())
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| {
+            #[cfg(target_os = "linux")]
+            {
+                let _ = app;
+                klip::platform::linux::log_dir()
+            }
 
-    #[cfg(not(target_os = "linux"))]
-    let log_dir = app
-        .path()
-        .app_log_dir()
-        .unwrap_or_else(|_| std::env::temp_dir().join("klip-logs"));
-
-    #[cfg(target_os = "linux")]
-    let _ = app;
+            #[cfg(not(target_os = "linux"))]
+            {
+                app.path()
+                    .app_log_dir()
+                    .unwrap_or_else(|_| std::env::temp_dir().join("klip-logs"))
+            }
+        });
     let _ = std::fs::create_dir_all(&log_dir);
 
     let appender = RollingFileAppender::new(Rotation::DAILY, &log_dir, "klip.log");
