@@ -1,17 +1,23 @@
 #!/usr/bin/env node
 import { copyFileSync, existsSync, mkdirSync, chmodSync, readdirSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { join, dirname, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(__dirname, '..');
 const hooksSrc = join(__dirname, 'hooks');
-const hooksDst = join(repoRoot, '.git', 'hooks');
 
 if (!existsSync(join(repoRoot, '.git'))) {
   console.log('install-hooks: not a git checkout, skipping');
   process.exit(0);
 }
+
+const gitHooksPath = execFileSync('git', ['rev-parse', '--git-path', 'hooks'], {
+  cwd: repoRoot,
+  encoding: 'utf8',
+}).trim();
+const hooksDst = isAbsolute(gitHooksPath) ? gitHooksPath : join(repoRoot, gitHooksPath);
 
 if (!existsSync(hooksDst)) {
   mkdirSync(hooksDst, { recursive: true });
