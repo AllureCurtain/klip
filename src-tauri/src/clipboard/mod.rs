@@ -1,4 +1,5 @@
 pub mod format;
+pub mod hash;
 pub mod monitor;
 pub mod paste;
 pub mod writer;

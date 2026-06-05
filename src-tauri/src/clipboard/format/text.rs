@@ -1,5 +1,3 @@
-use sha2::{Digest, Sha256};
-
 use super::{ClipboardFormatStrategy, ContentType, ExtractedContent, FormatError};
 
 pub struct TextStrategy;
@@ -31,7 +29,7 @@ impl ClipboardFormatStrategy for TextStrategy {
 
         let data = text.as_bytes().to_vec();
         let preview: String = text.chars().take(200).collect();
-        let hash = compute_hash(&data);
+        let hash = crate::clipboard::hash::hash_bytes(&data);
         let size = data.len() as i64;
 
         Ok(ExtractedContent {
@@ -64,12 +62,6 @@ where
             }
         }
     }
-}
-
-fn compute_hash(data: &[u8]) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(data);
-    format!("{:x}", hasher.finalize())
 }
 
 fn read_text_from_clipboard() -> Result<String, FormatError> {

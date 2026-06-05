@@ -4,10 +4,8 @@ use crate::database::types::{
     BackupSummary, ClipboardItem, ContentType, ImportSummary, RestoreSummary, Tag,
 };
 use crate::{AppError, Database};
-use base64::Engine;
 use rusqlite::{Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
-use sha2::Digest;
 use std::path::{Path, PathBuf};
 
 const SUPPORTED_EXPORT_VERSION: u32 = 1;
@@ -210,11 +208,7 @@ fn import_items(db: &Database, items: Vec<ClipboardItem>) -> Result<ImportSummar
     let mut imported = 0;
     let mut skipped = 0;
     for item in items {
-        let hash = if item.hash.is_empty() {
-            hash_content(item.content_type.as_str(), &item.content)
-        } else {
-            item.hash.clone()
-        };
+        let hash = hash_content(item.content_type.as_str(), &item.content);
         let result = tx.execute(
             "INSERT OR IGNORE INTO clipboard_items
              (content_type, content, preview, hash, size, metadata, is_favorited,
@@ -279,19 +273,7 @@ fn load_all_items(conn: &rusqlite::Connection) -> Result<Vec<ClipboardItem>, App
 }
 
 fn hash_content(content_type: &str, content: &str) -> String {
-    let mut hasher = sha2::Sha256::new();
-    hasher.update(content_type.as_bytes());
-    hasher.update([0]);
-    if content_type == "image" {
-        if let Some(data) = content.strip_prefix("data:image/png;base64,") {
-            if let Ok(decoded) = base64::engine::general_purpose::STANDARD.decode(data) {
-                hasher.update(decoded);
-                return format!("{:x}", hasher.finalize());
-            }
-        }
-    }
-    hasher.update(content.as_bytes());
-    format!("{:x}", hasher.finalize())
+    crate::clipboard::hash::hash_stored_content(content_type, content)
 }
 
 fn write_file(path: &str, data: &[u8]) -> Result<BackupSummary, AppError> {
@@ -514,6 +496,7 @@ mod tests {
     use super::*;
     use crate::database::Database;
     use rusqlite::Connection;
+    use sha2::Digest;
     use std::path::{Path, PathBuf};
 
     fn temp_dir(name: &str) -> PathBuf {
@@ -527,13 +510,23 @@ mod tests {
         Database::new(path).unwrap()
     }
 
+    fn normal_text_hash(content: &str) -> String {
+        let mut hasher = sha2::Sha256::new();
+        hasher.update(content.as_bytes());
+        format!("{:x}", hasher.finalize())
+    }
+
     fn insert_text(db: &Database, content: &str) {
+        insert_text_with_hash(db, content, &format!("hash-{content}"));
+    }
+
+    fn insert_text_with_hash(db: &Database, content: &str, hash: &str) {
         let conn = db.get_connection().unwrap();
         conn.execute(
             "INSERT INTO clipboard_items
              (content_type, content, preview, hash, size, created_at, last_used_at)
              VALUES ('text', ?1, ?1, ?2, ?3, 1, 1)",
-            rusqlite::params![content, format!("hash-{content}"), content.len() as i64],
+            rusqlite::params![content, hash, content.len() as i64],
         )
         .unwrap();
     }
@@ -554,6 +547,55 @@ mod tests {
                 |row| row.get(0),
             )
             .unwrap()
+    }
+
+    #[test]
+    fn import_csv_hash_matches_normal_text_capture_hash() {
+        let content = "same text content";
+        let expected = normal_text_hash(content);
+
+        assert_eq!(super::hash_content("text", content), expected);
+    }
+
+    #[test]
+    fn import_json_recomputes_hash_to_dedupe_legacy_export_hashes() {
+        let dir = temp_dir("json-recompute-hash");
+        let db_path = dir.join("current.db");
+        let json_path = dir.join("items.json");
+        let db = create_db(&db_path);
+        let content = "same text content";
+        insert_text_with_hash(&db, content, &normal_text_hash(content));
+        std::fs::write(
+            &json_path,
+            serde_json::json!({
+                "version": 1,
+                "exported_at": 1,
+                "items": [{
+                    "id": 1,
+                    "content_type": "text",
+                    "content": content,
+                    "preview": content,
+                    "hash": "legacy-mismatched-hash",
+                    "size": content.len(),
+                    "metadata": null,
+                    "is_favorited": false,
+                    "is_sensitive": false,
+                    "sensitivity_reason": null,
+                    "tags": [],
+                    "created_at": 1,
+                    "last_used_at": 1
+                }],
+                "tags": []
+            })
+            .to_string(),
+        )
+        .unwrap();
+
+        let summary = import_json(&db, json_path.to_str().unwrap()).unwrap();
+
+        assert_eq!(summary.imported, 0);
+        assert_eq!(summary.skipped, 1);
+        assert_eq!(count_items(&db_path), 1);
     }
 
     #[test]

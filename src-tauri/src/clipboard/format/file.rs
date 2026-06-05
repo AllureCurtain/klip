@@ -1,5 +1,3 @@
-use sha2::{Digest, Sha256};
-
 use super::{ClipboardFormatStrategy, ContentType, ExtractedContent, FormatError};
 
 pub struct FileStrategy;
@@ -47,7 +45,7 @@ impl ClipboardFormatStrategy for FileStrategy {
             .map_err(|e| FormatError::ExtractionFailed(e.to_string()))?;
 
         let data = json_data.as_bytes().to_vec();
-        let hash = compute_hash(&data);
+        let hash = crate::clipboard::hash::hash_bytes(&data);
         let size = data.len() as i64;
 
         // Stat each path so we can label files vs folders in the UI.
@@ -187,10 +185,4 @@ fn read_file_paths_with_retry() -> Result<Vec<String>, FormatError> {
     {
         Ok(Vec::new())
     }
-}
-
-fn compute_hash(data: &[u8]) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(data);
-    format!("{:x}", hasher.finalize())
 }
