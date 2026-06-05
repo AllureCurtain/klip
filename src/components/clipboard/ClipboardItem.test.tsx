@@ -291,6 +291,14 @@ describe('ClipboardItem', () => {
     expect(row.className).not.toContain('border-l-sky-500');
   });
 
+  it('does not add horizontal margin to the item surface', () => {
+    render(<ClipboardItem item={makeTextItem()} index={1} isSelected={false} />);
+
+    const row = screen.getByText('hello').closest('[data-testid="clipboard-item"]');
+
+    expect(row?.className).not.toContain('mx-1.5');
+  });
+
   it('uses a quiet border treatment for keyboard-selected rows', () => {
     const { container } = render(
       <ClipboardItem item={makeTextItem()} index={1} isSelected />
@@ -302,6 +310,39 @@ describe('ClipboardItem', () => {
     expect(row.className).not.toContain('shadow-[var(--shadow-card)]');
     expect(row.className).not.toContain('shadow-[var(--shadow-card-glow)]');
     expect(row.className).not.toContain('bg-indigo-500/8');
+  });
+
+  it('uses a readable quiet row treatment after copy feedback', () => {
+    render(<ClipboardItem item={makeTextItem()} index={1} isSelected={false} />);
+
+    fireEvent.click(screen.getByText('hello'));
+
+    const row = screen.getByText('hello').closest('[data-testid="clipboard-item"]');
+
+    expect(row?.className).toContain('border-primary/35');
+    expect(row?.className).toContain('bg-primary/8');
+    expect(row?.className).toContain('text-foreground');
+    expect(row?.className).not.toContain('bg-indigo-500/8');
+  });
+
+  it('uses the same readable quiet row treatment for batch-selected rows', () => {
+    storeMocks.selectedIds = [42];
+
+    render(
+      <ClipboardItemWithSelection
+        item={makeTextItem()}
+        index={1}
+        isSelected={false}
+        selectionMode
+      />
+    );
+
+    const row = screen.getByText('hello').closest('[data-testid="clipboard-item"]');
+
+    expect(row?.className).toContain('border-primary/35');
+    expect(row?.className).toContain('bg-primary/8');
+    expect(row?.className).toContain('text-foreground');
+    expect(row?.className).not.toContain('bg-indigo-500/8');
   });
 
   it('floats item actions out of the default content layout', () => {

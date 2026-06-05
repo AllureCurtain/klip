@@ -92,6 +92,7 @@ export function ClipboardItem({
   return (
     <>
       <motion.div
+        data-testid="clipboard-item"
         ref={itemRef}
         onClick={handleClick}
         variants={cardVariants}
@@ -103,14 +104,15 @@ export function ClipboardItem({
         whileTap="tap"
         style={{ opacity: opacityForAge }}
         className={cn(
-          'group relative mx-1.5 flex h-14 cursor-pointer items-center gap-2 overflow-hidden',
+          'group relative flex h-14 cursor-pointer items-center gap-2 overflow-hidden',
           'rounded-xl px-2.5',
           'bg-[var(--glass-bg)] backdrop-blur-sm',
           'border border-[var(--glass-border)]',
           'transition-[background-color,border-color] duration-200',
           'hover:bg-card/70 hover:border-border/70',
           isSelected && !strongRowState && 'border-primary/30 bg-primary/5',
-          strongRowState && tone.selected
+          strongRowState &&
+            'border-primary/35 bg-primary/8 text-foreground shadow-[var(--shadow-ring)]'
         )}
       >
         {selectionMode && (

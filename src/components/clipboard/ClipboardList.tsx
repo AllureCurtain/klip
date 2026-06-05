@@ -191,16 +191,17 @@ export function ClipboardList({ items, selectionMode = false }: ClipboardListPro
               return (
                 <div
                   key={row.id}
+                  data-testid="clipboard-virtual-row"
                   style={{
                     position: 'absolute',
                     top: 0,
                     left: 0,
                     width: '100%',
                     height: `${ITEM_HEIGHT}px`,
-                    overflow: 'hidden',
+                    overflow: 'visible',
                     transform: `translateY(${virtualRow.start}px)`,
                   }}
-                  className="py-[3px]"
+                  className="box-border px-1.5 py-[3px]"
                 >
                   <ClipboardItem
                     item={row.item}
