@@ -4,13 +4,12 @@ use crate::database::types::{
     BackupSummary, ClipboardItem, ContentType, ImportSummary, RestoreSummary, Tag,
 };
 use crate::{AppError, Database};
-use base64::Engine;
 use rusqlite::{Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
-use sha2::Digest;
 use std::path::{Path, PathBuf};
 
 const SUPPORTED_EXPORT_VERSION: u32 = 1;
+const EXPORT_PAGE_SIZE: i64 = 500;
 const CSV_HEADERS: [&str; 10] = [
     "id",
     "content_type",
@@ -47,53 +46,113 @@ struct ClipboardCsvRow {
 }
 
 pub fn export_json(db: &Database, path: &str) -> Result<BackupSummary, AppError> {
+    let output = Path::new(path);
+    ensure_parent_dir(output)?;
+
     let conn = db.get_connection()?;
-    let items = load_all_items(&conn)?;
     let tags = list_tags_locked(&conn)?;
-    let payload = ExportFile {
-        version: SUPPORTED_EXPORT_VERSION,
-        exported_at: now_millis(),
-        items,
-        tags,
-    };
-    let data = serde_json::to_vec_pretty(&payload)
+    let mut file = std::fs::File::create(output)
+        .map_err(|e| AppError::System(format!("failed to write file: {}", e)))?;
+
+    use std::io::Write;
+    write!(
+        file,
+        "{{\"version\":{},\"exported_at\":{},\"items\":[",
+        SUPPORTED_EXPORT_VERSION,
+        now_millis()
+    )
+    .map_err(|e| AppError::System(format!("failed to write export: {}", e)))?;
+
+    let mut offset = 0;
+    let mut first = true;
+    loop {
+        let items = load_items_page(&conn, offset)?;
+        if items.is_empty() {
+            break;
+        }
+        for item in items {
+            if !first {
+                write!(file, ",")
+                    .map_err(|e| AppError::System(format!("failed to write export: {}", e)))?;
+            }
+            serde_json::to_writer(&mut file, &item)
+                .map_err(|e| AppError::System(format!("failed to serialize export: {}", e)))?;
+            first = false;
+        }
+        offset += EXPORT_PAGE_SIZE;
+    }
+
+    write!(file, "],\"tags\":")
+        .map_err(|e| AppError::System(format!("failed to write export: {}", e)))?;
+    serde_json::to_writer(&mut file, &tags)
         .map_err(|e| AppError::System(format!("failed to serialize export: {}", e)))?;
-    write_file(path, &data)
+    write!(file, "}}").map_err(|e| AppError::System(format!("failed to write export: {}", e)))?;
+    file.flush()
+        .map_err(|e| AppError::System(format!("failed to flush export: {}", e)))?;
+
+    let size = std::fs::metadata(output)
+        .map_err(|e| AppError::System(format!("failed to inspect export: {}", e)))?
+        .len();
+    Ok(BackupSummary {
+        path: path.to_string(),
+        size,
+    })
 }
 
 pub fn export_csv(db: &Database, path: &str) -> Result<BackupSummary, AppError> {
+    let output = Path::new(path);
+    ensure_parent_dir(output)?;
+
     let conn = db.get_connection()?;
-    let items = load_all_items(&conn)?;
+    let file = std::fs::File::create(output)
+        .map_err(|e| AppError::System(format!("failed to write file: {}", e)))?;
     let mut writer = csv::WriterBuilder::new()
         .has_headers(false)
-        .from_writer(Vec::new());
+        .from_writer(file);
     writer.write_record(CSV_HEADERS).map_err(csv_error)?;
-    for item in items {
-        let tags = item
-            .tags
-            .iter()
-            .map(|tag| tag.name.as_str())
-            .collect::<Vec<_>>()
-            .join("|");
-        writer
-            .serialize(ClipboardCsvRow {
-                id: item.id,
-                content_type: item.content_type.as_str().to_string(),
-                preview: item.preview.unwrap_or_default(),
-                content: item.content,
-                is_favorited: item.is_favorited,
-                is_sensitive: item.is_sensitive,
-                sensitivity_reason: item.sensitivity_reason.unwrap_or_default(),
-                tags,
-                created_at: item.created_at,
-                last_used_at: item.last_used_at,
-            })
-            .map_err(csv_error)?;
+
+    let mut offset = 0;
+    loop {
+        let items = load_items_page(&conn, offset)?;
+        if items.is_empty() {
+            break;
+        }
+        for item in items {
+            let tags = item
+                .tags
+                .iter()
+                .map(|tag| tag.name.as_str())
+                .collect::<Vec<_>>()
+                .join("|");
+            writer
+                .serialize(ClipboardCsvRow {
+                    id: item.id,
+                    content_type: item.content_type.as_str().to_string(),
+                    preview: item.preview.unwrap_or_default(),
+                    content: item.content,
+                    is_favorited: item.is_favorited,
+                    is_sensitive: item.is_sensitive,
+                    sensitivity_reason: item.sensitivity_reason.unwrap_or_default(),
+                    tags,
+                    created_at: item.created_at,
+                    last_used_at: item.last_used_at,
+                })
+                .map_err(csv_error)?;
+        }
+        offset += EXPORT_PAGE_SIZE;
     }
-    let data = writer
-        .into_inner()
-        .map_err(|e| csv_error(e.into_error().into()))?;
-    write_file(path, &data)
+
+    writer
+        .flush()
+        .map_err(|e| AppError::System(format!("failed to flush CSV export: {}", e)))?;
+
+    let size = std::fs::metadata(output)
+        .map_err(|e| AppError::System(format!("failed to inspect export: {}", e)))?
+        .len();
+    Ok(BackupSummary {
+        path: path.to_string(),
+        size,
+    })
 }
 
 pub fn import_json(db: &Database, path: &str) -> Result<ImportSummary, AppError> {
@@ -210,11 +269,7 @@ fn import_items(db: &Database, items: Vec<ClipboardItem>) -> Result<ImportSummar
     let mut imported = 0;
     let mut skipped = 0;
     for item in items {
-        let hash = if item.hash.is_empty() {
-            hash_content(item.content_type.as_str(), &item.content)
-        } else {
-            item.hash.clone()
-        };
+        let hash = hash_content(item.content_type.as_str(), &item.content);
         let result = tx.execute(
             "INSERT OR IGNORE INTO clipboard_items
              (content_type, content, preview, hash, size, metadata, is_favorited,
@@ -273,36 +328,16 @@ fn upsert_import_tag(tx: &rusqlite::Transaction<'_>, tag: &Tag) -> Result<i64, A
     )
 }
 
-fn load_all_items(conn: &rusqlite::Connection) -> Result<Vec<ClipboardItem>, AppError> {
-    let spec = ClipboardQuerySpec::all_items();
+fn load_items_page(
+    conn: &rusqlite::Connection,
+    offset: i64,
+) -> Result<Vec<ClipboardItem>, AppError> {
+    let spec = ClipboardQuerySpec::new(EXPORT_PAGE_SIZE, offset);
     clipboard_query::fetch_items_with_tags_locked(conn, &spec)
 }
 
 fn hash_content(content_type: &str, content: &str) -> String {
-    let mut hasher = sha2::Sha256::new();
-    hasher.update(content_type.as_bytes());
-    hasher.update([0]);
-    if content_type == "image" {
-        if let Some(data) = content.strip_prefix("data:image/png;base64,") {
-            if let Ok(decoded) = base64::engine::general_purpose::STANDARD.decode(data) {
-                hasher.update(decoded);
-                return format!("{:x}", hasher.finalize());
-            }
-        }
-    }
-    hasher.update(content.as_bytes());
-    format!("{:x}", hasher.finalize())
-}
-
-fn write_file(path: &str, data: &[u8]) -> Result<BackupSummary, AppError> {
-    let output = Path::new(path);
-    ensure_parent_dir(output)?;
-    std::fs::write(path, data)
-        .map_err(|e| AppError::System(format!("failed to write file: {}", e)))?;
-    Ok(BackupSummary {
-        path: path.to_string(),
-        size: data.len() as u64,
-    })
+    crate::clipboard::hash::hash_stored_content(content_type, content)
 }
 
 fn ensure_parent_dir(path: &Path) -> Result<(), AppError> {
@@ -514,6 +549,7 @@ mod tests {
     use super::*;
     use crate::database::Database;
     use rusqlite::Connection;
+    use sha2::Digest;
     use std::path::{Path, PathBuf};
 
     fn temp_dir(name: &str) -> PathBuf {
@@ -527,13 +563,23 @@ mod tests {
         Database::new(path).unwrap()
     }
 
+    fn normal_text_hash(content: &str) -> String {
+        let mut hasher = sha2::Sha256::new();
+        hasher.update(content.as_bytes());
+        format!("{:x}", hasher.finalize())
+    }
+
     fn insert_text(db: &Database, content: &str) {
+        insert_text_with_hash(db, content, &format!("hash-{content}"));
+    }
+
+    fn insert_text_with_hash(db: &Database, content: &str, hash: &str) {
         let conn = db.get_connection().unwrap();
         conn.execute(
             "INSERT INTO clipboard_items
              (content_type, content, preview, hash, size, created_at, last_used_at)
              VALUES ('text', ?1, ?1, ?2, ?3, 1, 1)",
-            rusqlite::params![content, format!("hash-{content}"), content.len() as i64],
+            rusqlite::params![content, hash, content.len() as i64],
         )
         .unwrap();
     }
@@ -554,6 +600,55 @@ mod tests {
                 |row| row.get(0),
             )
             .unwrap()
+    }
+
+    #[test]
+    fn import_csv_hash_matches_normal_text_capture_hash() {
+        let content = "same text content";
+        let expected = normal_text_hash(content);
+
+        assert_eq!(super::hash_content("text", content), expected);
+    }
+
+    #[test]
+    fn import_json_recomputes_hash_to_dedupe_legacy_export_hashes() {
+        let dir = temp_dir("json-recompute-hash");
+        let db_path = dir.join("current.db");
+        let json_path = dir.join("items.json");
+        let db = create_db(&db_path);
+        let content = "same text content";
+        insert_text_with_hash(&db, content, &normal_text_hash(content));
+        std::fs::write(
+            &json_path,
+            serde_json::json!({
+                "version": 1,
+                "exported_at": 1,
+                "items": [{
+                    "id": 1,
+                    "content_type": "text",
+                    "content": content,
+                    "preview": content,
+                    "hash": "legacy-mismatched-hash",
+                    "size": content.len(),
+                    "metadata": null,
+                    "is_favorited": false,
+                    "is_sensitive": false,
+                    "sensitivity_reason": null,
+                    "tags": [],
+                    "created_at": 1,
+                    "last_used_at": 1
+                }],
+                "tags": []
+            })
+            .to_string(),
+        )
+        .unwrap();
+
+        let summary = import_json(&db, json_path.to_str().unwrap()).unwrap();
+
+        assert_eq!(summary.imported, 0);
+        assert_eq!(summary.skipped, 1);
+        assert_eq!(count_items(&db_path), 1);
     }
 
     #[test]
@@ -644,6 +739,41 @@ mod tests {
         assert!(export_path.exists());
         assert_eq!(summary.path, export_path.to_string_lossy());
         assert!(summary.size > 0);
+    }
+
+    #[test]
+    fn export_json_writes_valid_payload_across_pages() {
+        let dir = temp_dir("json-export-pages");
+        let db_path = dir.join("current.db");
+        let export_path = dir.join("items.json");
+        let db = create_db(&db_path);
+        let item_count = EXPORT_PAGE_SIZE as usize + 1;
+        for index in 0..item_count {
+            insert_text(&db, &format!("exported-item-{index}"));
+        }
+
+        export_json(&db, export_path.to_str().unwrap()).unwrap();
+        let payload: ExportFile =
+            serde_json::from_str(&std::fs::read_to_string(&export_path).unwrap()).unwrap();
+
+        assert_eq!(payload.items.len(), item_count);
+    }
+
+    #[test]
+    fn export_csv_writes_records_across_pages() {
+        let dir = temp_dir("csv-export-pages");
+        let db_path = dir.join("current.db");
+        let export_path = dir.join("items.csv");
+        let db = create_db(&db_path);
+        let item_count = EXPORT_PAGE_SIZE as usize + 1;
+        for index in 0..item_count {
+            insert_text(&db, &format!("exported-item-{index}"));
+        }
+
+        export_csv(&db, export_path.to_str().unwrap()).unwrap();
+        let mut reader = csv::Reader::from_path(&export_path).unwrap();
+
+        assert_eq!(reader.records().count(), item_count);
     }
 
     #[test]

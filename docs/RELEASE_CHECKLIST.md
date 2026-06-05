@@ -9,6 +9,8 @@ Use this checklist for Windows-first release verification. The current public re
 - [ ] `CHANGELOG.md` includes the version being released.
 - [ ] `pnpm release:readiness` reports the expected Windows signing and update feed readiness for this release.
 - [ ] `pnpm test:coverage` succeeds and records current frontend source coverage in release notes.
+- [ ] `pnpm audit --registry=https://registry.npmjs.org --audit-level high` reports no high or critical advisories.
+- [ ] RustSec audit in GitHub Actions reports no unreviewed Rust advisories for the release build.
 - [ ] `pnpm release:verify -SkipBundle` succeeds.
 - [ ] `pnpm e2e` succeeds on a Windows desktop session with `tauri-driver` and Edge WebDriver installed.
 

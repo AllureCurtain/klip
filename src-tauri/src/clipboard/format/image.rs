@@ -1,5 +1,3 @@
-use sha2::{Digest, Sha256};
-
 use super::{ClipboardFormatStrategy, ContentType, ExtractedContent, FormatError};
 
 const MAX_IMAGE_SIZE: usize = 5 * 1024 * 1024;
@@ -42,7 +40,7 @@ impl ClipboardFormatStrategy for ImageStrategy {
             }
 
             let png_data = encode_png(&rgba_data, width, height)?;
-            let hash = compute_hash(&png_data);
+            let hash = crate::clipboard::hash::hash_bytes(&png_data);
             let size = png_data.len() as i64;
             let preview = format!("图片 {}x{}", width, height);
             let metadata = serde_json::json!({
@@ -82,7 +80,7 @@ impl ClipboardFormatStrategy for ImageStrategy {
             }
 
             let png_data = encode_png(rgba_slice, width, height)?;
-            let hash = compute_hash(&png_data);
+            let hash = crate::clipboard::hash::hash_bytes(&png_data);
             let size = png_data.len() as i64;
             let preview = format!("图片 {}x{}", width, height);
             let metadata = serde_json::json!({
@@ -120,12 +118,6 @@ fn encode_png(rgba: &[u8], width: usize, height: usize) -> Result<Vec<u8>, Forma
 
 pub fn encode_png_test(rgba: &[u8], width: usize, height: usize) -> Result<Vec<u8>, FormatError> {
     encode_png(rgba, width, height)
-}
-
-fn compute_hash(data: &[u8]) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(data);
-    format!("{:x}", hasher.finalize())
 }
 
 #[cfg(not(target_os = "windows"))]

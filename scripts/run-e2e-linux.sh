@@ -44,8 +44,11 @@ mkdir -p "$RUN_ROOT/config" "$RUN_ROOT/data"
 export SELENIUM_REMOTE_URL="http://127.0.0.1:$PORT"
 export KLIP_E2E_APP="$APP_PATH"
 export KLIP_E2E_SHOW_WINDOW=1
+export KLIP_DATA_DIR="$RUN_ROOT/KlipData"
+export KLIP_LOG_DIR="$RUN_ROOT/KlipLogs"
 export XDG_CONFIG_HOME="$RUN_ROOT/config"
 export XDG_DATA_HOME="$RUN_ROOT/data"
+mkdir -p "$KLIP_DATA_DIR" "$KLIP_LOG_DIR"
 
 tauri-driver --port "$PORT" >"$RUN_ROOT/tauri-driver.out.log" 2>"$RUN_ROOT/tauri-driver.err.log" &
 DRIVER_PID=$!

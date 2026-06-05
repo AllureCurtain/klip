@@ -11,7 +11,7 @@ pub mod types;
 
 pub const CURRENT_DB_VERSION: i64 = 3;
 
-pub use connection::{get_db_path, init, Database};
+pub use connection::{app_data_dir, get_db_path, init, Database};
 pub use types::{
     AdvancedSearchQuery, BackupSummary, ClipboardItem, ConfigEntry, ContentType, DiagnosticsInfo,
     ImportSummary, NewClipboardItem, RestoreSummary, Snippet, SnippetInput, SourceRule,

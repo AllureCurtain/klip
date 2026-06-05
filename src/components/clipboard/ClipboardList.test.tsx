@@ -1,11 +1,17 @@
 /** @vitest-environment jsdom */
-import { render, screen } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import type { ClipboardItem as ClipboardItemType } from '@/types';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ClipboardList } from './ClipboardList';
 
 const storeMocks = vi.hoisted(() => ({
+  deleteItem: vi.fn(),
   copyItem: vi.fn(),
+  toggleFavorite: vi.fn(),
+  tags: [] as { id: number; name: string; color: string | null; created_at: number }[],
+  assignTagToItem: vi.fn(),
+  removeTagFromItem: vi.fn(),
+  selectedIds: [] as number[],
   toggleSelected: vi.fn(),
   hasMore: false,
   loadMore: vi.fn(),
@@ -40,12 +46,6 @@ vi.mock('@/stores', () => ({
   useClipboardStore: () => storeMocks,
 }));
 
-vi.mock('./ClipboardItem', () => ({
-  ClipboardItem: ({ item }: { item: ClipboardItemType }) => (
-    <div data-testid="clipboard-item">{item.preview}</div>
-  ),
-}));
-
 function makeTextItem(overrides: Partial<ClipboardItemType> = {}): ClipboardItemType {
   return {
     id: 42,
@@ -66,11 +66,22 @@ function makeTextItem(overrides: Partial<ClipboardItemType> = {}): ClipboardItem
 }
 
 describe('ClipboardList', () => {
+  beforeEach(() => {
+    Element.prototype.scrollIntoView = vi.fn();
+  });
+
   afterEach(() => {
+    cleanup();
     vi.useRealTimers();
     vi.restoreAllMocks();
+    storeMocks.deleteItem.mockReset();
     storeMocks.copyItem.mockReset();
+    storeMocks.toggleFavorite.mockReset();
+    storeMocks.assignTagToItem.mockReset();
+    storeMocks.removeTagFromItem.mockReset();
     storeMocks.toggleSelected.mockReset();
+    storeMocks.tags = [];
+    storeMocks.selectedIds = [];
     storeMocks.loadMore.mockReset();
     storeMocks.hasMore = false;
     storeMocks.loadingMore = false;
@@ -84,6 +95,18 @@ describe('ClipboardList', () => {
     const virtualCanvas = scroller.firstElementChild as HTMLElement;
 
     expect(virtualCanvas.style.height).toBe('90px');
+  });
+
+  it('keeps horizontal row spacing inside the virtual row bounds', () => {
+    render(<ClipboardList items={[makeTextItem({ id: 1, content: 'hello' })]} />);
+
+    const virtualRow = document.querySelector('[data-testid="clipboard-virtual-row"]');
+    expect(virtualRow?.className).toContain('px-1.5');
+
+    const row = within(virtualRow as HTMLElement)
+      .getByText('hello')
+      .closest('[data-testid="clipboard-item"]');
+    expect(row?.className).not.toContain('mx-1.5');
   });
 
   it('groups items by local calendar day instead of elapsed hours', () => {

@@ -71,7 +71,7 @@
 
 ### Security
 
-- Pinned patched transitive Mocha dependencies so `pnpm audit` reports no known vulnerabilities.
+- Upgraded Vitest tooling and pinned patched transitive dependencies so `pnpm audit --registry=https://registry.npmjs.org` reports no known vulnerabilities.
 
 ## [0.1.2] - 2026-05-22
 

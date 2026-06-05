@@ -122,17 +122,46 @@ pub(crate) fn hydrate_tags(
     conn: &rusqlite::Connection,
     items: &mut [ClipboardItem],
 ) -> Result<(), AppError> {
-    let mut stmt = conn.prepare(
-        "SELECT t.id, t.name, t.color, t.created_at
-         FROM tags t
-         JOIN clipboard_item_tags it ON it.tag_id = t.id
-         WHERE it.item_id = ?1
-         ORDER BY t.name COLLATE NOCASE",
-    )?;
+    if items.is_empty() {
+        return Ok(());
+    }
+
+    let item_ids = items.iter().map(|item| item.id).collect::<Vec<_>>();
+    let placeholders = (0..item_ids.len())
+        .map(|index| format!("?{}", index + 1))
+        .collect::<Vec<_>>()
+        .join(",");
+    let sql = format!(
+        "SELECT it.item_id, t.id, t.name, t.color, t.created_at
+         FROM clipboard_item_tags it
+         JOIN tags t ON it.tag_id = t.id
+         WHERE it.item_id IN ({})
+         ORDER BY it.item_id, t.name COLLATE NOCASE",
+        placeholders
+    );
+
+    let mut tags_by_item =
+        std::collections::HashMap::<i64, Vec<Tag>>::with_capacity(item_ids.len());
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map(rusqlite::params_from_iter(item_ids), |row| {
+        Ok((
+            row.get::<_, i64>(0)?,
+            Tag {
+                id: row.get(1)?,
+                name: row.get(2)?,
+                color: row.get(3)?,
+                created_at: row.get(4)?,
+            },
+        ))
+    })?;
+
+    for row in rows {
+        let (item_id, tag) = row?;
+        tags_by_item.entry(item_id).or_default().push(tag);
+    }
+
     for item in items {
-        item.tags = stmt
-            .query_map([item.id], tag_from_row)?
-            .collect::<Result<Vec<_>, _>>()?;
+        item.tags = tags_by_item.remove(&item.id).unwrap_or_default();
     }
     Ok(())
 }
@@ -227,15 +256,6 @@ fn clipboard_item_from_row(row: &rusqlite::Row<'_>) -> ClipboardItem {
         sensitivity_reason: row.get(11).unwrap_or(None),
         tags: Vec::new(),
     }
-}
-
-fn tag_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Tag> {
-    Ok(Tag {
-        id: row.get(0)?,
-        name: row.get(1)?,
-        color: row.get(2)?,
-        created_at: row.get(3)?,
-    })
 }
 
 #[cfg(test)]
@@ -419,6 +439,43 @@ mod tests {
 
         assert_eq!(second_page.len(), 1);
         assert_eq!(second_page[0].hash, "old-match");
+    }
+
+    #[test]
+    fn fetch_items_with_tags_hydrates_tags_for_multiple_items() {
+        let db = test_db();
+        let conn = db.get_connection().unwrap();
+        insert_item(
+            &conn,
+            "text",
+            Some("alpha"),
+            "alpha",
+            "hash-alpha",
+            1_000,
+            1_000,
+        );
+        insert_item(
+            &conn,
+            "text",
+            Some("beta"),
+            "beta",
+            "hash-beta",
+            2_000,
+            2_000,
+        );
+        let work = create_tag(&conn, "Work");
+        let personal = create_tag(&conn, "Personal");
+        assign_tag(&conn, "hash-alpha", work);
+        assign_tag(&conn, "hash-beta", personal);
+        drop(conn);
+
+        let items = fetch_items_with_tags(&db, &ClipboardQuerySpec::new(10, 0)).unwrap();
+
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[0].hash, "hash-beta");
+        assert_eq!(items[0].tags[0].name, "Personal");
+        assert_eq!(items[1].hash, "hash-alpha");
+        assert_eq!(items[1].tags[0].name, "Work");
     }
 
     #[test]

@@ -110,18 +110,36 @@ fn next_corrupt_backup_path(path: &Path) -> PathBuf {
     path.with_file_name(format!("{}.corrupt-{}.bak", file_name, now))
 }
 
-pub fn get_db_path(app_handle: &tauri::AppHandle) -> Result<std::path::PathBuf, AppError> {
+pub const ENV_KLIP_DATA_DIR: &str = "KLIP_DATA_DIR";
+
+pub fn app_data_dir_from_env() -> Option<PathBuf> {
+    std::env::var_os(ENV_KLIP_DATA_DIR)
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+}
+
+pub fn app_data_dir(app_handle: &tauri::AppHandle) -> Result<PathBuf, AppError> {
+    if let Some(path) = app_data_dir_from_env() {
+        return Ok(path);
+    }
+
     #[cfg(target_os = "linux")]
-    let app_data_dir = crate::platform::linux::data_dir();
+    {
+        let _ = app_handle;
+        Ok(crate::platform::linux::data_dir())
+    }
 
     #[cfg(not(target_os = "linux"))]
-    let app_data_dir = app_handle
-        .path()
-        .app_data_dir()
-        .map_err(|e| AppError::System(format!("failed to resolve app data dir: {}", e)))?;
+    {
+        app_handle
+            .path()
+            .app_data_dir()
+            .map_err(|e| AppError::System(format!("failed to resolve app data dir: {}", e)))
+    }
+}
 
-    #[cfg(target_os = "linux")]
-    let _ = app_handle;
+pub fn get_db_path(app_handle: &tauri::AppHandle) -> Result<std::path::PathBuf, AppError> {
+    let app_data_dir = app_data_dir(app_handle)?;
 
     std::fs::create_dir_all(&app_data_dir)
         .map_err(|e| AppError::System(format!("failed to create app data dir: {}", e)))?;
@@ -150,6 +168,17 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("klip-connection-{}-{}", name, now));
         std::fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    #[test]
+    fn app_data_dir_prefers_klip_data_dir_env_override() {
+        let dir = temp_dir("env-data-dir");
+        std::env::set_var(super::ENV_KLIP_DATA_DIR, &dir);
+
+        let resolved = super::app_data_dir_from_env();
+
+        std::env::remove_var(super::ENV_KLIP_DATA_DIR);
+        assert_eq!(resolved, Some(dir));
     }
 
     #[test]

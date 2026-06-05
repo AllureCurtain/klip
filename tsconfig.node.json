@@ -8,6 +8,7 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "composite": true,
+    "outDir": "node_modules/.cache/tsconfig-node",
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
