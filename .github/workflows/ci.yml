@@ -23,6 +23,7 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm audit --registry=https://registry.npmjs.org --audit-level high
       - run: pnpm lint
       - run: pnpm test
       - run: pnpm build
@@ -44,6 +45,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+      - uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          working-directory: src-tauri
       - run: cargo fmt -- --check
         working-directory: src-tauri
       - run: cargo clippy -- -D warnings

@@ -41,6 +41,13 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - run: pnpm audit --registry=https://registry.npmjs.org --audit-level high
+
+      - uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          working-directory: src-tauri
+
       - name: Verify release prerequisites
         run: pnpm release:verify -SkipBundle
 
