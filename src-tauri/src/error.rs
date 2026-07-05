@@ -21,6 +21,9 @@ pub enum AppError {
     Window(String),
 
     #[error("{0}")]
+    Llm(String),
+
+    #[error("{0}")]
     System(String),
 }
 
@@ -38,7 +41,7 @@ impl Serialize for AppError {
 }
 
 impl AppError {
-    fn code(&self) -> &'static str {
+    pub(crate) fn code(&self) -> &'static str {
         match self {
             Self::NotFound(_) => "not_found",
             Self::Database(_) => "database",
@@ -46,6 +49,7 @@ impl AppError {
             Self::Hotkey(_) => "hotkey",
             Self::InvalidInput(_) => "invalid_input",
             Self::Window(_) => "window",
+            Self::Llm(_) => "llm",
             Self::System(_) => "system",
         }
     }

@@ -21,9 +21,17 @@ pub const KEY_ENCRYPTION_ENABLED: &str = "encryption_enabled";
 pub const KEY_ENCRYPTION_STATUS: &str = "encryption_status";
 pub const KEY_SYNC_FOLDER: &str = "sync_folder";
 pub const KEY_PLUGIN_FOLDER: &str = "plugin_folder";
+pub const KEY_LLM_PROVIDER: &str = "llm_provider";
+pub const KEY_LLM_API_KEY: &str = "llm_api_key";
+pub const KEY_LLM_MODEL: &str = "llm_model";
+pub const KEY_LLM_BASE_URL: &str = "llm_base_url";
+pub const KEY_LLM_MAX_CONTEXT_ITEMS: &str = "llm_max_context_items";
 
 pub const DEFAULT_TOGGLE_HOTKEY: &str = "Ctrl+Alt+K";
 pub const DEFAULT_QUICK_PASTE_PREFIX: &str = "Ctrl+Alt";
+pub const DEFAULT_LLM_PROVIDER: &str = "fake";
+pub const DEFAULT_LLM_MODEL: &str = "gpt-4o-mini";
+pub const DEFAULT_LLM_BASE_URL: &str = "https://api.openai.com/v1";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RuntimeEffect {
@@ -186,6 +194,36 @@ pub const CONFIG_REGISTRY: &[ConfigDescriptor] = &[
         key: KEY_PLUGIN_FOLDER,
         default_value: "",
         kind: ConfigValueKind::String,
+        effect: RuntimeEffect::None,
+    },
+    ConfigDescriptor {
+        key: KEY_LLM_PROVIDER,
+        default_value: DEFAULT_LLM_PROVIDER,
+        kind: ConfigValueKind::String,
+        effect: RuntimeEffect::None,
+    },
+    ConfigDescriptor {
+        key: KEY_LLM_API_KEY,
+        default_value: "",
+        kind: ConfigValueKind::String,
+        effect: RuntimeEffect::None,
+    },
+    ConfigDescriptor {
+        key: KEY_LLM_MODEL,
+        default_value: DEFAULT_LLM_MODEL,
+        kind: ConfigValueKind::String,
+        effect: RuntimeEffect::None,
+    },
+    ConfigDescriptor {
+        key: KEY_LLM_BASE_URL,
+        default_value: DEFAULT_LLM_BASE_URL,
+        kind: ConfigValueKind::String,
+        effect: RuntimeEffect::None,
+    },
+    ConfigDescriptor {
+        key: KEY_LLM_MAX_CONTEXT_ITEMS,
+        default_value: "8",
+        kind: ConfigValueKind::Integer,
         effect: RuntimeEffect::None,
     },
 ];

@@ -4,7 +4,10 @@ pub mod config;
 pub mod database;
 pub mod error;
 pub mod hotkey;
+pub mod http;
+pub mod llm;
 pub mod platform;
+pub mod qa;
 pub mod tray;
 pub mod window;
 

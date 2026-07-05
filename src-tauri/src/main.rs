@@ -40,6 +40,11 @@ fn main() {
             klip::database::init(app.handle().clone())?;
             tracing::info!("Database initialized");
 
+            // Start the loopback HTTP API after the database is ready. It opens
+            // its own SQLite connection to avoid changing the IPC database state.
+            klip::http::start_server(app.handle().clone())?;
+            tracing::info!("HTTP API server started");
+
             // 启动剪贴板监听
             tracing::info!("Starting clipboard monitor...");
             klip::clipboard::start_monitor(app.handle().clone())?;
