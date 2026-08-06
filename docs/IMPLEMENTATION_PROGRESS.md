@@ -1,6 +1,6 @@
 # Foundation Implementation Progress
 
-- 最后更新时间：2026-08-07 03:09（Asia/Shanghai）
+- 最后更新时间：2026-08-07 03:13（Asia/Shanghai）
 - 当前分支：`feat/foundation`
 - 基准提交：`423ab24`（与 `main` / `origin/main` 一致）
 
@@ -18,10 +18,11 @@
 - `ef2cdcc`：稳定 Windows Selenium clipboard E2E 的窗口恢复/刷新等待，隔离 HTTP 端口并传播 runner 失败退出码；记录最终运行时与默认目录回退边界。
 - `f9dbea2`：记录最终 verify、Windows 运行时证据、默认目录回退限制和收尾清单。
 - `c853468`：记录首次成功 push、pre-push verify 与 PR 准备状态。
+- `387392b`：记录 PR #4 创建、平台限制与最终交付状态。
 
 ## 当前任务
 
-- 当前任务：交付完成记录；`feat/foundation` 已推送，PR #4 已创建并保持未合并，正在提交/推送本最终状态并把新 SHA 补入 PR 描述。
+- 当前任务：COMPLETE；当前环境可完成的实现、测试、分段提交、Windows 运行时验收、push 和 PR 创建均已完成。PR #4 保持 OPEN 且未合并，剩余仅为已记录的真实外部/平台验收项。
 - README 已补齐 `pnpm install --frozen-lockfile` worktree 初始化、`KLIP_DATA_DIR` / `KLIP_LOG_DIR` / `KLIP_HTTP_PORT`、单活动 worktree 串行执行和可选 sccache。CHANGELOG 已在 rich-text 提交中说明 DB v4 备份不能回退到只支持 v3 的旧版；各功能行为与限制已分布记录在 README、CHANGELOG、API、DATABASE 与 ARCHITECTURE。
 - `platform-source` 已在 `1e5b63e` 提交，§8.5 与串行功能队列均已据实勾选；macOS/Linux 真实桌面验收仍保持 SKIPPED，不影响已完成的代码、目标编译和 Windows 验收结论。
 - Windows 保留现有进程文件名和窗口标题行为；macOS 使用 `NSWorkspace.frontmostApplication`，Accessibility 未授权时保留应用名且窗口标题为空；X11 使用 EWMH 活动窗口/PID/标题并从 `/proc` 解析应用名；Wayland和其他不支持平台一次性提示后返回空来源。
@@ -105,6 +106,7 @@
 - 最终 `pnpm verify` 重跑：通过，用时 185.2 秒。ESLint 通过；20 个 Vitest 文件/149 项通过；生产构建通过；`cargo fmt -- --check` 与 `cargo clippy -- -D warnings` 通过；Rust library 143 项通过、1 项显式 100k 性能测试 ignored，另有 2 个 main 与 5 个 clipboard integration tests 通过。随后 `git diff --check` 通过。
 - push：通过。`git push -u origin feat/foundation` 的 pre-push verify 全绿，远端新建 `origin/feat/foundation`；GitHub 提示 PR 创建入口 `https://github.com/AllureCurtain/klip/pull/new/feat/foundation`。本次 push 未修改 `main`。
 - PR：通过。`gh pr create --base main --head feat/foundation` 创建 `https://github.com/AllureCurtain/klip/pull/4`，标题为 `feat: complete the clipboard foundation stack`；正文包含功能摘要、完整提交清单、测试证据、DB v4/v5/v6、OCR 资源/体积、平台权限与降级、默认目录回退阻塞及所有 SKIPPED 项。PR 未合并。
+- PR 交付记录 push：通过。`387392b` 已推送，pre-push `pnpm verify` 再次全绿；PR head 与远端分支同步。
 
 ## 技术决策
 
@@ -135,5 +137,5 @@
 
 ## 下一步准确操作
 
-- 提交并推送本最终记录，把该提交 SHA 补入 PR #4 的 commit 清单；确认 `feat/foundation` 工作树干净且 `main` 仍为 `423ab24`。
-- 后续由 PR #4 审查流程决定是否合并；本执行不 merge main。解除默认目录回退阻塞需隔离 Windows 测试用户/VM，真实 macOS/Linux 验收需对应桌面会话。
+- 无剩余自动实施或交付命令；后续由 PR #4 审查流程决定是否合并，本执行不 merge main。
+- 解除默认目录回退阻塞需隔离 Windows 测试用户/VM；真实 macOS/Linux 与浏览器/Word 富文本验收需对应桌面/应用环境和测试材料。
