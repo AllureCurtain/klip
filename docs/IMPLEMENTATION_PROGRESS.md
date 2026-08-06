@@ -1,6 +1,6 @@
 # Foundation Implementation Progress
 
-- 最后更新时间：2026-08-07 01:16（Asia/Shanghai）
+- 最后更新时间：2026-08-07 01:20（Asia/Shanghai）
 - 当前分支：`feat/foundation`
 - 基准提交：`423ab24`（与 `main` / `origin/main` 一致）
 
@@ -11,11 +11,12 @@
 - `909040d`：完成 clipboard-rs 统一 backend、哈希抑制、monitor/writer/format 迁移及针对性验证。
 - `0dc501b`：完成 Tantivy 全文索引、jieba 中文分词、批量/定时提交、删除同步、损坏重建和 SQLite `LIKE` 降级。
 - `3669c83`：完成 DB v4 多格式存储、clipboard-rs HTML/RTF 捕获与写回、v3/v4 备份兼容和 DOMPurify 安全预览。
+- `58da1e8`：完成 DB v5 图片 OCR、PP-OCRv5/ONNX Runtime 离线资源、异步 worker、搜索回灌、前端状态和 Windows runtime acceptance。
 
 ## 当前任务
 
-- 当前任务：OCR 里程碑提交；真实 Windows clipboard → OCR → Tantivy/HTTP search 链路和完整 `pnpm verify` 均已通过，正在审查差异、同步清单并创建独立功能 commit。
-- rich-text 已在 `3669c83` 提交；当前未提交差异仅属于 OCR 功能块及其里程碑记录。
+- 当前任务：`platform-focus` 功能块；先审查现有 `PREV_FOREGROUND_HWND`、窗口显示与粘贴调用链以及 `platform/` 模块边界，再按现有模式抽象平台无关的“上一个前台窗口”接口。
+- OCR 已在 `58da1e8` 提交；当前工作树只应包含本次里程碑进度记录，提交后再开始修改 `platform-focus` 代码。
 - Windows 完整“监听 → 捕获 → 选择历史 → 粘贴”闭环仍列为最终运行时验收项。
 
 ## 已运行的测试及结果
@@ -92,4 +93,4 @@
 
 ## 下一步准确操作
 
-- 运行 `git diff --check`，仅暂存 OCR 相关代码、资源、测试、用户文档、`WORKTREE_STRATEGY.md` 和本进度记录，提交 `feat: add local image OCR`；随后记录 commit SHA 并单独提交里程碑进度，再开始审查 `platform-focus` 的现有 Win32 焦点状态和调用链。
+- 只暂存 `docs/IMPLEMENTATION_PROGRESS.md` 并提交 OCR 里程碑进度；确认工作树干净后读取 `src-tauri/src/lib.rs`、`commands/mod.rs`、`platform/mod.rs` 及 Windows/macOS/Linux 平台文件，定位焦点捕获和恢复的全部调用点与已有平台依赖。
