@@ -1,6 +1,6 @@
 # Foundation Implementation Progress
 
-- 最后更新时间：2026-08-07 01:51（Asia/Shanghai）
+- 最后更新时间：2026-08-07 01:55（Asia/Shanghai）
 - 当前分支：`feat/foundation`
 - 基准提交：`423ab24`（与 `main` / `origin/main` 一致）
 
@@ -12,11 +12,12 @@
 - `0dc501b`：完成 Tantivy 全文索引、jieba 中文分词、批量/定时提交、删除同步、损坏重建和 SQLite `LIKE` 降级。
 - `3669c83`：完成 DB v4 多格式存储、clipboard-rs HTML/RTF 捕获与写回、v3/v4 备份兼容和 DOMPurify 安全预览。
 - `58da1e8`：完成 DB v5 图片 OCR、PP-OCRv5/ONNX Runtime 离线资源、异步 worker、搜索回灌、前端状态和 Windows runtime acceptance。
+- `82fa3a1`：完成 Windows HWND、macOS `NSRunningApplication`、Linux X11 EWMH 的粘贴目标焦点恢复及 Wayland/其他平台无错误降级。
 
 ## 当前任务
 
-- 当前任务：`platform-focus` 功能块收尾；三套后端静态检查、Windows 真实粘贴焦点闭环和针对性测试均已通过，正在同步清单、审查差异并创建独立功能 commit。
-- OCR 已在 `58da1e8` 提交；当前未提交差异仅属于 `platform-focus` 及其进度记录。
+- 当前任务：`platform-source` 功能块；先审查 Windows `ClipboardSource` 采集、来源规则匹配和默认降级语义，再实现统一来源接口及 macOS/X11 后端。
+- platform-focus 已在 `82fa3a1` 提交；当前工作树只应包含本次里程碑记录，提交后再开始修改 platform-source 代码。
 - Windows 完整“监听 → 捕获 → 选择历史 → 粘贴”闭环仍列为最终运行时验收项。
 
 ## 已运行的测试及结果
@@ -100,4 +101,4 @@
 
 ## 下一步准确操作
 
-- 更新 `WORKTREE_STRATEGY.md` 的 platform-focus 已完成项，运行 `git diff --check` 和最终针对性验证；仅暂存 platform-focus 代码、依赖、文档与进度记录，提交 `feat: restore paste focus across platforms`。随后记录 SHA 并把“当前任务”切换为 `platform-source`。
+- 只暂存 `docs/IMPLEMENTATION_PROGRESS.md` 并提交 platform-focus 里程碑进度；确认工作树干净后读取 `clipboard/monitor.rs` 的 `ClipboardSource` 与 capture gate、`database/source_rules.rs`、前端来源展示和平台依赖，确认“无来源时照常捕获”的全部调用路径。
