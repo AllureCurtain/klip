@@ -21,15 +21,15 @@ Foundation closeout status below reflects the Windows `feat/foundation` worktree
 - [ ] BLOCKED: full `pnpm release:verify` inherits the unresolved changelog/build-version mismatch.
 - [x] MSI exists at `src-tauri/target/release/bundle/msi/Klip_1.0.0_x64_en-US.msi` (32,542,720 bytes; SHA-256 `2FF01714E3334780F85D4FB71453EF8A310456D001449C0B2190CE5F54CDE434`).
 - [x] NSIS installer exists at `src-tauri/target/release/bundle/nsis/Klip_1.0.0_x64-setup.exe` (29,027,941 bytes; SHA-256 `0FA03449A06AAE6CE247AD24956B08A20022F104F0894C803B844BB5B470E06F`).
-- [ ] Run `pnpm release:smoke` and confirm local/GitHub installer assets are present.
+- [ ] BLOCKED: local-only installer smoke passed with `-SkipGitHub`, but full `pnpm release:smoke` reports that GitHub release `v1.0.0` and its assets do not exist.
 - [ ] BLOCKED: installer filenames, sizes, hashes, and unsigned status are recorded here, but final release notes depend on resolving whether the next release is `1.0.0` or follows `v0.1.2`.
 
 ## 3. Fresh Install Smoke Test
 
-- [ ] Install the NSIS `.exe` on a clean Windows user profile or VM.
-- [ ] Launch Klip and confirm it starts hidden in the tray.
-- [ ] Open from tray and from `Ctrl+Alt+K`.
-- [ ] Open Settings → About and confirm version, data directory, database path, and log directory render.
+- [ ] SKIPPED/BLOCKED: install the NSIS `.exe` on a clean Windows user profile or VM; no isolated Windows user/VM is available, so the current real user profile is not modified.
+- [ ] SKIPPED: installed-build hidden tray launch depends on the clean-profile installation above.
+- [ ] SKIPPED: installed-build tray and `Ctrl+Alt+K` checks depend on the clean-profile installation above.
+- [ ] SKIPPED: installed-build Settings → About verification depends on the clean-profile installation above; isolated `tauri:dev` diagnostics paths were verified separately.
 
 ## 4. Clipboard Workflow
 

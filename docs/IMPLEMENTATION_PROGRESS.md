@@ -1,6 +1,6 @@
 # Foundation Implementation Progress
 
-- 最后更新时间：2026-08-07 07:44（Asia/Shanghai）
+- 最后更新时间：2026-08-07 07:46（Asia/Shanghai）
 - 当前分支：`feat/foundation`
 - 基准提交：`423ab24`（与 `main` / `origin/main` 一致）
 
@@ -24,6 +24,7 @@
 - `210b940`：把实施策略中的当前数据库版本和迁移链修正为 schema v6。
 - `ec9f0a1`：记录 npm 开发/测试依赖高危审计阻塞。
 - `64be1de`：记录生产 npm 审计、RustSec warnings 和发布版本元数据阻塞。
+- `e0fef43`：记录 Windows MSI/NSIS 构建、大小、哈希、签名状态和发布清单证据。
 
 ## 当前任务
 
@@ -49,6 +50,7 @@
 - 发布 preflight：本地 `cargo audit` 扫描完成并 exit 0，但报告 22 个允许的 RustSec warnings（gtk3/`paste`/`ttf-parser`/unic 维护状态，以及 `anyhow`、`glib`、`lru`、`memmap2` unsound advisory）；不能据此声称 GitHub Actions 的“无未审查 advisory”门项通过。
 - 发布 verify 阻塞：`pnpm release:verify -SkipBundle` 在构建前失败，三处构建元数据为 `1.0.0`，但 `CHANGELOG.md` 当前公开记录为 `v0.1.2`，脚本报 `CHANGELOG.md does not mention version 1.0.0`。未擅自改版本号或添加误导性 changelog 条目；受影响下游为 release verify 和依赖它的 installer smoke。
 - Windows installer build：直接运行 `pnpm tauri:build` 通过，用时 549.6 秒；生成 `Klip_1.0.0_x64_en-US.msi`（32,542,720 B，SHA-256 `2FF01714E3334780F85D4FB71453EF8A310456D001449C0B2190CE5F54CDE434`）和 `Klip_1.0.0_x64-setup.exe`（29,027,941 B，SHA-256 `0FA03449A06AAE6CE247AD24956B08A20022F104F0894C803B844BB5B470E06F`）；两项 Authenticode 状态均为 `NotSigned`。
+- Installer smoke：完整 `pnpm release:smoke` 因 GitHub 不存在 `v1.0.0` release/资产而失败；随后按脚本支持的 `-SkipGitHub` 不同路径执行本地-only smoke，通过版本一致性、两项产物存在性/大小/哈希检查，并确认当前 `klip.exe` 进程数和已安装 Klip 注册表项均为 0。
 - Windows runtime smoke：`pnpm tauri:dev` 已启动 `klip.exe`；`KLIP_DATA_DIR=C:\tmp\klip-foundation\data` 下生成 `klip.db`/WAL，`KLIP_LOG_DIR=C:\tmp\klip-foundation\logs` 下生成日志文件；进程已停止。完整 UI 闭环尚未执行。
 - search 依赖核验：`tantivy 0.24.2` 使用 `tantivy-tokenizer-api 0.5`；选择同样依赖 tokenizer API 0.5 的 `tantivy-jieba 0.16.0`，避免同时链接不兼容的 tokenizer trait 版本。
 - search 首轮专项测试：未进入测试执行，测试编译因两个既有 `ClipboardQuerySpec` 字面量缺少新增的 `text_match_ids` 字段而失败（`clipboard_query.rs:380`、`:460`）；业务代码 `cargo check` 已通过。处理：补齐测试字段后原命令重跑，不跳过测试。
@@ -149,6 +151,8 @@
 - SKIPPED：用户未提供独立 rich-text 测试文件；已用内建恶意 HTML、DB migration/restore 和 Windows clipboard-rs 集成测试覆盖，若后续提供文件可在最终验收补跑。
 - BLOCKED：发布元数据 `1.0.0` 与公开文档/CHANGELOG `v0.1.2` 冲突；解除条件是发布负责人确定下一版本并同步三处构建元数据、README、CHANGELOG 和发布说明。
 - BLOCKED：完整 npm audit 有 19 项开发/测试工具链 high advisory，本地 RustSec 扫描另有 22 个允许 warning；生产 npm audit通过，但不能替代完整发布安全门。解除条件是评审并升级/覆盖对应依赖后重跑完整 npm/RustSec 审计。
+- BLOCKED：GitHub 尚无 `v1.0.0` release/安装器资产，完整 installer smoke 不能通过；创建 tag/release 超出本 PR 收尾范围，解除条件是版本决策完成后由发布流程生成并上传对应资产。
+- SKIPPED/BLOCKED：当前没有清洁 Windows 测试用户或 VM，不在真实用户配置上安装未签名 NSIS；安装后托盘/快捷键/About 和重启 autostart 验收依赖该隔离环境。
 
 ## 下一步准确操作
 
