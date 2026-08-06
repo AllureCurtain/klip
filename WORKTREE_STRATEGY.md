@@ -403,7 +403,7 @@ release profile 是 `panic = "abort"`。这意味着：
 - [x] 从 manifest 和源码移除 clipboard-master、clipboard-win、arboard（`clipboard-rs` 的传递依赖除外）
 - [x] 保留文件列表的 Preferred DropEffect，并验证文本、图片、文件捕获与写回
 - [x] 验证哈希抑制的一次性、TTL、写失败 disarm 和监听关闭行为
-- [ ] Windows 下运行 `tauri:dev`，手工走通监听 → 捕获 → 选择历史 → 粘贴闭环（已完成启动 smoke，完整闭环留待最终验收）
+- [x] Windows 下运行 `tauri:dev`，手工走通监听 → 捕获 → 选择历史 → 粘贴闭环（真实 WinForms 目标窗体、来源和焦点已验收）
 - [x] 针对性测试通过后提交 `refactor: unify clipboard backend on clipboard-rs`
 
 **串行功能队列**
@@ -419,10 +419,10 @@ release profile 是 `panic = "abort"`。这意味着：
 - [x] 每个功能的用户可见行为、限制和必要配置随对应 commit 更新
 
 **最终验证与 PR**
-- [ ] 检查提交历史：每个部分边界清楚，无把多个功能揉在一起的超大提交
-- [ ] `pnpm verify` 全绿
-- [ ] Windows `tauri:dev` 和核心剪贴板闭环通过；能执行的平台专项验证全部完成
-- [ ] 三个 env 生效：数据、日志、HTTP 端口进入指定位置；不设置时回落默认
+- [x] 检查提交历史：每个部分边界清楚，无把多个功能揉在一起的超大提交
+- [x] `pnpm verify` 全绿
+- [x] Windows `tauri:dev` 和核心剪贴板闭环通过；能执行的平台专项验证全部完成
+- [ ] 三个 env 生效：数据、日志、HTTP 端口进入指定位置；不设置时回落默认（SKIPPED/BLOCKED：Windows Known Folder API 不接受临时 APPDATA 覆盖，默认数据/日志安全隔离需测试用户或 VM）
 - [ ] 最终文档/集成修复提交后，`feat/foundation` 工作树干净
 - [ ] 推送 `feat/foundation`，创建面向 `main` 的 PR
 - [ ] PR 描述包含功能摘要、commit 清单、测试证据、DB migration、OCR 模型体积和平台降级边界

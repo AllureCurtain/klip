@@ -1,6 +1,6 @@
 # Foundation Implementation Progress
 
-- 最后更新时间：2026-08-07 02:11（Asia/Shanghai）
+- 最后更新时间：2026-08-07 02:17（Asia/Shanghai）
 - 当前分支：`feat/foundation`
 - 基准提交：`423ab24`（与 `main` / `origin/main` 一致）
 
@@ -14,10 +14,11 @@
 - `58da1e8`：完成 DB v5 图片 OCR、PP-OCRv5/ONNX Runtime 离线资源、异步 worker、搜索回灌、前端状态和 Windows runtime acceptance。
 - `82fa3a1`：完成 Windows HWND、macOS `NSRunningApplication`、Linux X11 EWMH 的粘贴目标焦点恢复及 Wayland/其他平台无错误降级。
 - `1e5b63e`：完成 Windows/macOS/X11 来源追踪、DB v6 持久化与兼容恢复、API/前端来源展示及 Windows runtime acceptance。
+- `77d7959`：完成 foundation worktree 初始化、运行时隔离、单 worktree 串行执行与可选 sccache 的开发文档。
 
 ## 当前任务
 
-- 当前任务：工具链与文档清单已完成编辑，正在执行文档差异检查并准备独立提交；下一块是提交边界审查与最终全量验证。
+- 当前任务：最终集成记录；默认目录回退的 Windows Known Folder 限制已确认并记录，正在提交 E2E 稳定性修复与进度证据，之后重新运行完整 `pnpm verify` 并准备最终文档/推送/PR。
 - README 已补齐 `pnpm install --frozen-lockfile` worktree 初始化、`KLIP_DATA_DIR` / `KLIP_LOG_DIR` / `KLIP_HTTP_PORT`、单活动 worktree 串行执行和可选 sccache。CHANGELOG 已在 rich-text 提交中说明 DB v4 备份不能回退到只支持 v3 的旧版；各功能行为与限制已分布记录在 README、CHANGELOG、API、DATABASE 与 ARCHITECTURE。
 - `platform-source` 已在 `1e5b63e` 提交，§8.5 与串行功能队列均已据实勾选；macOS/Linux 真实桌面验收仍保持 SKIPPED，不影响已完成的代码、目标编译和 Windows 验收结论。
 - Windows 保留现有进程文件名和窗口标题行为；macOS 使用 `NSWorkspace.frontmostApplication`，Accessibility 未授权时保留应用名且窗口标题为空；X11 使用 EWMH 活动窗口/PID/标题并从 `/proc` 解析应用名；Wayland和其他不支持平台一次性提示后返回空来源。
@@ -86,6 +87,17 @@
 - platform-source 完整 targeted 静态检查：monitor 9 项、connection/migration 12 项、restore 11 项、OpenAPI 6 项通过；`pnpm lint`、`cargo fmt --all -- --check`、`cargo clippy -- -D warnings` 和 `git diff --check` 均通过。
 - platform-source Windows runtime acceptance：通过。隔离数据/日志与端口 `27833` 启动完整 Tauri dev；外部 WinForms 窗口进程 `powershell.exe`、标题 `Klip Source Acceptance Target` 在保持前台时写入 `KLIP-SOURCE-ACCEPTANCE-20260807-0202`。HTTP 和 SQLite 均返回 `id=1`、相同应用名/标题，`db_version=6`。验收后 Klip/Vite/Cargo/WebView/目标窗体共 21 个进程全部停止，端口 `1420/27833` 已释放；证据目录为 `C:\tmp\klip-source-runtime-20260807-0202`。
 - 工具链文档审查：确认 `3669c83` 的 CHANGELOG 已明确 DB v4 备份向旧版不兼容；search、rich-text、OCR、platform-focus、platform-source 的用户行为、限制和必要配置已随对应功能提交写入 README/CHANGELOG/API/DATABASE/ARCHITECTURE。README 新增冻结 lockfile 初始化、三个隔离 env、单 worktree 串行规则与可选 sccache。
+- 最终提交边界审查：通过。`423ab24..77d7959` 依次为进度初始化、clipboard-rs、search、search 记录、rich-text、rich-text 记录、OCR、OCR 记录、platform-focus、focus 记录、platform-source、source 记录、开发工作流文档；六个实现提交未混入其他大型功能。OCR 的 50 文件/27,078 行主要来自约 21.5 MB 模型、14.1 MB runtime、字典及第三方许可证，属于同一离线 OCR 交付边界。
+- 最终 `pnpm verify`：通过，用时 225.7 秒。ESLint 通过；20 个 Vitest 文件/149 项通过；生产构建通过；`cargo fmt -- --check` 与 `cargo clippy -- -D warnings` 通过；Rust library 143 项通过、1 项显式 100k 性能测试 ignored，另有 2 个 main 与 5 个 clipboard integration tests 通过。
+- 最终 Windows Selenium E2E 首次尝试：业务测试未执行。Tauri/WebView2 版本为 `151.0.4129.59`，PATH 中 `msedgedriver 148.0.3967.70` 只支持 Edge 148，建 session 报 `SessionNotCreatedError`。`scripts/run-e2e.ps1` 的 `finally` 最后一条成功命令还掩盖了 Mocha 非零退出码，使外层进程显示 exit 0；本轮先不改脚本，下一路径是在临时目录下载精确匹配的 Driver 151、临时前置 PATH 后重跑。
+- 最终 Windows Selenium E2E 第二次尝试：临时 EdgeDriver `151.0.4129.59` 成功创建真实 WebView session，捕获和搜索等待均通过；把剪贴板覆盖为外部文本后，测试在未等待虚拟列表重渲染的最终 `findElement` 报 `NoSuchElementError`。处理方案改为复用 `waitForText` 返回稳定元素后点击，并让 `run-e2e.ps1` 显式检查 Mocha `$LASTEXITCODE`，避免业务失败被报告为 exit 0；修正后运行 lint 和同一 E2E。
+- E2E 方案调整：外部 `Set-Clipboard` 会触发窗口自动隐藏，因此在覆盖剪贴板后调用真实 `/api/window/show` 再定位历史条目；runner 为应用与测试进程共享隔离 `KLIP_HTTP_PORT`（默认 `27718`）并在退出时恢复原环境。该项代码尚未重新验证。
+- E2E 方案调整后重跑：`/api/window/show` 成功但原搜索视图在夺焦/恢复后仍不稳定，定位等待超时；下一方案是在重新显示后重新定位搜索输入并再次提交关键词，再等待历史条目。
+- E2E 数据诊断：覆盖后 API 返回两条记录且原文本匹配 `id=1`，恢复后的 WebView 只渲染最新外部文本行；确认不是 SQLite/剪贴板捕获丢数据。下一方案是在显示窗口后刷新 WebView，再搜索并点击原记录。
+- tauri:dev 完整闭环首次尝试：健康端点启动成功，但在外部窗口句柄等待阶段超时；该次证据写在 shell 隔离的 `C:\tmp`，无法跨命令读取。下一次把证据改到 worktree ignored `e2e/.tmp`，并用 Win32 前台 HWND/标题枚举替代 `Get-Process.MainWindowHandle`。
+- 最终 Windows Selenium E2E：通过。临时 EdgeDriver `151.0.4129.59` 与 WebView2 匹配；真实 Tauri WebView 完成剪贴板捕获、关键词搜索、外部剪贴板覆盖后窗口显示、刷新 hydration、记录点击和剪贴板恢复，1 项通过；runner 现会传播 Mocha 失败退出码并隔离 HTTP 端口 `27718`。
+- 最终 Windows tauri:dev runtime：通过。证据目录 `D:\Study\cc\klip\.worktrees\foundation\e2e\.tmp\final-runtime-20260807-023846`；`KLIP_HTTP_PORT=27834`，数据/索引位于隔离 `data`，日志位于隔离 `logs`。目标窗体 `powershell.exe` / `Klip Final Acceptance Target 20260807-023846` 写入 `KLIP-FINAL-ACCEPTANCE-20260807-023846`；来源 API 保留应用与标题。显示 Klip 前台 HWND `21105954`，显示后 Klip HWND `3608040`，粘贴后恢复 `21105954`，目标文本框收到准确文本。Klip、Vite、Cargo、WebView、目标窗体均由验收脚本停止。
+- 默认目录回退尝试：健康端点 `27717` 通过，但在临时 `APPDATA=D:\Study\cc\klip\.worktrees\foundation\e2e\.tmp\default-runtime-20260807-024658\AppData\Roaming` / `LOCALAPPDATA` 下，Windows Tauri Known Folder API 仍解析到真实 `C:\Users\AllureLove\AppData\Roaming\com.klip.app`（诊断端点已返回该路径）；未发送剪贴板输入，端口已释放。标记 `SKIPPED/BLOCKED`：当前用户环境没有可安全替代 Known Folder 的 Windows 用户配置，解除条件是隔离测试用户/VM 或产品提供显式默认目录注入点。
 
 ## 技术决策
 
@@ -108,6 +120,7 @@
 ## 阻塞或跳过项
 
 - 最终 PR 创建存在外部认证风险：`gh auth status` 报 GitHub 账户 `AllureCurtain` 的 keyring token invalid，建议命令为 `gh auth login -h github.com`。实现与本地提交不受影响；最终仍会分别实测 `git push` 和 `gh pr create`，只有实际失败后才把对应交付项标为 BLOCKED。
+- 默认目录无 env 的安全回退验收为 `SKIPPED/BLOCKED`：Windows Known Folder API 忽略临时 `APPDATA` 覆盖，不能在真实用户目录上继续做写入验收；健康端点回落到 `27717` 已观察，数据/日志路径结论仅作为平台证据，不声称完整隔离通过。
 - Windows 浏览器/Word 真实富文本闭环、macOS/Linux 真实平台验收、推送和 PR 创建尚未执行；Windows 已通过真实剪贴板 OCR、platform-source 来源捕获及外部文本框“捕获 → 显示 Klip → 选择历史粘贴 → 焦点返回”闭环，但最终仍需补一次面向完整分支的运行时回归。
 - SKIPPED：当前只有 Windows 真实桌面，无法实机验证 macOS `NSRunningApplication` 或 Linux X11/Wayland 桌面焦点行为；实际后端已分别通过 `aarch64-apple-darwin` / `x86_64-unknown-linux-gnu` 最小交叉静态编译。解除条件是提供对应真实桌面会话；不阻塞 Windows 验收及后续独立功能。
 - OCR 静态链接 BLOCKED 已解除：14.43 与官方静态包 ABI 不兼容，已改用官方 1.24.2 动态 DLL；DLL 入包后的 Windows 真实推理已通过，macOS/Linux 真实环境验收仍未执行且不得声称通过。
@@ -115,5 +128,5 @@
 
 ## 下一步准确操作
 
-- 运行 `git diff --check` 并审查 README/清单/进度差异，只暂存这三个文档，提交 `docs: document foundation development workflow`。
-- 提交后检查从 `423ab24` 起的提交边界，再更新“当前任务”为最终验证，运行完整 `pnpm verify`、完整 Windows runtime regression、三个 env 覆盖与无 KLIP env 的默认回退验收。
+- 提交 E2E runner/测试稳定性修复与本进度记录；随后重新运行完整 `pnpm verify` 和 `git diff --check`。
+- 更新最终清单，记录默认回退 `SKIPPED/BLOCKED` 与解除条件，提交收尾文档后执行 `git push feat/foundation` 和面向 `main` 的 PR 创建。

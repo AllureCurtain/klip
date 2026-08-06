@@ -69,12 +69,14 @@ $previousLocalAppData = $env:LOCALAPPDATA
 $previousE2eShowWindow = $env:KLIP_E2E_SHOW_WINDOW
 $previousDataDir = $env:KLIP_DATA_DIR
 $previousLogDir = $env:KLIP_LOG_DIR
+$previousHttpPort = $env:KLIP_HTTP_PORT
 
 $env:SELENIUM_REMOTE_URL = "http://127.0.0.1:$Port"
 $env:KLIP_E2E_APP = $appPath
 $env:KLIP_E2E_SHOW_WINDOW = '1'
 $env:KLIP_DATA_DIR = Join-Path $runRoot 'KlipData'
 $env:KLIP_LOG_DIR = Join-Path $runRoot 'KlipLogs'
+$env:KLIP_HTTP_PORT = if ([string]::IsNullOrWhiteSpace($previousHttpPort)) { '27718' } else { $previousHttpPort }
 $env:APPDATA = Join-Path $runRoot 'AppData\Roaming'
 $env:LOCALAPPDATA = Join-Path $runRoot 'AppData\Local'
 New-Item -ItemType Directory -Force -Path $env:APPDATA, $env:LOCALAPPDATA, $env:KLIP_DATA_DIR, $env:KLIP_LOG_DIR | Out-Null
@@ -102,12 +104,20 @@ try {
 
   Step 'Running Selenium E2E tests'
   pnpm exec mocha "e2e/**/*.e2e.js" --timeout 90000
+  if ($LASTEXITCODE -ne 0) {
+    throw "Selenium E2E tests failed with exit code $LASTEXITCODE"
+  }
 } finally {
   $env:APPDATA = $previousAppData
   $env:LOCALAPPDATA = $previousLocalAppData
   $env:KLIP_E2E_SHOW_WINDOW = $previousE2eShowWindow
   $env:KLIP_DATA_DIR = $previousDataDir
   $env:KLIP_LOG_DIR = $previousLogDir
+  if ($null -eq $previousHttpPort) {
+    Remove-Item Env:KLIP_HTTP_PORT -ErrorAction SilentlyContinue
+  } else {
+    $env:KLIP_HTTP_PORT = $previousHttpPort
+  }
 
   if ($driverProcess -and -not $driverProcess.HasExited) {
     Stop-Process -Id $driverProcess.Id -Force
