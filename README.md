@@ -193,7 +193,7 @@ Windows 安装资源中，PP-OCRv5 检测/识别模型和字典约 21.5 MB，ONN
 常用命令：
 
 ```powershell
-pnpm install
+pnpm install --frozen-lockfile
 pnpm tauri:dev
 pnpm test -- --run
 pnpm lint
@@ -201,6 +201,35 @@ pnpm build
 cd src-tauri
 cargo test
 ```
+
+首次初始化 worktree，以及 `pnpm-lock.yaml` 变化后，都应运行 `pnpm install --frozen-lockfile`。安装过程会通过 `prepare` 安装 pre-push hook；该 hook 在推送前执行 `pnpm verify`。
+
+桌面开发实例应使用独立的数据、日志和 HTTP 端口，避免污染日常使用的数据或与默认端口冲突：
+
+```powershell
+$env:KLIP_DATA_DIR = 'C:\tmp\klip-dev\data'
+$env:KLIP_LOG_DIR = 'C:\tmp\klip-dev\logs'
+$env:KLIP_HTTP_PORT = '27718'
+pnpm tauri:dev
+```
+
+| 变量 | 用途 | 未设置时 |
+|------|------|----------|
+| `KLIP_DATA_DIR` | SQLite、全文索引和 OCR 模型缓存目录 | 平台应用数据目录 |
+| `KLIP_LOG_DIR` | 运行日志目录 | 平台应用日志目录 |
+| `KLIP_HTTP_PORT` | 本地 HTTP API 端口 | `27717` |
+
+同一个开发任务保持一个活动 worktree，并串行完成实现、测试和提交。复用该 worktree 的 `target/` 与 `node_modules/`，不要同时运行多个 Klip 桌面实例；全局热键、开机自启和进程内剪贴板抑制无法靠上述目录与端口变量完全隔离。
+
+Windows 上可选用 `sccache` 加速重建依赖。它不是项目依赖，不需要修改仓库内 Cargo 配置：
+
+```powershell
+scoop install sccache
+$env:RUSTC_WRAPPER = 'sccache'
+sccache --show-stats
+```
+
+`sccache` 主要帮助 target 缓存未命中或 worktree 重建后的依赖编译；日常修改项目代码仍主要依靠 Cargo incremental。
 
 完整本地验证：
 

@@ -414,9 +414,9 @@ release profile 是 `panic = "abort"`。这意味着：
 - [x] 完成 §8.5 platform-source，针对性测试通过并 commit
 
 **工具链与文档**
-- [ ] README 补充可选 sccache、三个运行时 env、单 worktree 初始化和串行执行规则
-- [ ] rich-text 提交中的 CHANGELOG 说明 db_version 4 的备份兼容性影响
-- [ ] 每个功能的用户可见行为、限制和必要配置随对应 commit 更新
+- [x] README 补充可选 sccache、三个运行时 env、单 worktree 初始化和串行执行规则
+- [x] rich-text 提交中的 CHANGELOG 说明 db_version 4 的备份兼容性影响
+- [x] 每个功能的用户可见行为、限制和必要配置随对应 commit 更新
 
 **最终验证与 PR**
 - [ ] 检查提交历史：每个部分边界清楚，无把多个功能揉在一起的超大提交

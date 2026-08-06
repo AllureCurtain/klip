@@ -1,6 +1,6 @@
 # Foundation Implementation Progress
 
-- 最后更新时间：2026-08-07 02:08（Asia/Shanghai）
+- 最后更新时间：2026-08-07 02:11（Asia/Shanghai）
 - 当前分支：`feat/foundation`
 - 基准提交：`423ab24`（与 `main` / `origin/main` 一致）
 
@@ -17,7 +17,8 @@
 
 ## 当前任务
 
-- 当前任务：工具链与文档清单；先补齐 README 的可选 sccache、三个隔离 env、单 worktree 初始化与串行执行规则，再核对各功能 CHANGELOG/用户可见说明。
+- 当前任务：工具链与文档清单已完成编辑，正在执行文档差异检查并准备独立提交；下一块是提交边界审查与最终全量验证。
+- README 已补齐 `pnpm install --frozen-lockfile` worktree 初始化、`KLIP_DATA_DIR` / `KLIP_LOG_DIR` / `KLIP_HTTP_PORT`、单活动 worktree 串行执行和可选 sccache。CHANGELOG 已在 rich-text 提交中说明 DB v4 备份不能回退到只支持 v3 的旧版；各功能行为与限制已分布记录在 README、CHANGELOG、API、DATABASE 与 ARCHITECTURE。
 - `platform-source` 已在 `1e5b63e` 提交，§8.5 与串行功能队列均已据实勾选；macOS/Linux 真实桌面验收仍保持 SKIPPED，不影响已完成的代码、目标编译和 Windows 验收结论。
 - Windows 保留现有进程文件名和窗口标题行为；macOS 使用 `NSWorkspace.frontmostApplication`，Accessibility 未授权时保留应用名且窗口标题为空；X11 使用 EWMH 活动窗口/PID/标题并从 `/proc` 解析应用名；Wayland和其他不支持平台一次性提示后返回空来源。
 - Windows 完整“监听 → 捕获 → 选择历史 → 粘贴”闭环仍列为最终运行时验收项。
@@ -84,6 +85,7 @@
 - platform-source 前端/API 专项：`pnpm test -- --run src/components/clipboard/ClipboardItem.test.tsx` 通过 25 项（含有来源显示/tooltip 与无来源不显示）；`pnpm build` 通过；OpenAPI nullable/required 来源字段专项 1 项通过。
 - platform-source 完整 targeted 静态检查：monitor 9 项、connection/migration 12 项、restore 11 项、OpenAPI 6 项通过；`pnpm lint`、`cargo fmt --all -- --check`、`cargo clippy -- -D warnings` 和 `git diff --check` 均通过。
 - platform-source Windows runtime acceptance：通过。隔离数据/日志与端口 `27833` 启动完整 Tauri dev；外部 WinForms 窗口进程 `powershell.exe`、标题 `Klip Source Acceptance Target` 在保持前台时写入 `KLIP-SOURCE-ACCEPTANCE-20260807-0202`。HTTP 和 SQLite 均返回 `id=1`、相同应用名/标题，`db_version=6`。验收后 Klip/Vite/Cargo/WebView/目标窗体共 21 个进程全部停止，端口 `1420/27833` 已释放；证据目录为 `C:\tmp\klip-source-runtime-20260807-0202`。
+- 工具链文档审查：确认 `3669c83` 的 CHANGELOG 已明确 DB v4 备份向旧版不兼容；search、rich-text、OCR、platform-focus、platform-source 的用户行为、限制和必要配置已随对应功能提交写入 README/CHANGELOG/API/DATABASE/ARCHITECTURE。README 新增冻结 lockfile 初始化、三个隔离 env、单 worktree 串行规则与可选 sccache。
 
 ## 技术决策
 
@@ -113,5 +115,5 @@
 
 ## 下一步准确操作
 
-- 只暂存 `WORKTREE_STRATEGY.md` 与 `docs/IMPLEMENTATION_PROGRESS.md`，提交 `docs: record platform source milestone`。
-- 随后审查 README 开发章节和 CHANGELOG，补齐工具链清单并针对文档运行 `git diff --check`；提交后再进入提交历史审查、最终 `pnpm verify`、完整 Windows runtime regression 和 env fallback 验收。
+- 运行 `git diff --check` 并审查 README/清单/进度差异，只暂存这三个文档，提交 `docs: document foundation development workflow`。
+- 提交后检查从 `423ab24` 起的提交边界，再更新“当前任务”为最终验证，运行完整 `pnpm verify`、完整 Windows runtime regression、三个 env 覆盖与无 KLIP env 的默认回退验收。
