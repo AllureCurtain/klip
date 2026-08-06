@@ -16,6 +16,8 @@ function makeItem(overrides: Partial<ClipboardItem>): ClipboardItem {
     hash: 'hash',
     size: 5,
     metadata: null,
+    source_application: null,
+    source_window_title: null,
     is_favorited: false,
     is_sensitive: false,
     sensitivity_reason: null,

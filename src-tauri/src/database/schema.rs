@@ -45,6 +45,7 @@ fn create_clipboard_tables(conn: &Connection) -> Result<(), AppError> {
         "INTEGER NOT NULL DEFAULT 0",
     )?;
     add_column_if_missing(conn, "clipboard_items", "sensitivity_reason", "TEXT")?;
+    add_clipboard_source_columns(conn)?;
 
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_clipboard_created_at ON clipboard_items(created_at DESC)",
@@ -81,6 +82,12 @@ fn create_clipboard_tables(conn: &Connection) -> Result<(), AppError> {
     create_clipboard_format_table(conn)?;
     create_clipboard_ocr_table(conn)?;
 
+    Ok(())
+}
+
+pub(crate) fn add_clipboard_source_columns(conn: &Connection) -> Result<(), AppError> {
+    add_column_if_missing(conn, "clipboard_items", "source_application", "TEXT")?;
+    add_column_if_missing(conn, "clipboard_items", "source_window_title", "TEXT")?;
     Ok(())
 }
 

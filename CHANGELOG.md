@@ -4,6 +4,8 @@
 
 ### Added
 
+- Clipboard source attribution is persisted and shown compactly for Windows, macOS, and X11. macOS keeps the application name when Accessibility permission is absent; Wayland and unsupported platforms leave source fields empty without blocking capture.
+- Source-attribution migration, hash-conflict, v5/v6 backup/restore, JSON portability, OpenAPI, and frontend regression coverage.
 - Cross-platform paste target restoration: Win32 foreground windows, macOS running applications, and X11 EWMH active windows are captured before Klip opens and reactivated before synthetic paste; Wayland and unsupported platforms degrade without an error.
 - Offline image OCR using bundled PP-OCRv5 detection/recognition models and ONNX Runtime, with background processing, searchable recognized text, live status updates, and no runtime model downloads.
 - OCR migration, backup/restore, search rebuild/fallback, real Chinese inference, and frontend status regression coverage.
@@ -36,6 +38,7 @@
 
 ### Changed
 
+- Database schema version 6 adds nullable `source_application` and `source_window_title` columns. Version 5 databases and backups migrate with empty attribution, while schema-v6 backups require both columns and cannot be restored by Klip versions that only support v5.
 - Database schema version 5 adds `clipboard_ocr`. Version 4 databases and backups migrate automatically, while schema-v5 backups require `clipboard_ocr` and cannot be restored by Klip versions that only support v4.
 - Windows packages add about 21.5 MB of PP-OCRv5 model assets plus a 14.1 MB ONNX Runtime DLL; the verified models are copied to an app-data cache on first OCR use.
 - Database schema version 4 adds `clipboard_formats`. Version 3 databases and backups migrate automatically, but backups created by schema v4 cannot be restored by older Klip versions that only support v3.

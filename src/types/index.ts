@@ -6,6 +6,8 @@ export interface ClipboardItem {
   hash: string;
   size: number;
   metadata: string | null;
+  source_application: string | null;
+  source_window_title: string | null;
   is_favorited: boolean;
   is_sensitive: boolean;
   sensitivity_reason: string | null;

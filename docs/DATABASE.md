@@ -34,6 +34,8 @@ CREATE TABLE clipboard_items (
     hash            TEXT NOT NULL UNIQUE,       -- 内容哈希 (SHA256, 用于去重)
     size            INTEGER NOT NULL DEFAULT 0, -- 内容大小 (字节)
     metadata        TEXT,                       -- JSON 元数据
+    source_application TEXT,                    -- 来源应用；平台不可用时为 NULL
+    source_window_title TEXT,                   -- 来源窗口标题；权限不足时可为 NULL
     is_favorited    INTEGER NOT NULL DEFAULT 0, -- 是否收藏 (预留字段)
     is_sensitive    INTEGER NOT NULL DEFAULT 0, -- 是否敏感
     sensitivity_reason TEXT,                    -- 敏感原因
@@ -61,6 +63,8 @@ CREATE INDEX idx_clipboard_sensitive ON clipboard_items(is_sensitive, last_used_
 | hash | TEXT | 是 | SHA256 哈希，唯一约束 |
 | size | INTEGER | 是 | 内容大小，单位字节 |
 | metadata | TEXT | 否 | 图片或文件元数据 JSON |
+| source_application | TEXT | 否 | 捕获时的前台应用名或进程文件名 |
+| source_window_title | TEXT | 否 | 捕获时的窗口标题；macOS Accessibility 未授权等场景为空 |
 | is_favorited | INTEGER | 是 | 是否收藏，0/1 |
 | is_sensitive | INTEGER | 是 | 是否敏感，0/1 |
 | sensitivity_reason | TEXT | 否 | 敏感内容检测原因 |
@@ -260,6 +264,8 @@ pub struct ClipboardItem {
     pub preview: Option<String>,
     pub hash: String,
     pub size: i64,
+    pub source_application: Option<String>,
+    pub source_window_title: Option<String>,
     pub is_favorited: bool,
     pub is_sensitive: bool,
     pub sensitivity_reason: Option<String>,
@@ -321,9 +327,18 @@ ORDER BY last_used_at DESC, created_at DESC
 LIMIT ?;
 
 -- 插入新记录 (带去重)
-INSERT INTO clipboard_items (content_type, content, preview, hash, size, created_at, last_used_at)
-VALUES (?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT(hash) DO UPDATE SET last_used_at = excluded.last_used_at;
+INSERT INTO clipboard_items
+  (content_type, content, preview, hash, size, source_application,
+   source_window_title, created_at, last_used_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(hash) DO UPDATE SET
+  last_used_at = excluded.last_used_at,
+  source_application = CASE WHEN excluded.source_application IS NOT NULL
+    OR excluded.source_window_title IS NOT NULL
+    THEN excluded.source_application ELSE clipboard_items.source_application END,
+  source_window_title = CASE WHEN excluded.source_application IS NOT NULL
+    OR excluded.source_window_title IS NOT NULL
+    THEN excluded.source_window_title ELSE clipboard_items.source_window_title END;
 
 -- 删除旧记录 (保留最近 N 条)
 DELETE FROM clipboard_items
@@ -350,11 +365,11 @@ VALUES (?, ?, ?);
 
 ### 4.1 版本管理
 
-在 `app_config` 表中存储数据库版本。当前 schema 版本由后端常量 `CURRENT_DB_VERSION` 管理，当前值为 `5`：
+在 `app_config` 表中存储数据库版本。当前 schema 版本由后端常量 `CURRENT_DB_VERSION` 管理，当前值为 `6`：
 
 ```sql
 INSERT INTO app_config (key, value, updated_at)
-VALUES ('db_version', '5', strftime('%s', 'now') * 1000);
+VALUES ('db_version', '6', strftime('%s', 'now') * 1000);
 ```
 
 ### 4.2 迁移流程
@@ -366,6 +381,7 @@ VALUES ('db_version', '5', strftime('%s', 'now') * 1000);
 - v2 -> v3 会把早期较小窗口尺寸迁移到当前默认尺寸。
 - v3 -> v4 会创建 `clipboard_formats`，并为既有文本记录回填纯文本格式。
 - v4 -> v5 会创建 `clipboard_ocr`，并把既有图片记录初始化为 `pending`。
+- v5 -> v6 会给 `clipboard_items` 增加两个可空来源字段；既有记录保持 `NULL`。
 - 完成后写回当前 `db_version`。
 
 ```rust
@@ -383,6 +399,9 @@ fn run_migrations(db: &Connection) -> Result<()> {
     }
     if version < 5 {
         migrate_v4_to_v5(db)?;
+    }
+    if version < 6 {
+        migrate_v5_to_v6(db)?;
     }
 
     Ok(())
@@ -430,7 +449,7 @@ fn cleanup_old_records(db: &Connection, max_count: i64) -> Result<()> {
 
 ### 6.1 JSON/CSV 导入导出
 
-当前版本提供 JSON 和 CSV 导入导出命令。JSON 导入会校验导出版本；CSV 导入支持带引号的多行字段。导出命令会创建目标父目录。
+当前版本提供 JSON 和 CSV 导入导出命令。JSON v1 的 `ClipboardItem` 会携带两个可空来源字段，旧 JSON 缺少字段时按 `NULL` 导入；CSV v1 为保持严格表头兼容，不导入或导出来源字段。CSV 导入支持带引号的多行字段。导出命令会创建目标父目录。
 
 ### 6.2 数据库备份
 
@@ -438,7 +457,7 @@ fn cleanup_old_records(db: &Connection, max_count: i64) -> Result<()> {
 
 ### 6.3 数据库恢复
 
-`restore_database` 会先用只读 SQLite 连接校验备份文件，执行 `PRAGMA integrity_check`，并确认必需表存在。恢复前会自动创建当前数据库的 `.pre-restore.bak` 备份。恢复时通过当前连接 `ATTACH DATABASE` 后导入数据，不直接替换已打开的数据库文件。v3 备份会迁移并回填纯文本格式；v4 备份必须包含 `clipboard_formats`，恢复后为图片补建 pending OCR；v5 备份还必须包含 `clipboard_ocr`，并保留 pending/completed/failed 状态。旧版应用会拒绝更高 schema 版本，因此 v5 备份不能恢复到只支持 v4 或更早 schema 的 Klip。
+`restore_database` 会先用只读 SQLite 连接校验备份文件，执行 `PRAGMA integrity_check`，并确认必需表存在。恢复前会自动创建当前数据库的 `.pre-restore.bak` 备份。恢复时通过当前连接 `ATTACH DATABASE` 后导入数据，不直接替换已打开的数据库文件。v3 备份会迁移并回填纯文本格式；v4 备份必须包含 `clipboard_formats`，恢复后为图片补建 pending OCR；v5 备份还必须包含 `clipboard_ocr`，来源字段恢复为 `NULL`；v6 备份必须同时包含 `source_application` 与 `source_window_title` 并原样保留。缺列会在修改当前数据库前被拒绝。旧版应用会拒绝更高 schema 版本，因此 v6 备份不能恢复到只支持 v5 或更早 schema 的 Klip。
 
 ```rust
 pub struct RestoreSummary {

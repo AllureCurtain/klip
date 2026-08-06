@@ -56,6 +56,8 @@ function makeItem(id: number, overrides: Partial<ClipboardItem> = {}): Clipboard
     hash: `hash-${id}`,
     size: 10,
     metadata: null,
+    source_application: null,
+    source_window_title: null,
     is_favorited: false,
     is_sensitive: false,
     sensitivity_reason: null,

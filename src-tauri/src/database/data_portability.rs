@@ -187,6 +187,8 @@ pub fn import_csv(db: &Database, path: &str) -> Result<ImportSummary, AppError> 
             hash: hash_content(&row.content_type, &row.content),
             size: row.content.len() as i64,
             metadata: None,
+            source_application: None,
+            source_window_title: None,
             is_favorited: row.is_favorited,
             is_sensitive: row.is_sensitive,
             sensitivity_reason: empty_to_none(&row.sensitivity_reason),
@@ -278,9 +280,10 @@ fn import_items(db: &Database, items: Vec<ClipboardItem>) -> Result<ImportSummar
         let hash = hash_content(item.content_type.as_str(), &item.content);
         let result = tx.execute(
             "INSERT OR IGNORE INTO clipboard_items
-             (content_type, content, preview, hash, size, metadata, is_favorited,
-              is_sensitive, sensitivity_reason, created_at, last_used_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+             (content_type, content, preview, hash, size, metadata, source_application,
+               source_window_title, is_favorited, is_sensitive, sensitivity_reason,
+               created_at, last_used_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
             rusqlite::params![
                 item.content_type.as_str(),
                 item.content,
@@ -288,6 +291,8 @@ fn import_items(db: &Database, items: Vec<ClipboardItem>) -> Result<ImportSummar
                 hash,
                 item.size,
                 item.metadata,
+                item.source_application,
+                item.source_window_title,
                 item.is_favorited as i64,
                 item.is_sensitive as i64,
                 item.sensitivity_reason,
@@ -415,6 +420,7 @@ fn escape_sql_literal(value: &str) -> String {
 struct BackupLayout {
     has_clipboard_formats: bool,
     has_clipboard_ocr: bool,
+    has_clipboard_source: bool,
 }
 
 fn validate_backup_database(path: &Path) -> Result<BackupLayout, AppError> {
@@ -493,6 +499,21 @@ fn validate_backup_database(path: &Path) -> Result<BackupLayout, AppError> {
         )));
     }
 
+    let has_source_application = table_has_column(&conn, "clipboard_items", "source_application")?;
+    let has_source_window_title =
+        table_has_column(&conn, "clipboard_items", "source_window_title")?;
+    if backup_version >= 6 {
+        require_table_columns(
+            &conn,
+            "clipboard_items",
+            &["source_application", "source_window_title"],
+        )?;
+    } else if has_source_application != has_source_window_title {
+        return Err(AppError::InvalidInput(
+            "backup database has incomplete clipboard source columns".into(),
+        ));
+    }
+
     let has_clipboard_formats: bool = conn
         .query_row(
             "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'clipboard_formats'",
@@ -538,7 +559,20 @@ fn validate_backup_database(path: &Path) -> Result<BackupLayout, AppError> {
     Ok(BackupLayout {
         has_clipboard_formats,
         has_clipboard_ocr,
+        has_clipboard_source: has_source_application && has_source_window_title,
     })
+}
+
+fn table_has_column(conn: &Connection, table: &str, column: &str) -> Result<bool, AppError> {
+    let mut stmt = conn
+        .prepare(&format!("PRAGMA table_info({})", table))
+        .map_err(|e| AppError::InvalidInput(format!("invalid backup database: {}", e)))?;
+    let columns = stmt
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(|e| AppError::InvalidInput(format!("invalid backup database: {}", e)))?
+        .collect::<Result<std::collections::HashSet<_>, _>>()
+        .map_err(|e| AppError::InvalidInput(format!("invalid backup database: {}", e)))?;
+    Ok(columns.contains(column))
 }
 
 fn require_table_columns(
@@ -602,6 +636,11 @@ fn restore_from_attached_database(
     } else {
         ""
     };
+    let source_restore_columns = if layout.has_clipboard_source {
+        "source_application, source_window_title"
+    } else {
+        "NULL, NULL"
+    };
     let result = conn.execute_batch(&format!(
         "BEGIN IMMEDIATE;
          DELETE FROM clipboard_item_tags;
@@ -613,9 +652,11 @@ fn restore_from_attached_database(
 
          INSERT INTO clipboard_items
            (id, content_type, content, preview, hash, size, metadata, is_favorited,
-            created_at, last_used_at, is_sensitive, sensitivity_reason)
+            created_at, last_used_at, is_sensitive, sensitivity_reason,
+            source_application, source_window_title)
          SELECT id, content_type, content, preview, hash, size, metadata, is_favorited,
-            created_at, last_used_at, is_sensitive, sensitivity_reason
+            created_at, last_used_at, is_sensitive, sensitivity_reason,
+            {source_restore_columns}
          FROM restore_db.clipboard_items;
 
          INSERT INTO tags (id, name, color, created_at)
@@ -683,6 +724,25 @@ mod tests {
             rusqlite::params![content, hash, content.len() as i64],
         )
         .unwrap();
+    }
+
+    fn insert_text_with_source(
+        db: &Database,
+        content: &str,
+        application: &str,
+        window_title: Option<&str>,
+    ) -> ClipboardItem {
+        let item = NewClipboardItem {
+            content_type: ContentType::Text,
+            data: content.as_bytes().to_vec(),
+            preview: Some(content.to_string()),
+            hash: normal_text_hash(content),
+            size: content.len() as i64,
+            metadata: None,
+            formats: Vec::new(),
+        };
+        crate::database::clipboard::insert_with_source(db, &item, Some(application), window_title)
+            .unwrap()
     }
 
     fn insert_rich_text(db: &Database, content: &str, html: &str) -> ClipboardItem {
@@ -784,6 +844,33 @@ mod tests {
             .formats
             .iter()
             .any(|format| format.format == ClipboardFormatType::Html));
+    }
+
+    #[test]
+    fn json_export_and_import_preserve_source_attribution() {
+        let dir = temp_dir("json-source-attribution");
+        let source_path = dir.join("source.db");
+        let target_path = dir.join("target.db");
+        let export_path = dir.join("items.json");
+        let source = create_db(&source_path);
+        insert_text_with_source(
+            &source,
+            "exported with source",
+            "notes.exe",
+            Some("Research notes"),
+        );
+
+        export_json(&source, export_path.to_str().unwrap()).unwrap();
+        let target = create_db(&target_path);
+        import_json(&target, export_path.to_str().unwrap()).unwrap();
+
+        let imported = crate::database::clipboard::get_list(&target, 10, 0).unwrap();
+        assert_eq!(imported.len(), 1);
+        assert_eq!(imported[0].source_application.as_deref(), Some("notes.exe"));
+        assert_eq!(
+            imported[0].source_window_title.as_deref(),
+            Some("Research notes")
+        );
     }
 
     #[test]
@@ -1010,7 +1097,7 @@ mod tests {
         let version = crate::database::config::get(&current, "db_version")
             .unwrap()
             .unwrap();
-        assert_eq!(version, "5");
+        assert_eq!(version, "6");
     }
 
     #[test]
@@ -1055,6 +1142,15 @@ mod tests {
         let source = create_db(&source_path);
         let image = insert_image(&source, "v5-ocr-image");
         crate::database::ocr::complete(&source, image.id, "备份中的识别文字").unwrap();
+        {
+            let conn = source.get_connection().unwrap();
+            conn.execute_batch(
+                "UPDATE app_config SET value = '5' WHERE key = 'db_version';
+                 ALTER TABLE clipboard_items DROP COLUMN source_application;
+                 ALTER TABLE clipboard_items DROP COLUMN source_window_title;",
+            )
+            .unwrap();
+        }
         backup_database(&source, backup_path.to_str().unwrap()).unwrap();
 
         restore_database(&current, &current_path, backup_path.to_str().unwrap()).unwrap();
@@ -1065,6 +1161,71 @@ mod tests {
         assert_eq!(ocr.status, OcrStatus::Completed);
         assert_eq!(ocr.text, "备份中的识别文字");
         assert_eq!(ocr.error, None);
+        assert_eq!(restored[0].source_application, None);
+        assert_eq!(restored[0].source_window_title, None);
+    }
+
+    #[test]
+    fn restore_preserves_v6_source_attribution() {
+        let dir = temp_dir("v6-source-restore");
+        let current_path = dir.join("current.db");
+        let source_path = dir.join("source.db");
+        let backup_path = dir.join("source-backup.db");
+
+        let current = create_db(&current_path);
+        insert_text(&current, "current-item");
+        let source = create_db(&source_path);
+        insert_text_with_source(
+            &source,
+            "attributed text",
+            "browser.exe",
+            Some("Foundation plan"),
+        );
+        backup_database(&source, backup_path.to_str().unwrap()).unwrap();
+
+        restore_database(&current, &current_path, backup_path.to_str().unwrap()).unwrap();
+
+        let restored = crate::database::clipboard::get_list(&current, 10, 0).unwrap();
+        assert_eq!(restored.len(), 1);
+        assert_eq!(
+            restored[0].source_application.as_deref(),
+            Some("browser.exe")
+        );
+        assert_eq!(
+            restored[0].source_window_title.as_deref(),
+            Some("Foundation plan")
+        );
+    }
+
+    #[test]
+    fn restore_rejects_v6_backup_missing_source_columns_before_mutation() {
+        let dir = temp_dir("v6-missing-source-columns");
+        let current_path = dir.join("current.db");
+        let restore_path = dir.join("restore-v6.db");
+
+        let current = create_db(&current_path);
+        insert_text(&current, "keep-current-data");
+        let restore = create_db(&restore_path);
+        {
+            let conn = restore.get_connection().unwrap();
+            conn.execute(
+                "ALTER TABLE clipboard_items DROP COLUMN source_window_title",
+                [],
+            )
+            .unwrap();
+        }
+        drop(restore);
+
+        let result = restore_database(&current, &current_path, restore_path.to_str().unwrap());
+
+        assert!(matches!(
+            result,
+            Err(AppError::InvalidInput(message))
+                if message.contains("clipboard_items")
+                    && message.contains("source_window_title")
+        ));
+        assert_eq!(count_items(&current_path), 1);
+        assert_eq!(first_content(&current_path), "keep-current-data");
     }
 
     #[test]

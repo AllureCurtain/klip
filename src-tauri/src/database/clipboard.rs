@@ -265,6 +265,37 @@ mod tests {
         assert!(matches!(result, Err(AppError::InvalidInput(_))));
         assert!(get_list(&db, 100, 0).unwrap().is_empty());
     }
+
+    #[test]
+    fn source_attribution_updates_only_when_the_new_insert_has_source() {
+        let db = test_db();
+        let content = "same clipboard content";
+        let item = crate::database::types::NewClipboardItem {
+            content_type: ContentType::Text,
+            data: content.as_bytes().to_vec(),
+            preview: Some(content.into()),
+            hash: format!("{:x}", sha2::Sha256::digest(content.as_bytes())),
+            size: content.len() as i64,
+            metadata: None,
+            formats: Vec::new(),
+        };
+
+        let first =
+            insert_with_source(&db, &item, Some("first.exe"), Some("First document")).unwrap();
+        assert_eq!(first.source_application.as_deref(), Some("first.exe"));
+        assert_eq!(first.source_window_title.as_deref(), Some("First document"));
+
+        let without_source = insert(&db, &item).unwrap();
+        assert_eq!(without_source.source_application, first.source_application);
+        assert_eq!(
+            without_source.source_window_title,
+            first.source_window_title
+        );
+
+        let changed = insert_with_source(&db, &item, Some("second.exe"), None).unwrap();
+        assert_eq!(changed.source_application.as_deref(), Some("second.exe"));
+        assert_eq!(changed.source_window_title, None);
+    }
 }
 
 pub fn get_list(db: &Database, limit: i64, offset: i64) -> Result<Vec<ClipboardItem>, AppError> {
@@ -306,6 +337,15 @@ pub fn insert(
     db: &Database,
     item: &crate::database::types::NewClipboardItem,
 ) -> Result<ClipboardItem, AppError> {
+    insert_with_source(db, item, None, None)
+}
+
+pub(crate) fn insert_with_source(
+    db: &Database,
+    item: &crate::database::types::NewClipboardItem,
+    source_application: Option<&str>,
+    source_window_title: Option<&str>,
+) -> Result<ClipboardItem, AppError> {
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
@@ -336,13 +376,23 @@ pub fn insert(
 
     transaction.execute(
         "INSERT INTO clipboard_items
-         (content_type, content, preview, hash, size, metadata, is_sensitive,
-          sensitivity_reason, created_at, last_used_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+         (content_type, content, preview, hash, size, metadata, source_application,
+          source_window_title, is_sensitive, sensitivity_reason, created_at, last_used_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
          ON CONFLICT(hash) DO UPDATE SET
             last_used_at = excluded.last_used_at,
             is_sensitive = excluded.is_sensitive,
-            sensitivity_reason = excluded.sensitivity_reason",
+            sensitivity_reason = excluded.sensitivity_reason,
+            source_application = CASE
+                WHEN excluded.source_application IS NOT NULL OR excluded.source_window_title IS NOT NULL
+                THEN excluded.source_application
+                ELSE clipboard_items.source_application
+            END,
+            source_window_title = CASE
+                WHEN excluded.source_application IS NOT NULL OR excluded.source_window_title IS NOT NULL
+                THEN excluded.source_window_title
+                ELSE clipboard_items.source_window_title
+            END",
         rusqlite::params![
             item.content_type.as_str(),
             content_str,
@@ -350,6 +400,8 @@ pub fn insert(
             item.hash,
             item.size,
             item.metadata,
+            source_application,
+            source_window_title,
             sensitivity.is_some() as i64,
             sensitivity.as_deref(),
             now,

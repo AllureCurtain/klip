@@ -315,7 +315,7 @@ mod tests {
             .unwrap()
             .unwrap();
 
-        assert_eq!(version, "5");
+        assert_eq!(version, "6");
     }
 
     #[test]
@@ -410,7 +410,7 @@ mod tests {
             )
             .unwrap();
 
-        assert_eq!(version, "5");
+        assert_eq!(version, "6");
         assert_eq!(format, ("text".into(), "legacy text".into()));
         assert_eq!(image_ocr_status, "pending");
     }
@@ -452,8 +452,62 @@ mod tests {
             )
             .unwrap();
 
-        assert_eq!(version, "5");
+        assert_eq!(version, "6");
         assert_eq!(status, "pending");
+    }
+
+    #[test]
+    fn v5_database_is_migrated_with_empty_source_attribution() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "PRAGMA foreign_keys=ON;
+             CREATE TABLE app_config (
+                 key TEXT PRIMARY KEY,
+                 value TEXT NOT NULL,
+                 updated_at INTEGER NOT NULL
+             );
+             CREATE TABLE clipboard_items (
+                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                 content_type TEXT NOT NULL,
+                 content TEXT NOT NULL,
+                 preview TEXT,
+                 hash TEXT NOT NULL UNIQUE,
+                 size INTEGER NOT NULL DEFAULT 0,
+                 metadata TEXT,
+                 is_favorited INTEGER NOT NULL DEFAULT 0,
+                 is_sensitive INTEGER NOT NULL DEFAULT 0,
+                 sensitivity_reason TEXT,
+                 created_at INTEGER NOT NULL,
+                 last_used_at INTEGER NOT NULL
+             );
+             INSERT INTO app_config (key, value, updated_at) VALUES ('db_version', '5', 1);
+             INSERT INTO clipboard_items
+               (content_type, content, preview, hash, size, created_at, last_used_at)
+             VALUES ('text', 'v5 text', 'v5 text', 'v5-hash', 7, 1, 1);",
+        )
+        .unwrap();
+
+        let db = Database::from_conn(conn);
+        db.init_schema().unwrap();
+
+        let conn = db.get_connection().unwrap();
+        let version: String = conn
+            .query_row(
+                "SELECT value FROM app_config WHERE key = 'db_version'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let source: (Option<String>, Option<String>) = conn
+            .query_row(
+                "SELECT source_application, source_window_title FROM clipboard_items WHERE id = 1",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+
+        assert_eq!(version, "6");
+        assert_eq!(source, (None, None));
     }
 
     #[test]
@@ -492,7 +546,7 @@ mod tests {
         let version = crate::database::config::get(&db, "db_version")
             .unwrap()
             .unwrap();
-        assert_eq!(version, "5");
+        assert_eq!(version, "6");
         drop(db);
 
         let backups = std::fs::read_dir(&dir)

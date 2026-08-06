@@ -4,7 +4,7 @@ use rusqlite::types::Value;
 use rusqlite::{params_from_iter, OptionalExtension};
 
 const CLIPBOARD_ITEM_COLUMNS: &str =
-    "id, content_type, content, preview, hash, size, metadata, is_favorited, created_at, last_used_at, is_sensitive, sensitivity_reason";
+    "id, content_type, content, preview, hash, size, metadata, source_application, source_window_title, is_favorited, created_at, last_used_at, is_sensitive, sensitivity_reason";
 const CLIPBOARD_ITEM_ORDER_BY: &str = " ORDER BY last_used_at DESC, created_at DESC";
 
 #[derive(Debug, Clone)]
@@ -304,11 +304,13 @@ fn clipboard_item_from_row(row: &rusqlite::Row<'_>) -> ClipboardItem {
         hash: row.get(4).unwrap_or_default(),
         size: row.get(5).unwrap_or(0),
         metadata: row.get(6).unwrap_or(None),
-        is_favorited: row.get::<_, i64>(7).unwrap_or(0) != 0,
-        created_at: row.get(8).unwrap_or(0),
-        last_used_at: row.get(9).unwrap_or(0),
-        is_sensitive: row.get::<_, i64>(10).unwrap_or(0) != 0,
-        sensitivity_reason: row.get(11).unwrap_or(None),
+        source_application: row.get(7).unwrap_or(None),
+        source_window_title: row.get(8).unwrap_or(None),
+        is_favorited: row.get::<_, i64>(9).unwrap_or(0) != 0,
+        created_at: row.get(10).unwrap_or(0),
+        last_used_at: row.get(11).unwrap_or(0),
+        is_sensitive: row.get::<_, i64>(12).unwrap_or(0) != 0,
+        sensitivity_reason: row.get(13).unwrap_or(None),
         formats: Vec::new(),
         ocr: None,
         tags: Vec::new(),
@@ -409,7 +411,7 @@ mod tests {
         let query = build_clipboard_query(&spec);
         assert_eq!(
             query.sql,
-            "SELECT id, content_type, content, preview, hash, size, metadata, is_favorited, created_at, last_used_at, is_sensitive, sensitivity_reason FROM clipboard_items WHERE (preview = ?1 OR (content_type != 'image' AND content = ?1) OR id IN (SELECT item_id FROM clipboard_ocr WHERE status = 'completed' AND text = ?1)) AND content_type = ?2 AND is_favorited = 1 AND is_sensitive = ?3 AND id IN (SELECT item_id FROM clipboard_item_tags WHERE tag_id = ?4) AND created_at >= ?5 AND created_at <= ?6 ORDER BY last_used_at DESC, created_at DESC LIMIT ?7 OFFSET ?8"
+            "SELECT id, content_type, content, preview, hash, size, metadata, source_application, source_window_title, is_favorited, created_at, last_used_at, is_sensitive, sensitivity_reason FROM clipboard_items WHERE (preview = ?1 OR (content_type != 'image' AND content = ?1) OR id IN (SELECT item_id FROM clipboard_ocr WHERE status = 'completed' AND text = ?1)) AND content_type = ?2 AND is_favorited = 1 AND is_sensitive = ?3 AND id IN (SELECT item_id FROM clipboard_item_tags WHERE tag_id = ?4) AND created_at >= ?5 AND created_at <= ?6 ORDER BY last_used_at DESC, created_at DESC LIMIT ?7 OFFSET ?8"
         );
         assert_eq!(
             query.params,

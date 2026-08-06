@@ -36,6 +36,8 @@ function makeTextItem(overrides: Partial<ClipboardItemType> = {}): ClipboardItem
     hash: 'hash-42',
     size: 5,
     metadata: null,
+    source_application: null,
+    source_window_title: null,
     is_favorited: false,
     is_sensitive: false,
     sensitivity_reason: null,
@@ -474,6 +476,31 @@ describe('ClipboardItem', () => {
     expect(sensitiveMeta.className).toContain('text-muted-foreground');
     expect(sensitiveMeta.className).not.toContain('text-destructive');
     expect(tagMeta.className).not.toContain('bg-muted');
+  });
+
+  it('shows a compact source application with the window title as a tooltip', () => {
+    render(
+      <ClipboardItem
+        item={makeTextItem({
+          source_application: 'browser.exe',
+          source_window_title: 'Foundation implementation plan',
+        })}
+        index={1}
+        isSelected={false}
+      />
+    );
+
+    const source = screen.getByTestId('clipboard-source');
+    expect(screen.getByText('browser.exe')).toBeTruthy();
+    expect(source.getAttribute('title')).toBe(
+      'browser.exe - Foundation implementation plan'
+    );
+  });
+
+  it('omits source metadata when attribution is unavailable', () => {
+    render(<ClipboardItem item={makeTextItem()} index={1} isSelected={false} />);
+
+    expect(screen.queryByTestId('clipboard-source')).toBeNull();
   });
 
   it('enables checkbox selection only inside selection mode', () => {

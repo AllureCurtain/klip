@@ -108,6 +108,8 @@ pub struct ClipboardItem {
     pub hash: String,
     pub size: i64,
     pub metadata: Option<String>,
+    pub source_application: Option<String>,
+    pub source_window_title: Option<String>,
     pub is_favorited: bool,
     pub is_sensitive: bool,
     pub sensitivity_reason: Option<String>,

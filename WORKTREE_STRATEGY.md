@@ -324,11 +324,11 @@ rich-text、search-tantivy、OCR 都要加新 IPC 命令和 HTTP 路由，因此
 现状：`monitor.rs:547` 的非 Windows 分支直接 `ClipboardSource::default()`，等于没有来源。
 
 任务清单：
-- [ ] 抽象来源获取接口
-- [ ] Windows：保留现有 Win32 实现
-- [ ] macOS：用 `NSWorkspace` / Accessibility 取前台应用（**需要辅助功能授权，要处理未授权的降级**）
-- [ ] Linux(X11)：用 X11 取前台应用；Wayland 下多数合成器不给这个信息，直接关闭功能
-- [ ] 不支持时：功能自动关闭并给出提示
+- [x] 抽象来源获取接口
+- [x] Windows：保留现有 Win32 实现
+- [x] macOS：用 `NSWorkspace` / Accessibility 取前台应用（**需要辅助功能授权，要处理未授权的降级**）
+- [x] Linux(X11)：用 X11 取前台应用；Wayland 下多数合成器不给这个信息，直接关闭功能
+- [x] 不支持时：功能自动关闭并给出提示
 
 完成标准：
 - 三平台能显示来源应用；不支持平台不显示且不报错

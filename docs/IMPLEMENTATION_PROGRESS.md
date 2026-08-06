@@ -1,6 +1,6 @@
 # Foundation Implementation Progress
 
-- 最后更新时间：2026-08-07 01:55（Asia/Shanghai）
+- 最后更新时间：2026-08-07 02:08（Asia/Shanghai）
 - 当前分支：`feat/foundation`
 - 基准提交：`423ab24`（与 `main` / `origin/main` 一致）
 
@@ -16,8 +16,9 @@
 
 ## 当前任务
 
-- 当前任务：`platform-source` 功能块；先审查 Windows `ClipboardSource` 采集、来源规则匹配和默认降级语义，再实现统一来源接口及 macOS/X11 后端。
-- platform-focus 已在 `82fa3a1` 提交；当前工作树只应包含本次里程碑记录，提交后再开始修改 platform-source 代码。
+- 当前任务：`platform-source` 功能块已完成实现、文档、针对性验证和 Windows runtime acceptance；正在执行只暂存本功能相关文件、检查 staged diff 并创建 `feat: track clipboard source across supported platforms` commit。
+- §8.5 实施项已据实勾选；串行队列的“通过并 commit”项须等 commit 实际创建后再勾选。macOS/Linux 真实桌面验收仍保持 SKIPPED，不影响已完成的代码、目标编译和 Windows 验收结论。
+- Windows 保留现有进程文件名和窗口标题行为；macOS 使用 `NSWorkspace.frontmostApplication`，Accessibility 未授权时保留应用名且窗口标题为空；X11 使用 EWMH 活动窗口/PID/标题并从 `/proc` 解析应用名；Wayland和其他不支持平台一次性提示后返回空来源。
 - Windows 完整“监听 → 捕获 → 选择历史 → 粘贴”闭环仍列为最终运行时验收项。
 
 ## 已运行的测试及结果
@@ -74,6 +75,14 @@
 - platform-focus 目标后端静态编译：使用仓库外临时最小 crate 直接 `include!` 实际 `platform/focus/linux.rs` 与 `macos.rs`；`cargo check --target x86_64-unknown-linux-gnu` 和 `cargo check --target aarch64-apple-darwin` 均通过。输出只有临时 harness 未调用函数导致的 `dead_code` warning，实际后端无类型/API 错误。
 - platform-focus Windows 专项：`cargo fmt --all -- --check`、`cargo test platform::focus -- --test-threads=1`（1 项）、`cargo test clipboard::paste -- --test-threads=1`（4 项）和 `cargo clippy -- -D warnings` 全部通过。
 - platform-focus Windows runtime acceptance：通过。隔离端口 `27832` 启动应用，将唯一文本捕获为 `id=1`；外部 WinForms 文本框在显示 Klip 前为前台 `HWND 0x20e1a` / PID 8080，`POST /api/window/show` 后前台切至 Klip，`POST /api/clipboard/1/paste` 后恢复到同一目标 HWND，并完整收到 `KLIP-FOCUS-ACCEPTANCE-20260807-0145`。日志同时记录 `focus capture` 和 `focus restore`；Tauri/Vite/Cargo/WebView 与测试窗体进程已全部停止。
+- platform-source Windows 编译：把原 Win32 进程文件名/窗口标题采集迁移到 `platform::source` 后，`cargo fmt --all` 与实际 Windows `cargo check` 通过。
+- platform-source Linux 后端静态编译：仓库外最小 crate 直接编译实际 `platform/source/linux.rs`，`cargo check --target x86_64-unknown-linux-gnu` 通过；覆盖 `_NET_ACTIVE_WINDOW`、`_NET_WM_PID`、UTF-8 `_NET_WM_NAME`/`WM_NAME` fallback 和 `/proc` 应用名解析的类型/API。真实 X11/Wayland 运行仍为 SKIPPED。
+- platform-source macOS 后端静态编译：仓库外最小 crate 直接编译实际 `platform/source/macos.rs`，`cargo check --target aarch64-apple-darwin` 通过；确认 `NSWorkspace.frontmostApplication`、应用名 fallback、ApplicationServices Accessibility FFI 与 Core Foundation 所有权处理可编译。真实授权/未授权桌面运行仍为 SKIPPED。
+- platform-source DB v6 编译与专项：`cargo check` 通过；来源专项筛选 5 项通过，覆盖 monitor 落库、哈希冲突有来源更新/无来源保留、v5→v6 空值迁移、JSON v1 导入导出保留、v6 backup restore 保留。
+- platform-source restore 回归：`cargo test database::data_portability::tests::restore_ -- --test-threads=1` 通过 11 项，包含真实 v5 缺少来源列恢复为 `NULL`、v6 缺来源列在 mutation 前拒绝，以及既有 v3/v4/v5/损坏/新版本边界；查询列顺序专项 1 项通过。
+- platform-source 前端/API 专项：`pnpm test -- --run src/components/clipboard/ClipboardItem.test.tsx` 通过 25 项（含有来源显示/tooltip 与无来源不显示）；`pnpm build` 通过；OpenAPI nullable/required 来源字段专项 1 项通过。
+- platform-source 完整 targeted 静态检查：monitor 9 项、connection/migration 12 项、restore 11 项、OpenAPI 6 项通过；`pnpm lint`、`cargo fmt --all -- --check`、`cargo clippy -- -D warnings` 和 `git diff --check` 均通过。
+- platform-source Windows runtime acceptance：通过。隔离数据/日志与端口 `27833` 启动完整 Tauri dev；外部 WinForms 窗口进程 `powershell.exe`、标题 `Klip Source Acceptance Target` 在保持前台时写入 `KLIP-SOURCE-ACCEPTANCE-20260807-0202`。HTTP 和 SQLite 均返回 `id=1`、相同应用名/标题，`db_version=6`。验收后 Klip/Vite/Cargo/WebView/目标窗体共 21 个进程全部停止，端口 `1420/27833` 已释放；证据目录为 `C:\tmp\klip-source-runtime-20260807-0202`。
 
 ## 技术决策
 
@@ -90,6 +99,8 @@
 - `oar-ocr` 的 0.6.x 依赖范围不能任由 Cargo 升到不兼容的 core/ort 组合；必须把验证通过的传递版本一并锁定，并在升级时重新做编译与推理验收。
 - OCR 的 ONNX Runtime 分发必须同时满足本机 MSVC ABI、离线运行和安装包携带；若官方静态库与现有 toolset 不兼容，优先切换 `ORT_PREFER_DYNAMIC_LINK=1` + 显式打包 `onnxruntime.dll`，而不是伪造缺失 STL 符号或升级整机工具链后声称项目本身可复现。
 - 焦点恢复以平台进程/窗口标识为短期进程内状态：Windows 保存 HWND，macOS 保存前台应用 PID，Linux X11 保存 EWMH 活动窗口；捕获到 Klip 自身时保留上一外部目标，失效目标清空。Wayland 没有通用激活协议，明确静默跳过。
+- 来源持久化使用 DB v6 的 `clipboard_items.source_application` / `source_window_title` 可空列。monitor 走专用带来源插入接口；普通插入或导入缺少来源时不清空哈希冲突记录的旧来源，已知新来源则更新应用和与其配套的可空窗口标题。
+- DB v5 备份恢复时两个来源字段回填 `NULL`；DB v6 备份必须同时具备两个字段并原样保留，否则在修改当前数据库前拒绝。JSON v1 随 Rust 类型自然兼容新增可空字段；CSV v1 固定表头暂不增加来源列，避免破坏既有严格导入契约。
 
 ## 阻塞或跳过项
 
@@ -101,4 +112,5 @@
 
 ## 下一步准确操作
 
-- 只暂存 `docs/IMPLEMENTATION_PROGRESS.md` 并提交 platform-focus 里程碑进度；确认工作树干净后读取 `clipboard/monitor.rs` 的 `ClipboardSource` 与 capture gate、`database/source_rules.rs`、前端来源展示和平台依赖，确认“无来源时照常捕获”的全部调用路径。
+- 只暂存 platform-source 的代码、测试、Cargo、CHANGELOG、API/DATABASE/ARCHITECTURE、`WORKTREE_STRATEGY.md` 与本进度记录；运行 `git diff --cached --check` 并审查 staged stat 后提交 `feat: track clipboard source across supported platforms`。
+- 提交后把 commit SHA 写入本文件，切换当前任务到工具链/最终验证并创建独立 milestone progress commit；随后继续 README/toolchain checklist，不提前 push。

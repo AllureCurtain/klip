@@ -753,6 +753,8 @@ interface ClipboardItem {
   hash: string;
   size: number;
   metadata: string | null;
+  source_application: string | null;
+  source_window_title: string | null;
   is_favorited: boolean;
   is_sensitive: boolean;
   sensitivity_reason: string | null;
@@ -771,6 +773,8 @@ interface ClipboardItem {
   last_used_at: number; // 毫秒时间戳
 }
 ```
+
+`source_application` 是捕获时可用的应用名或进程文件名，`source_window_title` 是可选窗口标题。macOS 未授予 Accessibility 权限时仍返回应用名但标题为 `null`；Wayland 和不支持的平台两个字段均为 `null`，不会因此跳过捕获。JSON v1 导入导出保留这两个字段，CSV v1 为兼容既有固定表头不携带来源。
 
 ### 3.2 Tag
 

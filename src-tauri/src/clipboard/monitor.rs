@@ -271,9 +271,9 @@ impl ClipboardHandler for WatcherHandler {
 /// platform-neutral mechanism, and it is bounded: it happens once per paste, on
 /// the worker thread.
 fn handle_clipboard_change(app_handle: &AppHandle) {
-    let source = current_clipboard_source();
+    let source = crate::platform::source::current();
     if let Some(reason) =
-        should_skip_capture(app_handle, source.process_name(), source.window_title())
+        should_skip_capture(app_handle, source.application(), source.window_title())
     {
         tracing::debug!("Clipboard capture skipped: {:?}", reason);
         return;
@@ -293,7 +293,7 @@ fn handle_clipboard_change(app_handle: &AppHandle) {
         save_clipboard_item(
             app_handle,
             &item,
-            source.process_name(),
+            source.application(),
             source.window_title(),
         );
     }
@@ -412,7 +412,7 @@ pub fn insert_from_monitor(
         return Ok(None);
     }
 
-    database::clipboard::insert(db, item).map(Some)
+    database::clipboard::insert_with_source(db, item, process_name, window_title).map(Some)
 }
 
 pub fn capture_gate_decision(
@@ -466,100 +466,6 @@ fn now_millis() -> i64 {
 /// Diagnostics helper: what formats the clipboard is currently offering.
 pub fn current_clipboard_formats() -> Vec<String> {
     backend::available_formats()
-}
-
-// --- Source attribution -------------------------------------------------
-
-#[derive(Default)]
-struct ClipboardSource {
-    process_name: Option<String>,
-    window_title: Option<String>,
-}
-
-impl ClipboardSource {
-    fn process_name(&self) -> Option<&str> {
-        self.process_name.as_deref()
-    }
-
-    fn window_title(&self) -> Option<&str> {
-        self.window_title.as_deref()
-    }
-}
-
-#[cfg(target_os = "windows")]
-fn current_clipboard_source() -> ClipboardSource {
-    use windows::core::PWSTR;
-    use windows::Win32::Foundation::CloseHandle;
-    use windows::Win32::System::Threading::{
-        OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32,
-        PROCESS_QUERY_LIMITED_INFORMATION,
-    };
-    use windows::Win32::UI::WindowsAndMessaging::{
-        GetForegroundWindow, GetWindowTextLengthW, GetWindowTextW, GetWindowThreadProcessId,
-    };
-
-    unsafe {
-        let hwnd = GetForegroundWindow();
-        if hwnd.0.is_null() {
-            return ClipboardSource::default();
-        }
-
-        let title = {
-            let len = GetWindowTextLengthW(hwnd);
-            if len > 0 {
-                let mut buffer = vec![0u16; len as usize + 1];
-                let copied = GetWindowTextW(hwnd, &mut buffer);
-                if copied > 0 {
-                    Some(String::from_utf16_lossy(&buffer[..copied as usize]))
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        };
-
-        let mut pid = 0u32;
-        let _ = GetWindowThreadProcessId(hwnd, Some(&mut pid));
-        let process_name = if pid > 0 {
-            OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid)
-                .ok()
-                .and_then(|handle| {
-                    let mut buffer = vec![0u16; 32768];
-                    let mut len = buffer.len() as u32;
-                    let result = QueryFullProcessImageNameW(
-                        handle,
-                        PROCESS_NAME_WIN32,
-                        PWSTR::from_raw(buffer.as_mut_ptr()),
-                        &mut len,
-                    );
-                    let _ = CloseHandle(handle);
-                    result.ok().and_then(|_| {
-                        let path = String::from_utf16_lossy(&buffer[..len as usize]);
-                        std::path::Path::new(&path)
-                            .file_name()
-                            .and_then(|name| name.to_str())
-                            .map(|name| name.to_string())
-                    })
-                })
-        } else {
-            None
-        };
-
-        ClipboardSource {
-            process_name,
-            window_title: title,
-        }
-    }
-}
-
-/// No source attribution outside Windows yet. Returning an empty source means
-/// the capture gate sees no process or title to match, and
-/// `source_should_be_ignored` therefore lets the item through -- capturing is
-/// the correct default when the source is unknown.
-#[cfg(not(target_os = "windows"))]
-fn current_clipboard_source() -> ClipboardSource {
-    ClipboardSource::default()
 }
 
 pub fn start_monitor(app_handle: AppHandle) -> Result<(), crate::AppError> {
@@ -676,6 +582,20 @@ mod tests {
 
         let manual = database::clipboard::insert(&db, &item).unwrap();
         assert_eq!(manual.preview.as_deref(), Some("monitor should skip"));
+    }
+
+    #[test]
+    fn insert_from_monitor_persists_source_attribution() {
+        let db = test_db();
+        let item = text_item("source-aware capture");
+
+        let saved =
+            super::insert_from_monitor(&db, &item, Some("editor.exe"), Some("Draft document"))
+                .unwrap()
+                .unwrap();
+
+        assert_eq!(saved.source_application.as_deref(), Some("editor.exe"));
+        assert_eq!(saved.source_window_title.as_deref(), Some("Draft document"));
     }
 
     #[test]

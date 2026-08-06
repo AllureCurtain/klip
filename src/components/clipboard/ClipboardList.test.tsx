@@ -55,6 +55,8 @@ function makeTextItem(overrides: Partial<ClipboardItemType> = {}): ClipboardItem
     hash: 'hash-42',
     size: 5,
     metadata: null,
+    source_application: null,
+    source_window_title: null,
     is_favorited: false,
     is_sensitive: false,
     sensitivity_reason: null,

@@ -2841,6 +2841,7 @@ dependencies = [
  "axum",
  "base64 0.22.1",
  "clipboard-rs",
+ "core-foundation",
  "csv",
  "dirs 6.0.0",
  "enigo",

@@ -11,7 +11,7 @@ pub mod schema;
 pub mod snippets;
 pub mod types;
 
-pub const CURRENT_DB_VERSION: i64 = 5;
+pub const CURRENT_DB_VERSION: i64 = 6;
 
 pub use connection::{app_data_dir, get_db_path, init, Database};
 pub use types::{
