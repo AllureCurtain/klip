@@ -28,6 +28,7 @@
 | 3 | [ARCHITECTURE.md](ARCHITECTURE.md) | 理解前端、后端、Tauri 和数据库模块 |
 | 4 | [DATABASE.md](DATABASE.md) | 查看表结构、迁移和数据恢复策略 |
 | 5 | [API.md](API.md) | 查看 Tauri IPC 命令、事件和类型 |
+| 5b | [HTTP_ROUTE_AUDIT.md](HTTP_ROUTE_AUDIT.md) | 查看本地 HTTP API 的路由/OpenAPI/看板/测试覆盖矩阵 |
 | 6 | [DEVELOPMENT.md](DEVELOPMENT.md) | 搭建开发环境并运行验证脚本 |
 | 7 | [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) | 做 Windows 安装包发布前检查 |
 | 8 | [ROADMAP.md](ROADMAP.md) | 查看当前边界和后续方向 |

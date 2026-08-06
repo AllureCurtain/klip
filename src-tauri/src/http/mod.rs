@@ -1,8 +1,10 @@
 #![cfg_attr(test, allow(dead_code, unused_imports, unused_variables))]
 
 mod events;
+pub mod openapi;
 
 use crate::config::registry::{self, RuntimeEffect};
+use crate::database::StatsResponse;
 use crate::database::{
     self, AdvancedSearchQuery, BackupSummary, ClipboardItem, DiagnosticsInfo, ImportSummary,
     RestoreSummary, Snippet, SnippetInput, SourceRule, SourceRuleInput, SystemInfo, Tag,
@@ -26,6 +28,7 @@ use tauri::{Emitter, Listener};
 use tower_http::cors::{AllowOrigin, CorsLayer};
 
 pub use events::{EventBroadcaster, ServerEvent};
+pub use openapi::build_openapi;
 
 const DEFAULT_PORT: u16 = 27717;
 const ENV_PORT: &str = "KLIP_HTTP_PORT";
@@ -149,7 +152,10 @@ fn build_router(
 
     Router::new()
         .route("/api/health", get(health))
+        .route("/api/openapi.json", get(openapi_json_handler))
+        .route("/openapi.json", get(openapi_json_handler))
         .route("/api/events", get(sse_events))
+        .route("/api/stats", get(get_stats))
         .route(
             "/api/clipboard",
             get(list_clipboard).delete(clear_clipboard),
@@ -227,7 +233,10 @@ fn build_router_for_test(
 
     Router::new()
         .route("/api/health", get(health))
+        .route("/api/openapi.json", get(openapi_json_handler))
+        .route("/openapi.json", get(openapi_json_handler))
         .route("/api/events", get(sse_events))
+        .route("/api/stats", get(get_stats))
         .route("/api/qa/ask", post(qa_ask))
         .route("/api/ask", post(qa_ask))
         .fallback(fallback_404)
@@ -302,6 +311,19 @@ async fn health() -> Json<HealthResponse> {
         status: "ok",
         version: env!("CARGO_PKG_VERSION"),
     })
+}
+
+async fn openapi_json_handler() -> Json<serde_json::Value> {
+    Json(build_openapi())
+}
+
+async fn get_stats(State(state): State<AppState>) -> ApiResult<StatsResponse> {
+    let mut stats = json_result(database::clipboard::get_stats(&state.db))?;
+    let db_path = state.data_dir.join("klip.db");
+    if let Ok(metadata) = std::fs::metadata(db_path) {
+        stats.0.db_size_bytes = metadata.len();
+    }
+    Ok(stats)
 }
 
 async fn fallback_404() -> ApiError {
@@ -507,13 +529,18 @@ async fn delete_clipboard(State(state): State<AppState>, Path(id): Path<i64>) ->
 async fn clear_clipboard(State(state): State<AppState>) -> ApiResult<()> {
     let result = database::clipboard::clear(&state.db);
     if result.is_ok() {
-        #[cfg(not(test))]
-        if let Some(app) = &state.app {
-            let _ = app.emit("clipboard-cleared", ());
-        }
-        state.broadcaster.send(ServerEvent::ClipboardCleared);
+        emit_clipboard_cleared(&state);
     }
     json_result(result)
+}
+
+fn emit_clipboard_cleared(state: &AppState) {
+    #[cfg(not(test))]
+    if let Some(app) = &state.app {
+        let _ = app.emit("clipboard-cleared", ());
+        return;
+    }
+    state.broadcaster.send(ServerEvent::ClipboardCleared);
 }
 
 async fn batch_delete(
@@ -767,6 +794,7 @@ fn emit_config_changed(state: &AppState, key: &str, value: &str) {
             "config-changed",
             serde_json::json!({ "key": key, "value": value }),
         );
+        return;
     }
     state.broadcaster.send(ServerEvent::ConfigChanged {
         key: key.to_string(),
@@ -1080,6 +1108,86 @@ mod tests {
 
         assert!(response.status().is_success());
         assert_eq!(response_json(response).await["status"], "ok");
+    }
+
+    #[tokio::test]
+    async fn openapi_endpoints_serve_documented_api_spec() {
+        let app = build_router_for_test(
+            Arc::new(test_db()),
+            None,
+            PathBuf::from("C:/tmp/klip-test"),
+            EventBroadcaster::new(),
+        );
+
+        for path in ["/api/openapi.json", "/openapi.json"] {
+            let response = app
+                .clone()
+                .oneshot(Request::get(path).body(Body::empty()).unwrap())
+                .await
+                .unwrap();
+
+            assert!(
+                response.status().is_success(),
+                "{path} should return the OpenAPI document"
+            );
+            let value = response_json(response).await;
+            assert_eq!(value["openapi"], "3.1.0");
+            assert!(value["paths"]["/api/health"]["get"].is_object());
+            assert!(value["paths"]["/api/stats"]["get"].is_object());
+        }
+    }
+
+    #[tokio::test]
+    async fn stats_endpoint_reports_database_counts() {
+        let db = Arc::new(test_db());
+        insert_text(&db, "hello world");
+        insert_text(&db, "deploy token is klip-secret-123");
+        let tag = database::productization::create_tag(&db, "work", Some("#0d9488")).unwrap();
+        database::snippets::create(
+            &db,
+            SnippetInput {
+                title: "Greeting".to_string(),
+                content: "hello".to_string(),
+                tag_id: Some(tag.id),
+                is_favorited: true,
+            },
+        )
+        .unwrap();
+        database::productization::create_source_rule(
+            &db,
+            SourceRuleInput {
+                match_type: "title".to_string(),
+                pattern: "secret".to_string(),
+                enabled: true,
+            },
+        )
+        .unwrap();
+
+        let app = build_router_for_test(
+            db,
+            None,
+            PathBuf::from("C:/tmp/klip-test"),
+            EventBroadcaster::new(),
+        );
+
+        let response = app
+            .oneshot(Request::get("/api/stats").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        assert!(response.status().is_success());
+        let value = response_json(response).await;
+        assert_eq!(value["total_items"], 2);
+        assert_eq!(value["text_count"], 2);
+        assert_eq!(value["image_count"], 0);
+        assert_eq!(value["tag_count"], 1);
+        assert_eq!(value["snippet_count"], 1);
+        assert_eq!(value["source_rule_count"], 1);
+        assert_eq!(
+            value["total_size_bytes"].as_i64(),
+            Some(("hello world".len() + "deploy token is klip-secret-123".len()) as i64)
+        );
+        assert_eq!(value["db_size_bytes"], 0);
     }
 
     #[tokio::test]

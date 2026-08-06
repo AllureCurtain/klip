@@ -15,5 +15,5 @@ pub use connection::{app_data_dir, get_db_path, init, Database};
 pub use types::{
     AdvancedSearchQuery, BackupSummary, ClipboardItem, ConfigEntry, ContentType, DiagnosticsInfo,
     ImportSummary, NewClipboardItem, RestoreSummary, Snippet, SnippetInput, SourceRule,
-    SourceRuleInput, SystemInfo, Tag,
+    SourceRuleInput, StatsResponse, SystemInfo, Tag,
 };

@@ -162,3 +162,18 @@ pub struct RestoreSummary {
     pub pre_restore_backup_path: String,
     pub pre_restore_backup_size: u64,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StatsResponse {
+    pub total_items: i64,
+    pub text_count: i64,
+    pub image_count: i64,
+    pub file_count: i64,
+    pub favorite_count: i64,
+    pub sensitive_count: i64,
+    pub tag_count: i64,
+    pub snippet_count: i64,
+    pub source_rule_count: i64,
+    pub total_size_bytes: i64,
+    pub db_size_bytes: u64,
+}

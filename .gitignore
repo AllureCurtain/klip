@@ -4,10 +4,20 @@ coverage/
 target
 .DS_Store
 *.log
+.cargo/*
+!.cargo/config.toml
+.rustup/
+.profile
+.bashrc
 .env
 .env.*
 !.env.example
+*.db
+*.sqlite
+*.sqlite3
+*.deb
 *.tsbuildinfo
+*.pdf
 vite.config.d.ts
 vite.config.js
 src-tauri/gen/
@@ -15,3 +25,4 @@ src-tauri/icons/android/
 src-tauri/icons/ios/
 e2e/.tmp/
 .worktrees/
+软著补正重做/

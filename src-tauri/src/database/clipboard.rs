@@ -2,10 +2,66 @@ use base64::Engine;
 
 use crate::config::registry;
 use crate::database::clipboard_query::{self, ClipboardQuerySpec};
-use crate::database::types::ContentType;
+use crate::database::types::{ContentType, StatsResponse};
 use crate::{AppError, Database};
 
 use super::types::ClipboardItem;
+
+pub fn get_stats(db: &Database) -> Result<StatsResponse, AppError> {
+    let conn = db.get_connection()?;
+    let total_items =
+        conn.query_row("SELECT COUNT(*) FROM clipboard_items", [], |row| row.get(0))?;
+    let text_count = conn.query_row(
+        "SELECT COUNT(*) FROM clipboard_items WHERE content_type = 'text'",
+        [],
+        |row| row.get(0),
+    )?;
+    let image_count = conn.query_row(
+        "SELECT COUNT(*) FROM clipboard_items WHERE content_type = 'image'",
+        [],
+        |row| row.get(0),
+    )?;
+    let file_count = conn.query_row(
+        "SELECT COUNT(*) FROM clipboard_items WHERE content_type = 'file'",
+        [],
+        |row| row.get(0),
+    )?;
+    let favorite_count = conn.query_row(
+        "SELECT COUNT(*) FROM clipboard_items WHERE is_favorited = 1",
+        [],
+        |row| row.get(0),
+    )?;
+    let sensitive_count = conn.query_row(
+        "SELECT COUNT(*) FROM clipboard_items WHERE is_sensitive = 1",
+        [],
+        |row| row.get(0),
+    )?;
+    let tag_count = conn.query_row("SELECT COUNT(*) FROM tags", [], |row| row.get(0))?;
+    let snippet_count = conn.query_row("SELECT COUNT(*) FROM snippets", [], |row| row.get(0))?;
+    let source_rule_count =
+        conn.query_row("SELECT COUNT(*) FROM clipboard_source_rules", [], |row| {
+            row.get(0)
+        })?;
+    let total_size_bytes = conn.query_row(
+        "SELECT COALESCE(SUM(size), 0) FROM clipboard_items",
+        [],
+        |row| row.get(0),
+    )?;
+
+    Ok(StatsResponse {
+        total_items,
+        text_count,
+        image_count,
+        file_count,
+        favorite_count,
+        sensitive_count,
+        tag_count,
+        snippet_count,
+        source_rule_count,
+        total_size_bytes,
+        db_size_bytes: 0,
+    })
+}
 
 #[cfg(test)]
 mod tests {
