@@ -1,27 +1,9 @@
 # Klip 多 Worktree 开发策略与构建/数据目录规范
 
-> 本文档定义 Klip 从"讨论方案"进入"并行开发"的执行策略。
+> 本文档是 Klip 下一阶段的实现目标。
 > 核心原则：**地基（阶段一）先串行合入 main，再分叉多个 worktree 并行推进。**
 > 覆盖三块硬约束：Windows 构建成本、运行时进程级资源冲突、并行分支的代码冲突面。
->
-> **本版已按真实代码逐条核对（2026-08-06）。** 所有"现状"描述都附了文件:行号，可直接跳转验证。
-> 修订记录见文末 §10。
-
----
-
-## 0. 核对结论摘要
-
-初版文档（2026-08-05）方向正确，但有 3 处与代码不符、4 处遗漏。本版修正如下：
-
-| # | 初版说法 | 实际情况 | 本版处理 |
-|---|---------|---------|---------|
-| 1 | `KLIP_DATA_DIR` 是阶段一待办 | **已实现**，`database/connection.rs:113`，带单测，e2e 脚本在用 | §3 改为"已完成 + 只需接索引根目录" |
-| 2 | "单实例限制"存在 | **不存在**，未引入 `tauri-plugin-single-instance` | §4 改为列出真实的进程级冲突源 |
-| 3 | 共享 target 有"陈旧产物风险" | Cargo 对 target 有文件锁，并行安全但会**排队阻塞** | §2.2 修正理由 |
-| 4 | — | `.gitignore:7` 是 `.cargo/`，会吞掉要提交的 config.toml | §2.4 新增 |
-| 5 | — | HTTP 端口写死 27717，第二实例 bind 失败 | §4.2 新增 |
-| 6 | — | 全局热键进程独占，第二实例注册失败 | §4.2 新增 |
-| 7 | — | 阶段二"文件不重叠"不成立，5 个文件必冲突 | §6 新增，并改造 §5 |
+> 所有"现状"描述都附了 `文件:行号`，可直接跳转核对。
 
 ---
 
@@ -35,7 +17,7 @@
                  │  · 钉死 4 个接口 + 一次性定 DB schema  │
                  │  · 拆分命令注册点（消冲突）            │
                  │  · 补齐 worktree 环境隔离              │
-                 │  · 配置 sccache + 共享 target（见 §2） │
+                 │  · 配置 sccache                       │
                  └───────────────────┬─────────────────┘
                                      │ 合入 main 且稳定后
                                      ▼
@@ -43,12 +25,12 @@
                  │rich- │ │search- │ │ ocr │ │platform- │ │platform- │
                  │text  │ │tantivy │ │     │ │ focus    │ │ source   │
                  └──────┘ └────────┘ └─────┘ └──────────┘ └──────────┘
-                 各自独立分支 / 各自独立 worktree / 冲突面已在阶段一收敛
+                 各自独立分支 / 各自独立 worktree
 ```
 
 **为什么必须串行过地基：** 富文本的多格式捕获、多格式粘贴都依赖 clipboard-rs 切换后的新 API；Tantivy/OCR 的文字回灌依赖统一的 `index_text` 接口。若并行分支在 foundation 合入前就从旧代码切出，会同时改写 `monitor.rs` / `writer.rs` / `format/*.rs`，合回时冲突成片。
 
-**前置条件（初版遗漏）：** 分叉前 main 工作区必须干净。当前工作区有 11 个文件改动 + 未跟踪的 `web-klip/`、`src-tauri/src/http/openapi.rs`、四份 MD 报告。这批 HTTP/OpenAPI 的活必须先提交或 stash，否则各 worktree 基线不一致，后面对不上账。
+**前置条件：** 分叉前 main 工作区必须干净，各 worktree 才有一致基线。
 
 ---
 
@@ -57,63 +39,49 @@
 ### 2.1 问题
 Rust + Tauri 编译很重。每个 worktree 默认各自编译一套 `target/`，而本次引入的 `tantivy`、`oar-ocr`、`ort`(ONNX Runtime) 体积大、编译久。若每个 worktree 重复全量编译，时间和磁盘都浪费严重。
 
-### 2.2 编译产物能否共享？能，但要分清两种机制各自省的是什么
+### 2.2 两种共享机制，各自省的东西不一样
 
-#### 方案 A：共享 `CARGO_TARGET_DIR`
-- 设置环境变量指向统一目录（如 `D:\Study\cc\klip-target`）。
-- 所有 worktree 复用同一份已编译依赖。
-- **限制（本版修正）：** Cargo 对 `target/` 持有文件锁，并行 `cargo build` **不会产生陈旧产物或数据损坏**，但第二个进程会阻塞等待第一个释放锁。所以问题是"并行退化成串行"，不是"不安全"。需要真并行时用方案 B。
+**方案 A：共享 `CARGO_TARGET_DIR`**
+- 设环境变量指向统一目录（如 `D:\Study\cc\klip-target`），所有 worktree 复用同一份已编译依赖。
+- 限制：Cargo 对 `target/` 持有文件锁，并行 `cargo build` 不会产生陈旧产物或数据损坏，但第二个进程会阻塞等待。**问题是"并行退化成串行"，不是"不安全"。** 需要真并行时用方案 B。
 
-#### 方案 B：`sccache` 编译器缓存
-- 原理：按「编译器参数 + 输入文件哈希」缓存产物，统一存放在 `~/.cache/sccache`。
-- 不同 worktree 编译**同一个依赖**直接命中缓存，不依赖共享 target 目录，可真并行、互不干扰。
-- 安装：`scoop install sccache` 或 `cargo install sccache`
-- 启用：设置环境变量 `RUSTC_WRAPPER=sccache`
+**方案 B：`sccache` 编译器缓存**
+- 按「编译器参数 + 输入文件哈希」缓存产物，存在 `~/.cache/sccache`。
+- 不同 worktree 编译同一个依赖直接命中缓存，不依赖共享 target 目录，可真并行。
+- 安装：`scoop install sccache` 或 `cargo install sccache`；启用：设 `RUSTC_WRAPPER=sccache`。
 
-#### 关于 sccache 的期望管理（本版新增）
-**sccache 不缓存 incremental 编译。** 它省的是**新 worktree 第一次全量编译第三方依赖**的时间 —— 对开 5 个 worktree 的场景这恰好是大头（tantivy + ort 各自编一遍非常贵）。但它对 `klip` 这个 crate 本身"改一行重编"几乎零收益，那部分靠 cargo 的 incremental。
+**期望管理（重要）：** sccache **不缓存 incremental 编译**。它省的是「新 worktree 第一次全量编译第三方依赖」的时间 —— 对开 5 个 worktree 的场景这恰好是大头（tantivy + ort 各自编一遍非常贵）。但它对 `klip` 这个 crate 本身"改一行重编"几乎零收益，那部分靠 cargo 的 incremental。
 
 因此：
-- **dev profile 的 `incremental` 必须保持开启**（默认即开，不要为了 sccache 命中率去关掉）。
-- 别指望 sccache 加速日常迭代，它加速的是"开一个新 worktree 的冷启动"。
-- 推荐 **B 为主、A 为辅**：平时各 worktree 独立 target + sccache 兜依赖；确定要串行跑批量验证时再切共享 target 省磁盘。
+- **dev profile 的 `incremental` 保持开启**（默认即开，不要为了 sccache 命中率关掉）。
+- 推荐 B 为主、A 为辅：平时各 worktree 独立 target + sccache 兜依赖；确定要串行跑批量验证时再切共享 target 省磁盘。
 
-#### 前端（pnpm）共享
-pnpm 使用全局 content-addressable store，`node_modules` 是软链，体量很轻。各 worktree 执行 `pnpm install` 会命中 store，很快。**注意：`pnpm install` 不只是装依赖** —— 它会触发 `prepare` → `scripts/install-hooks.mjs`，把 `scripts/hooks/pre-push` 装进该 worktree 的 git hooks 目录。这道 hook 会跑 `pnpm verify`，是推送前的质量闸（详见 §4.4）。**每个新 worktree 都必须跑一次 `pnpm install`，否则该 worktree 推送时没有闸。**
+### 2.3 前端（pnpm）
+pnpm 使用全局 content-addressable store，`node_modules` 是软链，体量很轻，各 worktree `pnpm install` 会命中 store。
 
-### 2.3 阶段一要落地的构建配置
-- 新建 `.cargo/config.toml`，明确 `RUSTC_WRAPPER=sccache`；`CARGO_TARGET_DIR` 作为可选项写在注释或 README 里（不要硬编码进仓库，各人磁盘布局不同）。
-- 在 README 写清 Windows 启用步骤（scoop 安装 sccache、设环境变量、`sccache --show-stats` 验证命中）。
-- 验证标准：首次编译慢（填充缓存），**新开一个 worktree 首次 `cargo build` 显著提速**（不是同一 worktree 二次编译提速 —— 那是 incremental 的功劳，测不出 sccache）。
+**注意 `pnpm install` 不只是装依赖** —— 它会触发 `prepare` → `scripts/install-hooks.mjs`，把 `scripts/hooks/pre-push` 装进该 worktree 的 git hooks 目录。这道 hook 会跑 `pnpm verify`，是推送前的质量闸。**每个新 worktree 都必须跑一次 `pnpm install`，否则该 worktree 推送时没有闸。**
 
-### 2.4 先解掉 `.gitignore` 冲突（本版新增）
+### 2.4 sccache 只走环境变量，不进仓库
 
-`.gitignore:7` 当前是 `.cargo/`。直接 `git add .cargo/config.toml` 会被**静默忽略**，文件永远进不了仓库。阶段一必须把那一行改成：
+**不在仓库里放 `.cargo/config.toml`。** 理由：
+- 把 `RUSTC_WRAPPER=sccache` 提交进去，等于任何 clone 的人没装 sccache 就构建失败 —— 把一个本地加速工具变成了硬依赖。
+- `CARGO_TARGET_DIR` 是各人磁盘布局，不该由仓库决定。
 
-```gitignore
-.cargo/*
-!.cargo/config.toml
-```
+仓库根的 `.cargo/` 保持在 `.gitignore` 里 —— 它和 `.rustup/`、`.profile`、`.bashrc` 是同一类污染（构建时可能被当成 CARGO_HOME 落在仓库内），而且 `.cargo/credentials.toml` 会存 crates.io token，绝不能进版本库。
 
-**关键是斜杠后面的 `*`。** 已在临时仓库实测三种写法：
+需要个人固定配置的，写到用户级 `~/.cargo/config.toml`。
 
-| 写法 | `config.toml` | 目录内其他文件 | 结论 |
-|------|--------------|--------------|------|
-| `.cargo/` + `!.cargo/config.toml` | ❌ 仍被忽略 | 忽略 | 无效 —— git 不进入被排除的目录，看不到例外 |
-| `.cargo/` + `!.cargo/` + `!.cargo/config.toml` | ✅ 可跟踪 | ⚠️ 也可跟踪 | 过度放开，`.cargo/` 下的本地文件会被 git 看见 |
-| `.cargo/*` + `!.cargo/config.toml` | ✅ 可跟踪 | ✅ 忽略 | **正确** |
+阶段一在这块只需落地文档：README 写清 Windows 启用步骤（scoop 安装 sccache、设 `RUSTC_WRAPPER`、`sccache --show-stats` 看命中率）。
 
-原理：`.cargo/` 排除的是**目录本身**，git 直接不下探，里面的例外规则永远不生效；`.cargo/*` 排除的是**目录内容**，git 仍会进入目录，例外才能命中。
-
-改完用 `git status --porcelain -uall` 确认 `.cargo/config.toml` 出现在未跟踪列表里（不要用 `git check-ignore` 判断 —— 路径命中否定规则时它也返回 exit 0，容易误读成"被忽略"）。
+**验证标准：** 新开一个 worktree 首次 `cargo build` 显著提速。不是同一 worktree 二次编译提速 —— 那是 incremental 的功劳，测不出 sccache。
 
 ---
 
-## 3. 运行时数据目录隔离 —— 已实现，只需扩展
+## 3. 运行时数据目录隔离
 
-### 3.1 现状（本版修正：初版把已完成的活列成了待办）
+### 3.1 已有能力
 
-`KLIP_DATA_DIR` **已经在代码里跑着了**：
+`KLIP_DATA_DIR` 已在代码里生效：
 
 | 位置 | 内容 |
 |------|------|
@@ -125,43 +93,36 @@ pnpm 使用全局 content-addressable store，`node_modules` 是软链，体量�
 | `commands/mod.rs:349` | 诊断信息复用同一解析函数 |
 | `scripts/run-e2e.ps1:76` | e2e 已在用它做隔离 |
 
-**还有一个初版没提到的 env：`KLIP_LOG_DIR`**（`main.rs:14`，`main.rs:304` 消费），日志目录同样可隔离。
+日志目录同样可隔离：`KLIP_LOG_DIR`（`main.rs:14` 定义，`main.rs:304` 消费）。
 
-所以 §3 的阶段一任务不是"实现 KLIP_DATA_DIR"，而是：
+### 3.2 阶段一要做的
+新增的 Tantivy 索引根目录、OCR 模型缓存目录，**必须复用 `database::connection::app_data_dir()`**，不要另起一套路径解析。
 
-- [ ] 新增的 Tantivy 索引根目录、OCR 模型缓存目录，**必须复用 `database::connection::app_data_dir()`**，不要另起一套路径解析。这是唯一的新增工作量。
-
-### 3.2 一个边界要说清
-`KLIP_DATA_DIR` 覆盖的是**数据目录**。应用配置存在 SQLite 的 `app_config` 表里（`database/schema.rs:156`），也就是在 `klip.db` 内部 —— 所以配置天然随数据目录一起隔离，不需要额外处理。
+### 3.3 一个边界
+`KLIP_DATA_DIR` 覆盖的是数据目录。应用配置存在 SQLite 的 `app_config` 表里（`database/schema.rs:156`），也就是在 `klip.db` 内部 —— 配置天然随数据目录一起隔离，不需要额外处理。
 
 ---
 
-## 4. 进程级资源冲突（本版重写）
+## 4. 进程级资源冲突
 
-### 4.1 初版的错误
-初版 §3.3 写"单实例限制 + 数据隔离只需单跑即可"。**项目里没有单实例机制** —— `main.rs` 注册的插件只有 `shell` / `dialog` / `global-shortcut` / `autostart`，没有 `tauri-plugin-single-instance`。两个 Klip 现在**能同时起来**，这比初版描述的情况更需要小心。
-
-而且"因为有单实例限制所以要做多目录隔离"本身逻辑不通 —— 如果真有单实例限制，就不会有并发写同一个库的问题了。
-
-### 4.2 真实的冲突源清单
-
-即使数据目录隔离好了，下面这些是**进程级/系统级独占**，隔离不了：
+### 4.1 没有单实例保护
+项目未引入 `tauri-plugin-single-instance`（`main.rs` 注册的插件只有 `shell` / `dialog` / `global-shortcut` / `autostart`）。**两个 Klip 能同时起来**，下面这些资源隔离不了。
 
 | 资源 | 位置 | 第二实例的后果 |
 |------|------|--------------|
 | HTTP 端口 | `http/mod.rs:33` `DEFAULT_PORT = 27717` | bind 失败，`http/mod.rs:93` 打 error 日志后 HTTP 功能不可用 |
 | 全局热键 | `hotkey/manager.rs`，`Ctrl+Alt+K` / `Ctrl+Alt+1~9` | 系统级注册冲突，第二个注册失败 |
-| 开机自启 | `tauri-plugin-autostart`，写注册表/desktop entry | 互相覆盖，且写的是全局位置 |
-| 自复制标记 / 哈希抑制 | 见 §9.1 | 两个实例互相把对方的写入当成用户复制，可能形成回灌环 |
+| 开机自启 | `tauri-plugin-autostart`，写注册表/desktop entry | 互相覆盖，写的是全局位置 |
+| 自复制标记 | 见 §9.1 | 两个实例互相把对方的写入当成用户复制，可能形成回灌环 |
 
 端口有 env 可躲（`KLIP_HTTP_PORT`，`http/mod.rs:34`），热键和自启没有。
 
-### 4.3 开发者守则（修正版）
+### 4.2 开发者守则
 
-**每个 worktree 运行前设三个 env，不是一个：**
+**每个 worktree 运行前设三个 env：**
 
 ```bat
-:: 例：在 rich-text worktree 下（cmd）
+:: cmd
 set KLIP_DATA_DIR=C:\tmp\klip-rich-text\data
 set KLIP_LOG_DIR=C:\tmp\klip-rich-text\logs
 set KLIP_HTTP_PORT=27718
@@ -170,83 +131,78 @@ pnpm tauri:dev
 
 ```powershell
 # PowerShell
-$env:KLIP_DATA_DIR = 'C:\tmp\klip-rich-text\data'
-$env:KLIP_LOG_DIR  = 'C:\tmp\klip-rich-text\logs'
+$env:KLIP_DATA_DIR  = 'C:\tmp\klip-rich-text\data'
+$env:KLIP_LOG_DIR   = 'C:\tmp\klip-rich-text\logs'
 $env:KLIP_HTTP_PORT = '27718'
 pnpm tauri:dev
 ```
 
-建议端口分配：foundation 27717（默认）、rich-text 27718、search 27719、ocr 27720、focus 27721、source 27722。
+端口分配：foundation 27717（默认）、rich-text 27718、search 27719、ocr 27720、focus 27721、source 27722。
 
-**不要同时运行两个 Klip 实例。** 真实理由是 §4.2 的热键 + 自启 + 剪贴板标记冲突，**不是**因为存在单实例限制。数据目录隔离解决的是"先后跑不同 worktree 时不互相污染数据"，不解决同时跑。
+**不要同时运行两个 Klip 实例。** 理由是 §4.1 的热键 + 自启 + 剪贴板标记冲突。数据目录隔离解决的是"先后跑不同 worktree 时不互相污染数据"，不解决同时跑。
 
-如果确实需要同时跑两个开发实例，需要额外做（都不在当前计划内）：改 `tauri.conf.json` 的 `identifier`（当前 `com.klip.app`）、把热键改成可配置且错开、关掉其中一个的 autostart 测试。**建议直接避免这个场景。**
+若确实要同时跑，需额外做（都不在当前计划内）：改 `tauri.conf.json` 的 `identifier`（当前 `com.klip.app`）、热键改成可配置且错开、关掉其中一个的 autostart。**建议直接避免这个场景。**
 
-### 4.4 每个新 worktree 的初始化清单
+### 4.3 新 worktree 初始化
 
 ```bash
 cd ../klip-rich-text
 pnpm install          # 必须：装依赖 + 通过 prepare 装 pre-push hook
 ```
 
-`scripts/hooks/pre-push` 会在推送前跑 `pnpm verify`（= `lint` + `test --run` + `build` + `cargo fmt --check` + `cargo clippy -D warnings` + `cargo test`）。紧急情况可 `KLIP_SKIP_VERIFY=1` 绕过，但正常流程不要用。
+`scripts/hooks/pre-push` 会在推送前跑 `pnpm verify`（= `lint` + `test --run` + `build` + `cargo fmt --check` + `cargo clippy -D warnings` + `cargo test`）。紧急情况可 `KLIP_SKIP_VERIFY=1` 绕过，正常流程不要用。
 
 ---
 
-## 5. 阶段一要钉死的接口（本版：3 个 → 4 个）
+## 5. 阶段一要钉死的四个接口
 
 为避免阶段二并行分支各自为政、合并不了，地基阶段一次性定好：
 
 1. **`clipboard_formats` 存储接口** —— 富文本多格式落点（表：`item_id, format, content`），富文本与未来 RTF/Markdown 都走这里。
 2. **`index_text(item_id, text)` 索引函数** —— Tantivy 实现它；OCR 与富文本提取出的文字统一回灌此函数。签名要在地基阶段定死（含错误类型），阶段二只填实现。
 3. **DB schema 一次性定好** —— 把 `clipboard_formats` 表直接放进本次 migration。当前 `CURRENT_DB_VERSION = 3`（`database/mod.rs:12`），本次 bump 到 4，在 `database/migrations.rs` 的 `MIGRATIONS` 数组追加一条即可。
-4. **命令注册点拆分（本版新增，见 §6）** —— 把 `commands/mod.rs`、`main.rs` 的 `invoke_handler!`、`http/mod.rs` 的 router、`src/lib/tauri.ts` 从"一个大列表"改成"按 feature 分模块 + 一行挂载"。这是阶段二能否真并行的关键。
+4. **命令注册点拆分** —— 见 §6。这是阶段二能否真并行的关键。
 
-### 5.1 schema 版本的一个副作用
-bump 到 4 之后，`database/data_portability.rs:457` 的备份版本校验会拒绝更高版本的备份文件恢复到低版本 app。也就是：**用地基版本导出的备份，不能恢复到旧 app**。这是预期行为（防止静默降级），但要在 CHANGELOG 里说明。
+**schema 版本的副作用：** bump 到 4 之后，`database/data_portability.rs:457` 的备份版本校验会拒绝更高版本的备份恢复到低版本 app。也就是用地基版本导出的备份不能恢复到旧 app。这是预期行为（防止静默降级），要在 CHANGELOG 说明。
 
 ---
 
-## 6. 阶段二的真实冲突面（本版新增，最重要的一节）
+## 6. 阶段二的冲突面与收敛方案
 
-### 6.1 初版的错误
-初版说阶段二"碰的文件基本不重叠"。**不成立。** rich-text / search-tantivy / ocr 三个分支都要加新 IPC 命令和新 HTTP 路由，因此都要改这 5 个文件：
+### 6.1 会冲突的文件
 
-| 文件 | 当前状态 | 为什么会冲突 |
-|------|---------|-------------|
-| `src-tauri/src/main.rs` | `invoke_handler!` 里 46 条命令平铺（`main.rs:149` 起） | 三个分支都在同一个列表尾部加行 → 同一位置 diff |
+rich-text / search-tantivy / ocr 三个分支都要加新 IPC 命令和新 HTTP 路由，因此都要改这几个文件：
+
+| 文件 | 当前状态 | 冲突原因 |
+|------|---------|---------|
+| `src-tauri/src/main.rs` | `invoke_handler!` 里 46 条命令平铺（`main.rs:149` 起） | 三个分支都在同一个列表尾部加行 |
 | `src-tauri/src/commands/mod.rs` | 483 行，核心命令都在里面 | 三个分支都往里加 handler |
 | `src-tauri/src/http/mod.rs` | 1323 行，router 里 40+ 条 `.route()`（`:154-214`） | 三个分支都加路由 |
+| `src-tauri/src/http/openapi.rs` | 919 行 | 跟着加 schema |
 | `src/lib/tauri.ts` | 222 行，项目约定的 IPC 唯一出口 | 三个分支都加 API 包装 |
 | `src/types/index.ts` | 186 行，要和 `database/types.rs` 手工同步 | 三个分支都加类型 |
 
-外加 `src-tauri/src/http/openapi.rs`（919 行，未提交）也要跟着加 schema。
+### 6.2 阶段一的收敛做法（§5 接口 4）
 
-这 5~6 个文件是**保证冲突**的，不是"基本不重叠"。
+按现有 `commands/productization.rs` 的先例（核心命令在 `mod.rs`、产品化命令单独一个文件），把新 feature 的注册点全部改成"独立文件 + 一行挂载"：
 
-### 6.2 阶段一必须先做的收敛（属 §5 接口 4）
-
-按现有 `commands/productization.rs` 已有的先例（核心命令在 `mod.rs`、产品化命令单独一个文件），把新 feature 的注册点全部改成"独立文件 + 一行挂载"：
-
-- **Rust 命令**：新建 `commands/rich_text.rs`、`commands/search.rs`、`commands/ocr.rs` 占位。`main.rs` 的 `invoke_handler!` 里，每个 feature 占**连续一段并加注释锚点**，各分支只动自己那段：
+- **Rust 命令**：新建 `commands/rich_text.rs`、`commands/search.rs`、`commands/ocr.rs` 占位。`main.rs` 的 `invoke_handler!` 里每个 feature 占连续一段并加注释锚点，各分支只动自己那段：
   ```rust
   // --- rich-text (feat/rich-text owns this block) ---
   // --- search   (feat/search-tantivy owns this block) ---
   // --- ocr      (feat/ocr owns this block) ---
   ```
-  注释锚点不是强约束，但能把 diff 局部化，git 三方合并基本能自动过。
-- **HTTP 路由**：把 router 拆成 `fn rich_text_routes() -> Router`、`fn search_routes()`、`fn ocr_routes()`，主 router 用 `.merge()` 挂载。各分支只改自己的函数。
-- **前端**：`src/lib/tauri.ts` 已有 `clipboardApi` / `productApi` / `configApi` / `systemApi` 分组。地基阶段补 `richTextApi` / `searchApi` / `ocrApi` 三个空壳并 export，各分支只填自己的。
-- **前端类型**：`src/types/index.ts` 同理，按 feature 分区加注释锚点；或更彻底地拆成 `types/richText.ts` 等再 re-export。
+  锚点不是强约束，但能把 diff 局部化，三方合并基本能自动过。
+- **HTTP 路由**：拆成 `fn rich_text_routes() -> Router`、`fn search_routes()`、`fn ocr_routes()`，主 router 用 `.merge()` 挂载。
+- **前端**：`src/lib/tauri.ts` 已有 `clipboardApi` / `productApi` / `configApi` / `systemApi` 分组，地基阶段补 `richTextApi` / `searchApi` / `ocrApi` 三个空壳并 export。
+- **前端类型**：`src/types/index.ts` 按 feature 分区加注释锚点，或拆成 `types/richText.ts` 等再 re-export。
 
-做完这一步，阶段二的冲突面从"5 个文件正面撞车"降到"每个分支只碰自己的文件 + 主文件里一行挂载"。
+做完这一步，冲突面从"6 个文件正面撞车"降到"每个分支只碰自己的文件 + 主文件里一行挂载"。
 
 ### 6.3 剩余的不可消除冲突
-- `Cargo.toml` 的 `[dependencies]`：search 加 tantivy、ocr 加 oar-ocr/ort。**冲突小且易解**（不同行）。
-- `Cargo.lock`：必冲突，但可以 `git checkout --theirs` 后重跑 `cargo build` 重新生成，不要手工合。
-- `package.json`：rich-text 要加 DOMPurify。同上，易解。
-
-约定：**Cargo.lock 冲突一律重新生成，不手工解。**
+- `Cargo.toml` 的 `[dependencies]`：search 加 tantivy、ocr 加 oar-ocr/ort。不同行，易解。
+- `package.json`：rich-text 要加 DOMPurify。同上。
+- `Cargo.lock`：必冲突。**约定一律 `git checkout --theirs` 后重跑 `cargo build` 重新生成，不手工合。**
 
 ---
 
@@ -263,9 +219,7 @@ bump 到 4 之后，`database/data_portability.rs:457` 的备份版本校验会�
   ```
 - 阶段二的所有 worktree **必须在 foundation 合入 main 之后再分叉**。
 - 路径放仓库平级（如 `D:\Study\cc\klip-search`），避免嵌套进主仓库造成 git 混淆。
-  - 注：`.gitignore` 里有 `.worktrees/` 条目，说明历史上曾把 worktree 放在仓库内。**本文档采用平级方案**，那条 ignore 可以留着不管。
-- 每个 worktree 建好后按 §4.4 跑 `pnpm install`。
-- 当前状态：`git worktree list` 只有主仓库一个，`git branch -a` 只有 `main` + `origin/main` + `origin/worktree-feat+ui-redesign`（历史遗留）。
+- 每个 worktree 建好后按 §4.3 跑 `pnpm install`。
 
 ---
 
@@ -277,9 +231,9 @@ bump 到 4 之后，`database/data_portability.rs:457` 的备份版本校验会�
 现状：`database/types.rs:5` 的 `ContentType` 只有 `Text` / `Image` / `File`，没有富文本概念，要从零建。
 
 任务清单：
-- [ ] 后端落地 `clipboard_formats(item_id, format, content)` 多格式存储（对应 §5 接口 1）
+- [ ] 后端落地 `clipboard_formats(item_id, format, content)` 多格式存储（§5 接口 1）
 - [ ] monitor 捕获时优先取 HTML/RTF（clipboard-rs `get_html()` / `get_rich_text()`），无富文本则回退纯文本
-- [ ] writer 粘贴时同时写入 `CF_TEXT` + `CF_HTML`（多格式粘贴）
+- [ ] writer 粘贴时同时写入纯文本 + HTML（多格式粘贴）
 - [ ] 前端列表/详情渲染 HTML，用 DOMPurify 做 XSS 过滤（仅保留 `<b>/<i>/<a>/<table>/<code>` 等安全标签）
 - [ ] 复用地基已定义的 `clipboard_formats` 表 migration
 - [ ] 通过用户提供的测试文件
@@ -296,19 +250,19 @@ bump 到 4 之后，`database/data_portability.rs:457` 的备份版本校验会�
 
 任务清单：
 - [ ] 新增 `search/` 模块：索引创建、写入、查询（实现 §5 接口 2 `index_text`）
-- [ ] 集成 `tantivy-jieba` 做中文分词（tantivy 0.24.x + tantivy-jieba，版本要对齐 `tantivy-tokenizer-api`）
-- [ ] 索引目录走 `database::connection::app_data_dir()`（§3.1）
+- [ ] 集成 `tantivy-jieba` 做中文分词（tantivy 0.24.x，版本要对齐 `tantivy-tokenizer-api`）
+- [ ] 索引目录走 `database::connection::app_data_dir()`（§3.2）
 - [ ] 写入策略：批量 + 定时 commit（如每 5s 或积攒 50 条）
 - [ ] 删除同步：剪贴板记录删除时同步删除索引项
-- [ ] segment 合并压缩；启动健康检测 + 索引损坏时从 SQLite 全量重建（reindex）
+- [ ] segment 合并压缩；启动健康检测 + 索引损坏时从 SQLite 全量重建
 - [ ] Tantivy 异常时降级回 SQLite `LIKE`（前端无感知）
 - [ ] 切换 `clipboard_query.rs` 的 `text_query` 分支为 FTS 查询
 
-完成标准（本版加强了基准）：
-- **10 万条数据**搜索在毫秒级。初版写的"1k 条毫秒级"证明不了什么 —— SQLite `LIKE` 在 1k 条上也是毫秒级，这个基准无法区分改进是否有效。
-- 中文分词生效：搜「剪贴板工具」能命中「剪贴板管理工具」（`LIKE '%剪贴板工具%'` 命中不了，这是能区分新旧实现的判据）
+完成标准：
+- **10 万条数据**搜索在毫秒级。（1k 条的基准无意义 —— `LIKE` 在 1k 条上也是毫秒级，区分不出改进。）
+- 中文分词生效：搜「剪贴板工具」能命中「剪贴板管理工具」。`LIKE '%剪贴板工具%'` 命中不了，这是能区分新旧实现的判据。
 - 删除条目后搜索不再返回该条
-- 索引损坏能自动重建且不崩溃（注意 §8.6 的 panic 约束）；Tantivy 故障时回退 `LIKE` 仍可用
+- 索引损坏能自动重建且不崩溃（注意 §9.2 的 panic 约束）；Tantivy 故障时回退 `LIKE` 仍可用
 - 测试全绿
 
 ### 8.3 `feat/ocr` — 图片文字识别
@@ -327,10 +281,10 @@ bump 到 4 之后，`database/data_portability.rs:457` 的备份版本校验会�
 - 中文识别可用；识别在后台异步完成，复制操作不卡顿
 - 测试全绿
 
-**体积成本（本版新增，初版遗漏）：** PP-OCR 的检测 + 识别 ONNX 模型合计几十 MB，加上 onnxruntime 动态库，安装包体积会明显跳一档。要做的额外工作：
+**体积成本：** PP-OCR 的检测 + 识别 ONNX 模型合计几十 MB，加上 onnxruntime 动态库，安装包体积会明显跳一档。额外工作：
 - `tauri.conf.json` 的 `bundle.resources` 要配模型路径
 - onnxruntime 动态库的分发方式要定（`ort` 的 download-binaries feature 会在构建时拉，离线/CI 环境要预置）
-- release profile 是 `opt-level = "s"`（体积优先），和几十 MB 的模型放在一起，优化编译体积的收益被模型盖过去了 —— 不需要改配置，只是要知道体积主因在模型不在代码
+- release profile 是 `opt-level = "s"`（体积优先），但体积主因在模型不在代码，不需要为此改配置
 
 ### 8.4 `feat/platform-focus` — 跨平台焦点恢复
 **目标**：粘贴后恢复前台窗口焦点（Windows 已有，补齐 macOS / Linux，否则优雅降级）。
@@ -338,7 +292,7 @@ bump 到 4 之后，`database/data_portability.rs:457` 的备份版本校验会�
 现状：`lib.rs:37` 的 `PREV_FOREGROUND_HWND: AtomicI64` + `lib.rs:90` 的 `GetForegroundWindow`，纯 Win32。
 
 任务清单：
-- [ ] 抽象焦点恢复接口（把 `AtomicI64` 存 HWND 的做法抽象成平台无关的 "上一个前台窗口句柄" 概念）
+- [ ] 抽象焦点恢复接口（把"`AtomicI64` 存 HWND"抽象成平台无关的"上一个前台窗口"概念）
 - [ ] Windows：保留现有 Win32 实现
 - [ ] macOS：用 `NSRunningApplication` 恢复
 - [ ] Linux(X11)：用 X11 恢复；Wayland 检测到就跳过（`platform/linux.rs:207` 已有 `is_wayland_session()` 可复用）
@@ -346,7 +300,7 @@ bump 到 4 之后，`database/data_portability.rs:457` 的备份版本校验会�
 
 完成标准：
 - 三平台粘贴后焦点回到原应用；不支持平台静默降级，无异常
-- **注意**：改动会碰到 `lib.rs` 的托盘点击守卫（`LAST_TRAY_CLICK_MS` / `TRAY_CLICK_GUARD_MS = 300ms`）。按 CLAUDE.md 的约定，任何新的窗口显示/聚焦路径都要走 `notify_tray_click()`，否则和 focus-lost 自动隐藏打架。
+- **注意**：改动会碰到 `lib.rs` 的托盘点击守卫（`LAST_TRAY_CLICK_MS` / `TRAY_CLICK_GUARD_MS = 300ms`）。按 CLAUDE.md 约定，任何新的窗口显示/聚焦路径都要走 `notify_tray_click()`，否则和 focus-lost 自动隐藏打架。
 
 ### 8.5 `feat/platform-source` — 跨平台来源追踪
 **目标**：记录每条记录的来源应用（进程名/标题），三平台可用，否则自动关闭该功能。
@@ -362,31 +316,31 @@ bump 到 4 之后，`database/data_portability.rs:457` 的备份版本校验会�
 
 完成标准：
 - 三平台能显示来源应用；不支持平台不显示且不报错
-- 来源规则（`clipboard_source_rules` 表，捕获忽略规则）在无来源信息的平台上不误判 —— 拿不到来源时的默认行为必须是"照常捕获"，不能是"全部忽略"
+- 来源规则（`clipboard_source_rules` 表，捕获忽略规则）在无来源信息的平台上不误判 —— **拿不到来源时的默认行为必须是"照常捕获"，不能是"全部忽略"**
 
 ### 8.6 阶段二总完成标准
 - 五个分支各自通过用户提供的测试
 - 各自 rebase/merge 到 main 无冲突（依赖 §6.2 已收敛的注册点）
 - 全平台（至少 Windows）`tauri:dev` 跑通，核心闭环可用
-- 每个分支推送前 `pnpm verify` 全绿（pre-push hook 会强制）
+- 每个分支推送前 `pnpm verify` 全绿（pre-push hook 强制）
 
-> 注：Tantivy（`feat/search-tantivy`）最独立，但为让 OCR 回灌，仍需等地基 `index_text` 接口定好再开并行。
+> Tantivy 最独立，但为让 OCR 回灌，仍需等地基 `index_text` 接口定好再开并行。
 
 ---
 
-## 9. 阶段一开工前必须先验证的两个技术前提（本版新增）
+## 9. 阶段一开工前要先验证的两件事
 
-这两条不确认就动手，返工概率很高。建议各写个几十行的独立小 demo 验掉，不要在主干上试。
+这两条不确认就动手，返工概率很高。各写个几十行的独立小 demo 验掉，不要在主干上试。
 
-### 9.1 自复制标记必须用 clipboard-rs 重新实现
+### 9.1 自复制标记用 clipboard-rs 重新实现
 
-**决策（2026-08-06 用户确认）：统一使用 clipboard-rs，不保留 clipboard-win。** 两套剪贴板库并存会让"哪个 API 负责什么"变成隐性知识，架构上留疤，不接受。因此防回灌机制要跟着一起迁移，而不是绕开。
+**决策：统一使用 clipboard-rs，移除 clipboard-win。** 两套剪贴板库并存会让"哪个 API 负责什么"变成隐性知识，架构上留疤。防回灌机制要跟着一起迁移，而不是绕开。
 
 **现状**：Windows 上防回灌靠 `"Clipboard Viewer Ignore"` 这个自定义剪贴板格式：
 - 写入侧 `clipboard/writer.rs:51` `raw_set_text_with_marker()` —— `clipboard_win::raw::empty()` + `set_string()` + `set_without_clear(id, b"Klip")`
 - 读取侧 `clipboard/monitor.rs:75` `is_self_copy_marker_present()` —— `clipboard_win::raw::is_format_avail()`
 
-**clipboard-rs 的对应能力（已查 0.3.5 API 文档确认存在）**：
+**clipboard-rs 的对应能力**（已查 0.3.5 API 确认存在）：
 
 | 用途 | clipboard-rs API |
 |------|-----------------|
@@ -395,63 +349,62 @@ bump 到 4 之后，`database/data_portability.rs:457` 的备份版本校验会�
 | 检测标记是否存在 | `available_formats() -> Result<Vec<String>>`，查列表里有没有那个格式名 |
 | 读自定义格式内容 | `get_buffer(format: &str) -> Result<Vec<u8>>` |
 
-关键是 `set(Vec<ClipboardContent>)` —— 一次调用把正文和 `Other("Clipboard Viewer Ignore", b"Klip".to_vec())` 一起写进去，是原子的，不存在"先写正文再补标记、中间被监听线程抓到"的窗口。这比现在 `empty()` + `set_string()` + `set_without_clear()` 三步走的实现更干净。
+关键是 `set(Vec<ClipboardContent>)` —— 一次调用把正文和 `Other("Clipboard Viewer Ignore", b"Klip".to_vec())` 一起写进去，是原子的，不存在"先写正文再补标记、中间被监听线程抓到"的窗口。比现在三步走的实现更干净。
 
 注意 `has()` 只接受 `ContentFormat` 枚举，不接受任意格式名字符串，所以检测自定义标记要走 `available_formats()`，不是 `has()`。
 
-**已知坑（官方文档明写）**：`set_image` 会清空剪贴板（"set image will clear clipboard"）。所以图片写入不能是"先 set_image 再补标记"，必须走 `set(vec![Image(..), Other(..)])` 一次性写完。这条对 `writer.rs` 的图片分支是硬约束。
+**已知坑（官方文档明写）**：`set_image` 会清空剪贴板（"set image will clear clipboard"）。所以图片写入不能是"先 set_image 再补标记"，必须走 `set(vec![Image(..), Other(..)])` 一次性写完。这对 `writer.rs` 的图片分支是硬约束。
 
-**验证 demo（阶段一开工第一件事）**：
+**验证步骤**：
 1. `set(vec![Text("hello"), Other("Clipboard Viewer Ignore", b"Klip")])`
 2. `available_formats()` 确认列表里有 `"Clipboard Viewer Ignore"`
 3. `get_text()` 确认正文没被标记干扰
-4. 对 `set(vec![Image(..), Other(..)])` 重复一遍（因为 set_image 会 clear，这条最可能出问题）
-5. 最后确认外部程序（记事本 / Word）粘贴时看不到这个自定义格式的干扰
+4. 对 `set(vec![Image(..), Other(..)])` 重复一遍（`set_image` 会 clear，这条最可能出问题）
+5. 确认外部程序（记事本 / Word）粘贴时看不到这个自定义格式的干扰
 
-**如果第 4 步在 Windows 上失败**（图片 + 标记不能共存），退路是**改用哈希抑制**替代剪贴板标记：Klip 写入前把内容哈希记进一个 `LAST_WRITTEN_HASH`，监听线程发现新内容哈希与之相等就跳过。这个方案完全平台中立，反而比自定义格式标记更符合"统一库"的方向 —— `monitor.rs` 里已有 `LAST_HASH`（`monitor.rs:20`）可以借用同一套机制。代价是极端情况下用户手工复制了和 Klip 刚写入完全相同的内容会被漏记一次，可接受。
+**退路**：若第 4 步失败（图片 + 标记不能共存），改用**哈希抑制** —— Klip 写入前把内容哈希记进一个 `LAST_WRITTEN_HASH`，监听线程发现新内容哈希与之相等就跳过。这个方案完全平台中立，反而更契合"统一库"的方向；`monitor.rs:20` 已有 `LAST_HASH` 可以借用同一套机制。代价是极端情况下用户手工复制了和 Klip 刚写入完全相同的内容会被漏记一次，可接受。
 
-**这一步的产出必须是明确结论**：走自定义格式标记，还是走哈希抑制。定了再动 `writer.rs`。
+**产出必须是明确结论**：走自定义格式标记，还是走哈希抑制。定了再动 `writer.rs`。
 
-### 9.2 `panic = "abort"` 和"索引损坏不崩溃"冲突
+### 9.2 `panic = "abort"` 与"索引损坏不崩溃"的冲突
 
-`Cargo.toml` 的 release profile 是 `panic = "abort"`。这意味着：
+release profile 是 `panic = "abort"`。这意味着：
 - `std::panic::catch_unwind` **不生效**
 - tantivy / ort 内部任何 panic 都会直接终止整个进程
+- 后台线程 panic 也会 abort 整个进程（`panic = "abort"` 下没有"线程 panic 只死这个线程"这回事）
 
-而 §8.2 的完成标准要求"索引损坏自动重建且不崩溃"。这两件事在当前 profile 下不能靠捕获 panic 实现。
+而 §8.2 要求"索引损坏自动重建且不崩溃"。这两件事在当前 profile 下不能靠捕获 panic 实现。
 
 **约束**：
 - 索引健康检测和重建只能靠 tantivy 返回的 `Result` 来兜，把所有 `unwrap()` / `expect()` 换成显式错误处理
 - OCR 同理，`ort` 的推理错误必须走 `Result`
-- 后台线程里的 panic 也会 abort 整个进程（`panic = "abort"` 下没有"线程 panic 只死这个线程"这回事），所以异步 OCR 任务内部必须零 panic
+- 异步 OCR 任务内部必须零 panic
 - 不要为此改 release profile —— `panic = "abort"` 是有意的体积/性能选择，改它影响面更大
 
-**验证 demo**：手工损坏一个 tantivy 索引目录（截断 segment 文件），确认打开时返回 `Err` 而不是 panic。如果 tantivy 在这种情况下确实 panic，那 §8.2 的完成标准要改写成"索引损坏时应用重启后能重建"，并在 README 说明。
+**验证步骤**：手工损坏一个 tantivy 索引目录（截断 segment 文件），确认打开时返回 `Err` 而不是 panic。如果 tantivy 在这种情况下确实 panic，§8.2 的完成标准要改写成"索引损坏时应用重启后能重建"，并在 README 说明。
 
 ---
 
-## 10. 阶段一待办清单（汇总）
+## 10. 阶段一待办清单
 
-按依赖顺序排列：
+按依赖顺序：
 
 **准备**
-- [ ] 提交或 stash 当前工作区的 HTTP/OpenAPI + `web-klip/` 改动，让 main 干净（§1）
-- [ ] 修 `.gitignore` 的 `.cargo/` 例外，`git check-ignore -v` 验证（§2.4）
-- [ ] 跑 §9.1 自复制标记验证 demo，定下走「自定义格式标记」还是「哈希抑制」
-- [ ] 跑 §9.2 tantivy 损坏索引验证 demo，确认错误处理路径
+- [ ] 确认 main 工作区干净（§1）
+- [ ] 跑 §9.1 验证，定下走「自定义格式标记」还是「哈希抑制」
+- [ ] 跑 §9.2 验证，确认 tantivy 索引损坏的错误处理路径
 
 **地基改造**
 - [ ] 切换底层剪贴板库：**移除 `clipboard-master` 和 `clipboard-win`**，统一引入 `clipboard-rs`，重写 `monitor.rs` / `writer.rs` / `format/*.rs`（防回灌按 §9.1 结论实现）
-- [ ] 顺带评估 `arboard` 能否一并移除 —— 它当前只在非 Windows 非 Linux 分支读文本（`monitor.rs:17`），clipboard-rs 覆盖后应该就是死代码
-- [ ] 钉死 §5 的 4 个接口
+- [ ] 评估 `arboard` 能否一并移除 —— 它当前只在非 Windows 非 Linux 分支读文本（`monitor.rs:17`），clipboard-rs 覆盖后应该就是死代码
+- [ ] 钉死 §5 的四个接口
 - [ ] `clipboard_formats` 表 migration，`CURRENT_DB_VERSION` 3 → 4（`database/mod.rs:12` + `database/migrations.rs`）
 - [ ] §6.2 的注册点拆分：`commands/` 分文件、`invoke_handler!` 加注释锚点、http router 拆 `fn xxx_routes()`、`src/lib/tauri.ts` 加空壳 API 分组、`src/types/index.ts` 分区
-- [ ] 新增目录（索引/模型缓存）统一走 `database::connection::app_data_dir()`（§3.1）
+- [ ] 新增目录（索引/模型缓存）统一走 `database::connection::app_data_dir()`（§3.2）
 
 **工具链与文档**
-- [ ] `.cargo/config.toml` 写 `RUSTC_WRAPPER=sccache`
-- [ ] README 补：sccache 安装启用步骤、§4.3 的三 env 开发者守则、§4.4 的 worktree 初始化清单
-- [ ] CHANGELOG 说明 db_version 4 的备份兼容性影响（§5.1）
+- [ ] README 补：sccache 安装启用步骤（§2.4）、§4.2 的三 env 开发者守则、§4.3 的 worktree 初始化清单
+- [ ] CHANGELOG 说明 db_version 4 的备份兼容性影响（§5）
 
 **收尾**
 - [ ] `pnpm verify` 全绿
@@ -460,33 +413,8 @@ bump 到 4 之后，`database/data_portability.rs:457` 的备份版本校验会�
 ### 阶段一完成标准
 - `cargo build` / `tauri:dev` 在 Windows 跑通，剪贴板监听、捕获、粘贴核心闭环正常
 - **`Cargo.toml` 里已无 `clipboard-master`、`clipboard-win`**，剪贴板读写监听全部走 `clipboard-rs` 单一入口（`grep -rn "clipboard_win\|clipboard_master" src/` 应为空）
-- §5 的 4 个接口已落地；`clipboard_formats` 表 migration 已合入；`CURRENT_DB_VERSION = 4`
+- §5 的四个接口已落地；`clipboard_formats` 表 migration 已合入；`CURRENT_DB_VERSION = 4`
 - 注册点拆分完成 —— 判据：在两个临时分支上各加一个 dummy 命令 + 路由，merge 到一起零冲突
 - 设 `KLIP_DATA_DIR` / `KLIP_LOG_DIR` / `KLIP_HTTP_PORT` 后数据、日志、端口都进指定位置；不设则回落默认
-- sccache 生效（**新开 worktree 首次编译**显著提速）；`.cargo/config.toml` 已能被 git 跟踪
+- sccache 生效（**新开 worktree 首次编译**显著提速）
 - `pnpm verify` 全绿，main 干净
-
----
-
-## 11. 修订记录
-
-**v3（2026-08-06）** —— 用户决策：统一 clipboard-rs，不保留 clipboard-win：
-- 重写 §9.1：从"建议保留 clipboard-win 做写入"改为"必须用 clipboard-rs 重新实现防回灌"，给出 `set(Vec<ClipboardContent>)` + `ClipboardContent::Other` 的迁移路径（已查 0.3.5 API 确认存在），并记录 `set_image` 会清空剪贴板这个官方明写的坑
-- §9.1 增加退路：若图片 + 标记无法共存，改用哈希抑制（平台中立，更契合统一库方向）
-- §10 阶段一待办：明确移除 `clipboard-win`，并新增评估移除 `arboard`
-- §10 完成标准：加 `grep` 判据
-
-**v2（2026-08-06）** —— 按真实代码逐条核对后修订：
-- 修正 §3：`KLIP_DATA_DIR` 已实现，不是待办；补充 `KLIP_LOG_DIR`
-- 重写 §4：删除不存在的"单实例限制"，改为真实的进程级冲突清单（端口/热键/自启/剪贴板标记）
-- 修正 §2.2：共享 target 的风险是"并行退化为串行"而非"陈旧产物"
-- 新增 §2.2 sccache 期望管理：不缓存 incremental，省的是新 worktree 冷启动
-- 新增 §2.4：`.gitignore` 的 `.cargo/` 会吞掉 config.toml
-- 新增 §4.4：worktree 必须 `pnpm install` 才有 pre-push 闸
-- 新增 §6：阶段二真实冲突面（5~6 个文件必冲突），并把消除冲突升为 §5 接口 4
-- 新增 §9：开工前两个技术前提（自复制标记、`panic = "abort"`）
-- 加强 §8.2 基准：1k 条 → 10 万条 + 中文分词判据
-- 补充 §8.3 OCR 体积成本、§8.4 托盘守卫约束、§8.5 无来源时的默认行为
-- 新增 §1 前置条件：分叉前 main 必须干净
-
-**v1（2026-08-05）** —— 初版，与 WorkBuddy 会话记录一致。

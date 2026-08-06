@@ -4,8 +4,7 @@ coverage/
 target
 .DS_Store
 *.log
-.cargo/*
-!.cargo/config.toml
+.cargo/
 .rustup/
 .profile
 .bashrc
