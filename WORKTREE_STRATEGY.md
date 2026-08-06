@@ -167,10 +167,10 @@ pnpm install --frozen-lockfile  # 装依赖，并通过 prepare 安装 pre-push 
 
 1. **`index_text(item_id, text)` 归 search 所有** —— search-tantivy 定义签名、错误类型、降级行为并完成实现；rich-text 提取出的纯文本和 OCR 识别结果统一调用它。因此执行顺序必须是 search 在 rich-text 和 OCR 之前。
 2. **`clipboard_formats` 归 rich-text 所有** —— rich-text 创建 `clipboard_formats(item_id, format, content)` 多格式存储接口，HTML、RTF 与未来 Markdown 都走这里。
-3. **DB migration 跟随实际功能** —— 当前 `CURRENT_DB_VERSION = 3`（`database/mod.rs:12`）。rich-text 在引入 `clipboard_formats` 时追加 migration 并 bump 到 4，不在 foundation 中提前创建尚未使用的表。后续功能需要 schema 变更时继续使用独立版本，禁止把未实现功能的猜测一次性塞进 v4。
+3. **DB migration 跟随实际功能** —— 当前 `CURRENT_DB_VERSION = 6`（`src-tauri/src/database/mod.rs:14`）。v3 → v4 引入 `clipboard_formats`，v4 → v5 引入 `clipboard_ocr`，v5 → v6 引入可空的来源字段；每次 schema 变更都随实际功能独立迁移，禁止把未实现功能的猜测一次性塞入旧版本。
 4. **模块边界随功能落地** —— 命令、HTTP 路由、前端 API 和类型在对应功能实现时拆分，不创建 `rich_text.rs`、`search.rs`、`ocr.rs` 等无行为占位文件。
 
-**schema 版本的副作用：** bump 到 4 之后，`database/data_portability.rs:457` 的备份版本校验会拒绝更高版本的备份恢复到低版本 app。也就是用 rich-text 版本导出的备份不能恢复到旧 app。这是预期行为（防止静默降级），必须在同一功能提交的 CHANGELOG 中说明。
+**schema 版本的副作用：** `database/data_portability.rs` 的备份版本校验会拒绝更高版本的备份恢复到低版本 app。当前 v6 备份不能恢复到只支持 v5 或更早 schema 的 Klip；v3/v4/v5 备份仍按各自迁移链升级恢复。这是预期行为（防止静默降级），每次 schema 变化都必须在对应 CHANGELOG 中说明。
 
 ---
 
