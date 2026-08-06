@@ -1,0 +1,45 @@
+# cargo-audit configuration.
+#
+# Policy: real vulnerabilities fail the build. Informational advisories
+# ("unmaintained", "unsound", "notice") stay visible in the log but do
+# not fail it -- that is cargo-audit's default and rustsec/audit-check
+# behaves the same way ("informational advisories are not affecting the
+# check status").
+#
+# The advisories below are therefore NOT suppressed. They are recorded
+# here as a reviewed inventory so that a newly appearing informational
+# advisory is easy to spot against a known baseline, and so nobody has
+# to re-derive why these cannot be fixed from our side.
+#
+# Re-check this list when bumping Tauri or the image stack.
+#
+# gtk-rs GTK3 bindings, unmaintained (RUSTSEC-2024-0411/0412/0413/0414/
+#   0415/0416/0417/0418/0419/0420): atk, atk-sys, gdk, gdk-sys,
+#   gdkwayland-sys, gdkx11, gdkx11-sys, gtk, gtk-sys, gtk3-macros.
+#   Pulled in by Tauri's Linux backend. Tauri 2 still targets GTK3, so
+#   there is nothing to upgrade to. Klip ships Windows-first and this
+#   code is not in the Windows binary at all.
+#
+# unic-* unmaintained (RUSTSEC-2025-0075/0080/0081/0098/0100):
+#   transitive only, no maintained drop-in replacement exists.
+#
+# Build-time proc-macro helpers, unmaintained (RUSTSEC-2024-0370
+#   proc-macro-error, RUSTSEC-2024-0436 paste): build-time only, not
+#   linked into the shipped binary.
+#
+# Unsound, transitive, no reachable fixed version (RUSTSEC-2026-0190
+#   anyhow Error::downcast_mut, RUSTSEC-2024-0429 glib VariantStrIter,
+#   RUSTSEC-2026-0186 memmap2 pointer offset): Klip calls none of the
+#   affected APIs directly.
+
+[advisories]
+# Report informational classes rather than hiding them, so a new
+# unmaintained/unsound advisory is visible in CI logs without turning
+# the build red.
+informational_warnings = ["unmaintained", "unsound", "notice"]
+
+# Intentionally empty. Nothing is suppressed: every advisory above is
+# informational and already non-blocking. If a real vulnerability ever
+# needs a temporary exception, add it here WITH a dated reason and a
+# tracking issue -- never to make a red build green.
+ignore = []

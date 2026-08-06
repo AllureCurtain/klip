@@ -42,7 +42,11 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm audit --registry=https://registry.npmjs.org --audit-level high
+      # Scoped to --prod: only production dependencies ship in the
+      # installer. Dev-tooling advisories must not block a release.
+      # Unlike CI, audits stay BEFORE the build here on purpose -- we
+      # do not want to publish artifacts we have not audited.
+      - run: pnpm audit --prod --registry=https://registry.npmjs.org --audit-level high
 
       - uses: rustsec/audit-check@v2
         with:

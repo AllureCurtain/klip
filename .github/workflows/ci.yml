@@ -27,10 +27,15 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm audit --registry=https://registry.npmjs.org --audit-level high
       - run: pnpm lint
       - run: pnpm test
       - run: pnpm build
+      # Audit runs last: a new advisory in the dependency tree must not
+      # mask lint/test/build results. Scoped to --prod because only
+      # production dependencies end up in the shipped app; advisories in
+      # eslint/vitest/mocha tooling are not user-facing and must not
+      # gate a release.
+      - run: pnpm audit --prod --registry=https://registry.npmjs.org --audit-level high
 
   backend:
     name: Backend
@@ -49,13 +54,16 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-      - uses: rustsec/audit-check@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          working-directory: src-tauri
       - run: cargo fmt -- --check
         working-directory: src-tauri
       - run: cargo clippy -- -D warnings
         working-directory: src-tauri
       - run: cargo test
         working-directory: src-tauri
+      # Audit runs last for the same reason as the frontend job. Ignore
+      # policy and the reviewed advisory inventory live in
+      # src-tauri/audit.toml.
+      - uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          working-directory: src-tauri
