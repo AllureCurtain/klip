@@ -1,6 +1,6 @@
 # Foundation Implementation Progress
 
-- 最后更新时间：2026-08-07 03:06（Asia/Shanghai）
+- 最后更新时间：2026-08-07 03:09（Asia/Shanghai）
 - 当前分支：`feat/foundation`
 - 基准提交：`423ab24`（与 `main` / `origin/main` 一致）
 
@@ -17,10 +17,11 @@
 - `77d7959`：完成 foundation worktree 初始化、运行时隔离、单 worktree 串行执行与可选 sccache 的开发文档。
 - `ef2cdcc`：稳定 Windows Selenium clipboard E2E 的窗口恢复/刷新等待，隔离 HTTP 端口并传播 runner 失败退出码；记录最终运行时与默认目录回退边界。
 - `f9dbea2`：记录最终 verify、Windows 运行时证据、默认目录回退限制和收尾清单。
+- `c853468`：记录首次成功 push、pre-push verify 与 PR 准备状态。
 
 ## 当前任务
 
-- 当前任务：创建面向 `main` 的 PR；`feat/foundation` 已成功推送到 `origin`，正在提交本次 push 证据后再次推送，再用完整 PR 描述创建 PR。
+- 当前任务：交付完成记录；`feat/foundation` 已推送，PR #4 已创建并保持未合并，正在提交/推送本最终状态并把新 SHA 补入 PR 描述。
 - README 已补齐 `pnpm install --frozen-lockfile` worktree 初始化、`KLIP_DATA_DIR` / `KLIP_LOG_DIR` / `KLIP_HTTP_PORT`、单活动 worktree 串行执行和可选 sccache。CHANGELOG 已在 rich-text 提交中说明 DB v4 备份不能回退到只支持 v3 的旧版；各功能行为与限制已分布记录在 README、CHANGELOG、API、DATABASE 与 ARCHITECTURE。
 - `platform-source` 已在 `1e5b63e` 提交，§8.5 与串行功能队列均已据实勾选；macOS/Linux 真实桌面验收仍保持 SKIPPED，不影响已完成的代码、目标编译和 Windows 验收结论。
 - Windows 保留现有进程文件名和窗口标题行为；macOS 使用 `NSWorkspace.frontmostApplication`，Accessibility 未授权时保留应用名且窗口标题为空；X11 使用 EWMH 活动窗口/PID/标题并从 `/proc` 解析应用名；Wayland和其他不支持平台一次性提示后返回空来源。
@@ -103,6 +104,7 @@
 - 最终 `pnpm verify` 重跑首次结果：前端 lint、Vitest 20/149、build、rustfmt、Clippy 均通过；Cargo 在移除/重链 `src-tauri/target/debug/klip.exe` 时因残留进程 PID `40088`（启动于默认目录回退尝试）占用文件，报 Windows `os error 5`。已按精确可执行路径停止该 PID，未改动源码；清理后重跑。
 - 最终 `pnpm verify` 重跑：通过，用时 185.2 秒。ESLint 通过；20 个 Vitest 文件/149 项通过；生产构建通过；`cargo fmt -- --check` 与 `cargo clippy -- -D warnings` 通过；Rust library 143 项通过、1 项显式 100k 性能测试 ignored，另有 2 个 main 与 5 个 clipboard integration tests 通过。随后 `git diff --check` 通过。
 - push：通过。`git push -u origin feat/foundation` 的 pre-push verify 全绿，远端新建 `origin/feat/foundation`；GitHub 提示 PR 创建入口 `https://github.com/AllureCurtain/klip/pull/new/feat/foundation`。本次 push 未修改 `main`。
+- PR：通过。`gh pr create --base main --head feat/foundation` 创建 `https://github.com/AllureCurtain/klip/pull/4`，标题为 `feat: complete the clipboard foundation stack`；正文包含功能摘要、完整提交清单、测试证据、DB v4/v5/v6、OCR 资源/体积、平台权限与降级、默认目录回退阻塞及所有 SKIPPED 项。PR 未合并。
 
 ## 技术决策
 
@@ -124,7 +126,7 @@
 
 ## 阻塞或跳过项
 
-- 最终 PR 创建存在外部认证风险：`gh auth status` 报 GitHub 账户 `AllureCurtain` 的 keyring token invalid，建议命令为 `gh auth login -h github.com`。实现与本地提交不受影响；最终仍会分别实测 `git push` 和 `gh pr create`，只有实际失败后才把对应交付项标为 BLOCKED。
+- RESOLVED：`gh auth status` 最终确认 `AllureCurtain` keyring token 有效；push 和 PR #4 创建均成功。
 - 默认目录无 env 的安全回退验收为 `SKIPPED/BLOCKED`：Windows Known Folder API 忽略临时 `APPDATA` 覆盖，不能在真实用户目录上继续做写入验收；健康端点回落到 `27717` 已观察，数据/日志路径结论仅作为平台证据，不声称完整隔离通过。
 - Windows 浏览器/Word 真实富文本闭环、macOS/Linux 真实平台验收、推送和 PR 创建仍未完成；Windows 完整分支已通过真实 Selenium WebView 与外部文本框“捕获 → 显示 Klip → 选择历史粘贴 → 焦点返回”闭环。富文本真实浏览器/Word 验收仍因未提供独立测试材料保持 SKIPPED。
 - SKIPPED：当前只有 Windows 真实桌面，无法实机验证 macOS `NSRunningApplication` 或 Linux X11/Wayland 桌面焦点行为；实际后端已分别通过 `aarch64-apple-darwin` / `x86_64-unknown-linux-gnu` 最小交叉静态编译。解除条件是提供对应真实桌面会话；不阻塞 Windows 验收及后续独立功能。
@@ -133,5 +135,5 @@
 
 ## 下一步准确操作
 
-- 提交本次 push/PR 记录并再次推送，确认 `feat/foundation` 工作树干净且 `main` 未变化。
-- 使用完整功能摘要、commit 清单、测试证据、DB v4/v5/v6、OCR 体积、平台降级和所有跳过项调用 `gh pr create --base main --head feat/foundation`，记录 PR URL 或完整外部错误。
+- 提交并推送本最终记录，把该提交 SHA 补入 PR #4 的 commit 清单；确认 `feat/foundation` 工作树干净且 `main` 仍为 `423ab24`。
+- 后续由 PR #4 审查流程决定是否合并；本执行不 merge main。解除默认目录回退阻塞需隔离 Windows 测试用户/VM，真实 macOS/Linux 验收需对应桌面会话。

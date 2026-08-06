@@ -425,8 +425,8 @@ release profile 是 `panic = "abort"`。这意味着：
 - [ ] 三个 env 生效：数据、日志、HTTP 端口进入指定位置；不设置时回落默认（SKIPPED/BLOCKED：Windows Known Folder API 不接受临时 APPDATA 覆盖，默认数据/日志安全隔离需测试用户或 VM）
 - [x] 最终文档/集成修复提交后，`feat/foundation` 工作树干净
 - [x] 推送 `feat/foundation`，创建面向 `main` 的 PR
-- [ ] PR 描述包含功能摘要、commit 清单、测试证据、DB migration、OCR 模型体积和平台降级边界
-- [ ] 不直接 push 或 merge main；是否合并由 PR 审查流程决定
+- [x] PR 描述包含功能摘要、commit 清单、测试证据、DB migration、OCR 模型体积和平台降级边界
+- [x] 不直接 push 或 merge main；是否合并由 PR 审查流程决定
 
 ### 全部完成标准
 - clipboard-rs 是唯一剪贴板库，监听、读取、写入和哈希防回灌全部走统一入口
