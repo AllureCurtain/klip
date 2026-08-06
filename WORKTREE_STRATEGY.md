@@ -407,7 +407,7 @@ release profile 是 `panic = "abort"`。这意味着：
 - [x] 针对性测试通过后提交 `refactor: unify clipboard backend on clipboard-rs`
 
 **串行功能队列**
-- [ ] 完成 §8.1 search-tantivy，针对性测试通过并 commit
+- [x] 完成 §8.1 search-tantivy，针对性测试通过并 commit
 - [ ] 完成 §8.2 rich-text 与 DB v4 migration，针对性测试通过并 commit
 - [ ] 完成 §8.3 OCR，针对性测试通过并 commit
 - [ ] 完成 §8.4 platform-focus，针对性测试通过并 commit

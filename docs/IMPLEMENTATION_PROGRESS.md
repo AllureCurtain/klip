@@ -1,6 +1,6 @@
 # Foundation Implementation Progress
 
-- 最后更新时间：2026-08-06 23:15（Asia/Shanghai）
+- 最后更新时间：2026-08-06 23:17（Asia/Shanghai）
 - 当前分支：`feat/foundation`
 - 基准提交：`423ab24`（与 `main` / `origin/main` 一致）
 
@@ -9,12 +9,12 @@
 - `423ab24`：本轮实现基线，与 `main` / `origin/main` 一致。
 - `d30e26c`：独立初始化本持续实施进度记录并审核单 worktree 策略。
 - `909040d`：完成 clipboard-rs 统一 backend、哈希抑制、monitor/writer/format 迁移及针对性验证。
-- search-tantivy 已完成实现和验收，正在创建本里程碑的 `feat: add tantivy full-text search` commit。
+- `0dc501b`：完成 Tantivy 全文索引、jieba 中文分词、批量/定时提交、删除同步、损坏重建和 SQLite `LIKE` 降级。
 
 ## 当前任务
 
-- 当前任务：search-tantivy 里程碑收尾；仅暂存 search 实现、依赖、测试、对应文档和清单，创建独立 commit。
-- search 代码、测试和文档已完成；尚未开始 rich-text 代码改动。
+- 当前任务：rich-text 功能块；先审查 clipboard-rs HTML/RTF API、现有数据库迁移/备份结构和前端 renderer，再落地 DB v4 与多格式捕获/写回。
+- search 已在 `0dc501b` 提交；尚未开始 rich-text 代码改动。
 - Windows 完整“监听 → 捕获 → 选择历史 → 粘贴”闭环仍列为最终运行时验收项。
 
 ## 已运行的测试及结果
@@ -51,4 +51,4 @@
 
 ## 下一步准确操作
 
-- 运行 `git diff --check`，核对仅有 search 里程碑文件后暂存并提交 `feat: add tantivy full-text search`；确认工作树干净，再把“当前任务”切换为 rich-text 与 DB v4 migration 后开始代码改动。
+- 仅提交本次 search SHA/清单状态记录并确认工作树干净；随后审查 clipboard-rs 的 `get_html()` / `get_rich_text()` / 多格式 `set()`、migration 与前端 renderer 测试，列出 rich-text 的准确修改面后开始实现。
