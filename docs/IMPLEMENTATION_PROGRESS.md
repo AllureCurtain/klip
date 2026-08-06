@@ -1,6 +1,6 @@
 # Foundation Implementation Progress
 
-- 最后更新时间：2026-08-06（Asia/Shanghai）
+- 最后更新时间：2026-08-06 22:42（Asia/Shanghai）
 - 当前分支：`feat/foundation`
 - 基准提交：`423ab24`（与 `main` / `origin/main` 一致）
 
@@ -12,14 +12,19 @@
 
 ## 当前任务
 
-1. 先提交实施文档初始记录（仅文档文件）。
-2. 审查并完成 clipboard-rs 地基：统一监听、读取、写入、文件拖放语义和哈希防回灌，补齐错误处理与回归测试。
+- 当前任务：search-tantivy 功能块；先完成 Tantivy 索引模块、查询降级和删除同步的设计审查，再实现并测试。
+- clipboard-rs 地基代码已完成针对性验证，准备提交独立功能 commit；Windows 完整“监听 → 捕获 → 选择历史 → 粘贴”闭环仍列为最终运行时验收项。
+- 文档初始记录已在 `d30e26c` 独立提交；后续每个功能块完成前更新本文件并随功能提交。
 
 ## 已运行的测试及结果
 
 - 本轮开始前未发现可复用的测试结果记录。
-- 当前尚未在本轮运行 `cargo test`、`pnpm test` 或 `pnpm verify`；首次针对性测试将在地基代码审查后运行。
-- 当前仅完成静态 Git 状态/差异检查；`git diff --check` 尚未发现内容错误（换行符提示不属于 diff 错误）。
+- `pnpm install --frozen-lockfile`：通过，prepare 已安装 foundation worktree 的 pre-push hook。
+- `cargo fmt --check`：通过。
+- `cargo test`：通过，110 个库测试、2 个 main 测试、5 个 clipboard integration tests，共 117 个测试通过。
+- `cargo clippy -- -D warnings`：通过。
+- `git diff --check`：通过；仅有 CRLF 转换提示。
+- Windows runtime smoke：`pnpm tauri:dev` 已启动 `klip.exe`；`KLIP_DATA_DIR=C:\tmp\klip-foundation\data` 下生成 `klip.db`/WAL，`KLIP_LOG_DIR=C:\tmp\klip-foundation\logs` 下生成日志文件；进程已停止。完整 UI 闭环尚未执行。
 
 ## 技术决策
 
@@ -31,9 +36,8 @@
 ## 阻塞或跳过项
 
 - 暂无已确认的外部阻塞。
-- Windows `tauri:dev` 手工闭环、macOS/Linux 真实平台验收、推送和 PR 创建尚未执行。
+- Windows 手工 UI 闭环、macOS/Linux 真实平台验收、search 及后续功能、推送和 PR 创建尚未执行。
 
 ## 下一步准确操作
 
-- 仅暂存 `WORKTREE_STRATEGY.md` 与 `docs/IMPLEMENTATION_PROGRESS.md`，创建独立文档提交；随后保持工作树干净，继续完成 clipboard-rs 地基并运行其针对性测试。
-
+- 仅暂存 clipboard-rs 地基相关代码、`Cargo.toml`/`Cargo.lock`、本进度记录和策略清单，创建 `refactor: unify clipboard backend on clipboard-rs`；提交后确认工作树干净，再开始 search。

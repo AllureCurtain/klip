@@ -14,6 +14,8 @@ pub trait ClipboardFormatStrategy: Send + Sync {
 pub enum FormatError {
     #[error("clipboard access failed: {0}")]
     ClipboardAccess(String),
+    #[error(transparent)]
+    Backend(#[from] crate::clipboard::backend::ClipboardError),
     #[error("format detection failed: {0}")]
     DetectionFailed(String),
     #[error("content extraction failed: {0}")]

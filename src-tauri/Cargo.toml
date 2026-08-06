@@ -20,7 +20,10 @@ tauri-plugin-shell = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rusqlite = { version = "0.31", features = ["bundled"] }
-arboard = "3"
+# Single clipboard library for every platform and every content type.
+# The `wayland` feature keeps Linux parity with the previous wl-copy path;
+# without it clipboard-rs is X11-only. See src/clipboard/backend.rs.
+clipboard-rs = { version = "0.3.5", features = ["wayland"] }
 sha2 = "0.10"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
@@ -46,8 +49,6 @@ tower = { version = "0.5", features = ["util"] }
 dirs = "6"
 
 [target.'cfg(windows)'.dependencies]
-clipboard-master = "4.0.0"
-clipboard-win = "5"
 windows = { version = "0.59", features = [
     "Win32_System_DataExchange",
     "Win32_System_Threading",

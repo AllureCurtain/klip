@@ -399,12 +399,12 @@ release profile 是 `panic = "abort"`。这意味着：
 - [x] 完成 §9.2 demo，确认 Tantivy 损坏可通过 `Result` 处理
 
 **地基：clipboard-rs**
-- [ ] 完成统一剪贴板 backend，重写 monitor / writer / format，补齐错误处理和回归测试
-- [ ] 从 manifest 和源码移除 clipboard-master、clipboard-win、arboard
-- [ ] 保留文件列表的 Preferred DropEffect，并验证文本、图片、文件捕获与写回
-- [ ] 验证哈希抑制的一次性、TTL、写失败 disarm 和监听关闭行为
-- [ ] Windows 下运行 `tauri:dev`，手工走通监听 → 捕获 → 选择历史 → 粘贴闭环
-- [ ] 针对性测试通过后提交 `refactor: unify clipboard backend on clipboard-rs`
+- [x] 完成统一剪贴板 backend，重写 monitor / writer / format，补齐错误处理和回归测试
+- [x] 从 manifest 和源码移除 clipboard-master、clipboard-win、arboard（`clipboard-rs` 的传递依赖除外）
+- [x] 保留文件列表的 Preferred DropEffect，并验证文本、图片、文件捕获与写回
+- [x] 验证哈希抑制的一次性、TTL、写失败 disarm 和监听关闭行为
+- [ ] Windows 下运行 `tauri:dev`，手工走通监听 → 捕获 → 选择历史 → 粘贴闭环（已完成启动 smoke，完整闭环留待最终验收）
+- [x] 针对性测试通过后提交 `refactor: unify clipboard backend on clipboard-rs`
 
 **串行功能队列**
 - [ ] 完成 §8.1 search-tantivy，针对性测试通过并 commit

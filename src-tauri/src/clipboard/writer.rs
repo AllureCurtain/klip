@@ -1,204 +1,105 @@
+//! The one path for writing a saved item back to the OS clipboard.
+//!
+//! Callers hand over a stored `content` string plus its `content_type` and
+//! `metadata`; this module decodes that representation and delegates the
+//! actual write to [`crate::clipboard::backend`]. Nothing here is
+//! platform-specific -- the platform differences live in the backend.
+//!
+//! Every write arms [`crate::clipboard::suppress`] first so the monitor does
+//! not capture Klip's own write as a user copy.
+
 use base64::Engine;
-use image::GenericImageView;
 
-#[cfg(target_os = "windows")]
-#[derive(serde::Deserialize)]
-struct ImageDimensions {
-    width: u32,
-    height: u32,
-}
+use crate::clipboard::{backend, hash, suppress};
+use crate::database::types::ContentType;
+use crate::AppError;
 
-#[cfg(target_os = "windows")]
-const KLIP_IGNORE_FORMAT: &str = "Clipboard Viewer Ignore";
+const PNG_DATA_URL_PREFIX: &str = "data:image/png;base64,";
 
-#[cfg(target_os = "windows")]
-struct ClipboardGuard {
-    _private: (),
-}
-
-#[cfg(target_os = "windows")]
-impl ClipboardGuard {
-    fn open(max_attempts: u32) -> Result<Self, String> {
-        let mut attempts = 0;
-        loop {
-            match clipboard_win::raw::open() {
-                Ok(()) => return Ok(Self { _private: () }),
-                Err(e) => {
-                    attempts += 1;
-                    if attempts >= max_attempts {
-                        return Err(format!(
-                            "failed to open clipboard after {} retries: {}",
-                            attempts, e
-                        ));
-                    }
-                    std::thread::sleep(std::time::Duration::from_millis(50));
-                }
-            }
-        }
-    }
-}
-
-#[cfg(target_os = "windows")]
-impl Drop for ClipboardGuard {
-    fn drop(&mut self) {
-        if let Err(e) = clipboard_win::raw::close() {
-            tracing::warn!("Failed to close clipboard: {}", e);
-        }
-    }
-}
-
-#[cfg(target_os = "windows")]
-fn raw_set_text_with_marker(text: &str) -> Result<(), String> {
-    let ignore_format = clipboard_win::raw::register_format(KLIP_IGNORE_FORMAT);
-    let _guard = ClipboardGuard::open(10)?;
-
-    clipboard_win::raw::empty().map_err(|e| e.to_string())?;
-    clipboard_win::raw::set_string(text).map_err(|e| e.to_string())?;
-
-    if let Some(id) = ignore_format {
-        clipboard_win::raw::set_without_clear(id.get(), b"Klip").map_err(|e| e.to_string())?;
-    }
-    Ok(())
-}
-
-#[cfg(target_os = "linux")]
-fn raw_set_text_with_marker(text: &str) -> Result<(), String> {
-    crate::platform::linux::set_text(text)
-}
-
-#[cfg(all(not(target_os = "windows"), not(target_os = "linux")))]
-fn raw_set_text_with_marker(text: &str) -> Result<(), String> {
-    let mut cb = arboard::Clipboard::new().map_err(|e| e.to_string())?;
-    cb.set_text(text).map_err(|e| e.to_string())
-}
-
-#[cfg(target_os = "windows")]
-fn raw_set_image_with_marker(png_data: &[u8], metadata: Option<&str>) -> Result<(), String> {
-    let img =
-        image::load_from_memory(png_data).map_err(|e| format!("failed to decode PNG: {}", e))?;
-
-    let (w, h) = if let Some(meta_str) = metadata {
-        serde_json::from_str::<ImageDimensions>(meta_str)
-            .map(|m| (m.width as usize, m.height as usize))
-            .unwrap_or_else(|_| {
-                let dims = img.dimensions();
-                (dims.0 as usize, dims.1 as usize)
-            })
-    } else {
-        let dims = img.dimensions();
-        (dims.0 as usize, dims.1 as usize)
-    };
-
-    let rgba = img.to_rgba8();
-    let raw = arboard::ImageData {
-        width: w,
-        height: h,
-        bytes: rgba.as_raw().clone().into(),
-    };
-
-    let mut attempts = 0;
-    loop {
-        let mut cb = arboard::Clipboard::new().map_err(|e| e.to_string())?;
-        match cb.set_image(raw.clone()) {
-            Ok(()) => break,
-            Err(e) => {
-                attempts += 1;
-                if attempts >= 10 {
-                    return Err(format!(
-                        "failed to set image after {} retries: {}",
-                        attempts, e
-                    ));
-                }
-                std::thread::sleep(std::time::Duration::from_millis(50));
-            }
-        }
-    }
-
-    let ignore_format = clipboard_win::raw::register_format(KLIP_IGNORE_FORMAT);
-    if let Ok(_guard) = ClipboardGuard::open(5) {
-        if let Some(id) = ignore_format {
-            if let Err(e) = clipboard_win::raw::set_without_clear(id.get(), b"Klip") {
-                tracing::warn!("Failed to set ignore marker: {}", e);
-            }
-        }
-    }
-
-    Ok(())
-}
-
-#[cfg(not(target_os = "windows"))]
-fn raw_set_image_with_marker(png_data: &[u8], _metadata: Option<&str>) -> Result<(), String> {
-    let img =
-        image::load_from_memory(png_data).map_err(|e| format!("failed to decode PNG: {}", e))?;
-    let dims = img.dimensions();
-    let rgba = img.to_rgba8();
-    let raw = arboard::ImageData {
-        width: dims.0 as usize,
-        height: dims.1 as usize,
-        bytes: rgba.as_raw().clone().into(),
-    };
-    let mut cb = arboard::Clipboard::new().map_err(|e| e.to_string())?;
-    cb.set_image(raw).map_err(|e| e.to_string())
-}
-
-#[cfg(target_os = "windows")]
-fn raw_set_file_list_with_marker(paths: &[&str]) -> Result<(), String> {
-    const DROPEFFECT_COPY: u32 = 5;
-
-    let ignore_format = clipboard_win::raw::register_format(KLIP_IGNORE_FORMAT);
-    let dropeffect_format = clipboard_win::raw::register_format("Preferred DropEffect");
-
-    let _guard = ClipboardGuard::open(10)?;
-
-    clipboard_win::raw::empty().map_err(|e| e.to_string())?;
-    clipboard_win::raw::set_file_list(paths).map_err(|e| e.to_string())?;
-
-    if let Some(id) = dropeffect_format {
-        clipboard_win::raw::set_without_clear(id.get(), &DROPEFFECT_COPY.to_le_bytes())
-            .map_err(|e| e.to_string())?;
-    } else {
-        tracing::warn!("Failed to register Preferred DropEffect format");
-    }
-
-    if let Some(id) = ignore_format {
-        clipboard_win::raw::set_without_clear(id.get(), b"Klip").map_err(|e| e.to_string())?;
-    }
-    Ok(())
-}
-
-#[cfg(target_os = "linux")]
-fn raw_set_file_list_with_marker(paths: &[&str]) -> Result<(), String> {
-    crate::platform::linux::set_file_list(paths)
-}
-
-#[cfg(all(not(target_os = "windows"), not(target_os = "linux")))]
-fn raw_set_file_list_with_marker(_paths: &[&str]) -> Result<(), String> {
-    Err("file copy back not supported on this platform".to_string())
-}
-
+/// Write a stored item back to the clipboard.
+///
+/// `metadata` is accepted because it is part of the stored representation, but
+/// image dimensions are read from the PNG itself rather than from metadata:
+/// when the two disagreed, the PNG was always the truthful one.
 pub fn copy_to_clipboard(
     content: &str,
-    content_type: &crate::database::types::ContentType,
-    metadata: Option<&str>,
-) -> Result<(), crate::AppError> {
+    content_type: &ContentType,
+    _metadata: Option<&str>,
+) -> Result<(), AppError> {
+    // Arm before writing. Arming afterwards would leave a window in which the
+    // clipboard has already changed but the monitor has nothing to match
+    // against, which is exactly the feedback loop this guards.
+    suppress::arm(hash::hash_stored_content(content_type.as_str(), content));
+
     let result = match content_type {
-        crate::database::types::ContentType::Text => raw_set_text_with_marker(content),
-        crate::database::types::ContentType::Image => {
-            let png_data = if let Some(stripped) = content.strip_prefix("data:image/png;base64,") {
-                base64::engine::general_purpose::STANDARD
-                    .decode(stripped)
-                    .map_err(|e| e.to_string())?
-            } else {
-                content.as_bytes().to_vec()
-            };
-            raw_set_image_with_marker(&png_data, metadata)
-        }
-        crate::database::types::ContentType::File => {
-            let paths: Vec<String> = serde_json::from_str(content)
-                .map_err(|e| format!("invalid file path JSON: {}", e))?;
-            let path_refs: Vec<&str> = paths.iter().map(|s| s.as_str()).collect();
-            raw_set_file_list_with_marker(&path_refs)
-        }
+        ContentType::Text => backend::write_text(content).map_err(AppError::from),
+        ContentType::Image => write_image(content),
+        ContentType::File => write_files(content),
     };
-    result.map_err(crate::AppError::Clipboard)
+
+    if result.is_err() {
+        // The content never reached the clipboard, so a later genuine copy of
+        // it must not be swallowed by the arm we just set.
+        suppress::disarm();
+    }
+
+    result
+}
+
+fn write_image(content: &str) -> Result<(), AppError> {
+    let png = decode_png(content)?;
+    backend::write_image(&png).map_err(AppError::from)
+}
+
+/// Images are stored as a `data:image/png;base64,` URL. Older rows, and any
+/// row written before that convention, may hold raw bytes instead.
+fn decode_png(content: &str) -> Result<Vec<u8>, AppError> {
+    match content.strip_prefix(PNG_DATA_URL_PREFIX) {
+        Some(encoded) => base64::engine::general_purpose::STANDARD
+            .decode(encoded)
+            .map_err(|e| AppError::Clipboard(format!("invalid base64 image content: {}", e))),
+        None => Ok(content.as_bytes().to_vec()),
+    }
+}
+
+fn write_files(content: &str) -> Result<(), AppError> {
+    let paths: Vec<String> = serde_json::from_str(content)
+        .map_err(|e| AppError::Clipboard(format!("invalid file path JSON: {}", e)))?;
+    let refs: Vec<&str> = paths.iter().map(|s| s.as_str()).collect();
+    backend::write_files(&refs).map_err(AppError::from)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn decode_png_accepts_a_data_url() {
+        let raw = b"\x89PNG\r\n\x1a\n";
+        let encoded = base64::engine::general_purpose::STANDARD.encode(raw);
+        let content = format!("{}{}", PNG_DATA_URL_PREFIX, encoded);
+
+        assert_eq!(decode_png(&content).unwrap(), raw);
+    }
+
+    #[test]
+    fn decode_png_passes_through_content_without_the_prefix() {
+        assert_eq!(decode_png("not-a-data-url").unwrap(), b"not-a-data-url");
+    }
+
+    #[test]
+    fn decode_png_rejects_malformed_base64() {
+        let content = format!("{}{}", PNG_DATA_URL_PREFIX, "!!!not base64!!!");
+
+        let err = decode_png(&content).unwrap_err();
+
+        assert!(matches!(err, AppError::Clipboard(msg) if msg.contains("invalid base64")));
+    }
+
+    #[test]
+    fn write_files_rejects_content_that_is_not_a_json_array() {
+        let err = write_files("C:/not/json.txt").unwrap_err();
+
+        assert!(matches!(err, AppError::Clipboard(msg) if msg.contains("invalid file path JSON")));
+    }
 }
