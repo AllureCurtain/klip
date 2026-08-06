@@ -270,9 +270,9 @@ SELECT * FROM clipboard_items
 ORDER BY last_used_at DESC, created_at DESC
 LIMIT ? OFFSET ?;
 
--- 搜索剪贴板记录
+-- Tantivy 返回匹配 ID 后，由 SQLite 叠加筛选、排序和分页
 SELECT * FROM clipboard_items
-WHERE preview LIKE ?
+WHERE id IN (SELECT CAST(value AS INTEGER) FROM json_each(?))
 ORDER BY last_used_at DESC, created_at DESC
 LIMIT ?;
 
@@ -414,7 +414,7 @@ pub struct RestoreSummary {
 | idx_clipboard_created_at | 按时间排序查询 |
 | idx_clipboard_last_used_created_at | 列表/搜索的最近使用排序 |
 | idx_clipboard_hash | 去重检查 |
-| idx_clipboard_preview | 搜索优化 |
+| idx_clipboard_preview | Tantivy 不可用时的 SQLite 搜索降级 |
 | idx_clipboard_content_type | 类型筛选 |
 | idx_clipboard_sensitive | 敏感条目筛选和排序 |
 | idx_clipboard_favorite_last_used | 收藏筛选和排序 |
@@ -425,7 +425,10 @@ pub struct RestoreSummary {
 ### 7.2 查询优化
 
 - 使用 `LIMIT` 限制返回数量
-- 搜索使用 `LIKE '%keyword%'` 包含匹配
+- 普通关键词搜索由 `search-index` 中的 Tantivy + jieba 生成匹配 ID，SQLite 继续负责类型、标签、收藏、敏感状态、日期、排序和分页
+- 精确匹配继续使用 SQLite 等值查询；Tantivy 初始化、校验、写入或查询失败时自动回退 `LIKE '%keyword%'`
+- 索引每 50 条或 5 秒批量提交，查询前刷新待提交内容；删除、清空、导入和恢复同步更新索引
+- 启动时校验 Tantivy checksum 和 SQLite 记录数，损坏或失配时保留旧索引并从 SQLite 全量重建
 - 批量操作使用事务
 
 ### 7.3 连接管理

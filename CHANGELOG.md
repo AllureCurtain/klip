@@ -4,6 +4,7 @@
 
 ### Added
 
+- Tantivy full-text indexing with jieba Chinese tokenization, batched background commits, corruption recovery from SQLite, and transparent `LIKE` fallback when the index is unavailable.
 - Regression coverage for Data Management settings path actions, restore cancellation, file path input labels, and Settings general/behavior control labels.
 - Regression coverage for Header icon-only actions.
 - Regression coverage for Header filter pressed states.

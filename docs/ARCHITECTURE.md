@@ -152,6 +152,7 @@ src-tauri/src/
 │
 ├── commands/            # IPC 命令
 │   ├── mod.rs           # 基础剪贴板、配置、窗口、系统命令
+│   ├── search.rs        # 搜索 IPC 命令
 │   └── productization.rs # 筛选、标签、导入导出、备份恢复、敏感内容
 │
 ├── clipboard/           # 剪贴板监听与格式处理
@@ -171,6 +172,9 @@ src-tauri/src/
 │   ├── data_portability.rs # JSON/CSV 导入导出、数据库备份恢复
 │   ├── productization.rs   # 筛选、标签、敏感内容扫描
 │   └── types.rs         # 数据类型（ClipboardItem, SystemInfo 等）
+│
+├── search/              # Tantivy 全文索引、jieba 分词、健康检测和 SQLite 重建
+│   └── mod.rs
 │
 ├── hotkey/              # 快捷键管理
 │   ├── mod.rs
@@ -192,19 +196,11 @@ src-tauri/src/
 ### 4.1 剪贴板监听流程
 
 ```rust
-// 简化示意
-#[cfg(target_os = "windows")]
+// 简化示意：所有平台共享 clipboard-rs backend
 fn start_monitor(app_handle: AppHandle) {
-    clipboard_master::Master::new(WindowsClipboardHandler { app_handle }).run();
-}
-
-#[cfg(not(target_os = "windows"))]
-fn start_monitor(app_handle: AppHandle) {
-    loop {
-        let text = arboard::Clipboard::new()?.get_text()?;
-        save_if_changed(app_handle, text);
-        sleep(500ms);
-    }
+    let mut watcher = ClipboardWatcherContext::new()?;
+    watcher.add_handler(KlipClipboardHandler { app_handle });
+    watcher.start_watch();
 }
 ```
 
@@ -406,6 +402,7 @@ interface AppConfig {
 | 数据库索引 | `created_at`、`last_used_at + created_at`、`content_type`、`hash` |
 | 数据库访问模型 | 单个 SQLite 连接 + `Mutex<Connection>` 串行化访问 |
 | 异步处理 | 剪贴板监听独立线程 |
+| 全文搜索 | Tantivy + jieba；50 条/5 秒批量提交，损坏时从 SQLite 重建，失败时回退 `LIKE` |
 | 批量操作 | 批量删除优化 |
 
 ---

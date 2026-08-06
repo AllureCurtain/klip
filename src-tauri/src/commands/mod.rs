@@ -1,6 +1,8 @@
 mod productization;
+mod search;
 
 pub use productization::*;
+pub use search::*;
 
 use crate::config::registry::{self, RuntimeEffect};
 use crate::database::{self, ClipboardItem, DiagnosticsInfo, SystemInfo};
@@ -17,16 +19,6 @@ pub fn get_clipboard_list(
     offset: Option<i64>,
 ) -> Result<Vec<ClipboardItem>, AppError> {
     database::clipboard::get_list(&db, limit.unwrap_or(100), offset.unwrap_or(0))
-}
-
-#[tauri::command]
-pub fn search_clipboard(
-    db: State<'_, database::Database>,
-    query: String,
-    content_type: Option<String>,
-    limit: Option<i64>,
-) -> Result<Vec<ClipboardItem>, AppError> {
-    database::clipboard::search(&db, &query, content_type.as_deref(), limit.unwrap_or(100))
 }
 
 #[tauri::command]

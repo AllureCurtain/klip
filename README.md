@@ -81,10 +81,11 @@ Klip 是一个本地单机剪贴板管理器。系统剪贴板通常只能记住
 
 ### 搜索和筛选
 
-- 支持关键词搜索。
+- 支持基于 Tantivy + jieba 的全文关键词搜索，可按拆分后的中文词组命中结果。
 - 支持文本、图片、文件类型筛选。
 - 支持收藏、标签、敏感内容、精确匹配和日期范围筛选。
 - 搜索框默认聚焦，适合用快捷键唤起后直接输入。
+- 搜索索引损坏时会从 SQLite 自动重建；索引暂时不可用时自动回退到 SQLite 包含匹配。
 
 ### 粘贴和窗口
 
@@ -149,7 +150,7 @@ Klip 是一个本地单机剪贴板管理器。系统剪贴板通常只能记住
 
 ## 隐私和数据
 
-Klip 将历史记录、标签、片段、来源规则和设置保存在本地 SQLite 数据库 `klip.db` 中。
+Klip 将历史记录、标签、片段、来源规则和设置保存在本地 SQLite 数据库 `klip.db` 中；全文索引保存在同一应用数据目录下的 `search-index`，可以随时从 SQLite 重建。
 
 | 平台 | 数据库位置 |
 |------|------------|
@@ -238,7 +239,8 @@ pnpm release:smoke
 | 状态管理 | Zustand |
 | 后端 | Rust |
 | 数据库 | SQLite, rusqlite |
-| 剪贴板 | arboard, clipboard-master, clipboard-win |
+| 全文搜索 | Tantivy, tantivy-jieba |
+| 剪贴板 | clipboard-rs |
 | 测试 | Vitest, Testing Library, Selenium WebDriver |
 
 ## 文档地图
@@ -270,5 +272,5 @@ pnpm release:smoke
 - [Tauri](https://tauri.app/)：桌面应用框架
 - [React](https://react.dev/)：前端 UI
 - [Rust](https://www.rust-lang.org/)：本地后端
-- [arboard](https://github.com/1Password/arboard)：跨平台剪贴板基础能力
-- [clipboard-master](https://crates.io/crates/clipboard-master)：Windows 剪贴板事件监听
+- [clipboard-rs](https://crates.io/crates/clipboard-rs)：跨平台剪贴板读取、写入与变更监听
+- [Tantivy](https://github.com/quickwit-oss/tantivy)：本地全文搜索索引

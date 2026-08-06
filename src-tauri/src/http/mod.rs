@@ -160,8 +160,7 @@ fn build_router(
             "/api/clipboard",
             get(list_clipboard).delete(clear_clipboard),
         )
-        .route("/api/clipboard/search", get(search_clipboard))
-        .route("/api/clipboard/search/advanced", post(advanced_search))
+        .merge(search_routes())
         .route("/api/clipboard/batch-delete", post(batch_delete))
         .route("/api/clipboard/batch-favorite", post(batch_favorite))
         .route("/api/clipboard/rescan-sensitive", post(rescan_sensitive))
@@ -215,6 +214,13 @@ fn build_router(
         .fallback(fallback_404)
         .layer(cors_layer())
         .with_state(state)
+}
+
+#[cfg(not(test))]
+fn search_routes() -> Router<AppState> {
+    Router::new()
+        .route("/api/clipboard/search", get(search_clipboard))
+        .route("/api/clipboard/search/advanced", post(advanced_search))
 }
 
 #[cfg(test)]

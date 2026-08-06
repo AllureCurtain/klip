@@ -10,6 +10,7 @@ const CLIPBOARD_ITEM_ORDER_BY: &str = " ORDER BY last_used_at DESC, created_at D
 #[derive(Debug, Clone)]
 pub struct ClipboardQuerySpec {
     pub text_query: Option<String>,
+    pub text_match_ids: Option<Vec<i64>>,
     pub content_type: Option<String>,
     pub favorite_only: bool,
     pub sensitive_only: Option<bool>,
@@ -25,6 +26,7 @@ impl ClipboardQuerySpec {
     pub fn new(limit: i64, offset: i64) -> Self {
         Self {
             text_query: None,
+            text_match_ids: None,
             content_type: None,
             favorite_only: false,
             sensitive_only: None,
@@ -52,8 +54,9 @@ pub(crate) fn fetch_items(
     db: &Database,
     spec: &ClipboardQuerySpec,
 ) -> Result<Vec<ClipboardItem>, AppError> {
+    let resolved = resolve_full_text_search(db, spec);
     let conn = db.get_connection()?;
-    fetch_items_locked(&conn, spec)
+    fetch_items_locked(&conn, &resolved)
 }
 
 pub(crate) fn fetch_items_locked(
@@ -74,8 +77,9 @@ pub(crate) fn fetch_items_with_tags(
     db: &Database,
     spec: &ClipboardQuerySpec,
 ) -> Result<Vec<ClipboardItem>, AppError> {
+    let resolved = resolve_full_text_search(db, spec);
     let conn = db.get_connection()?;
-    fetch_items_with_tags_locked(&conn, spec)
+    fetch_items_with_tags_locked(&conn, &resolved)
 }
 
 pub(crate) fn fetch_items_with_tags_locked(
@@ -186,6 +190,20 @@ fn build_clipboard_query(spec: &ClipboardQuerySpec) -> BuiltClipboardQuery {
         ));
     }
 
+    if let Some(item_ids) = spec.text_match_ids.as_deref() {
+        let item_ids_json = match serde_json::to_string(item_ids) {
+            Ok(value) => value,
+            Err(error) => {
+                tracing::warn!("Failed to encode full-text search IDs: {error}");
+                "[]".to_string()
+            }
+        };
+        let placeholder = push_param(&mut params, Value::Text(item_ids_json));
+        clauses.push(format!(
+            "id IN (SELECT CAST(value AS INTEGER) FROM json_each({placeholder}))"
+        ));
+    }
+
     if let Some(content_type) = spec.content_type.as_deref() {
         let placeholder = push_param(&mut params, Value::Text(content_type.to_string()));
         clauses.push(format!("content_type = {placeholder}"));
@@ -228,6 +246,30 @@ fn build_clipboard_query(spec: &ClipboardQuerySpec) -> BuiltClipboardQuery {
     sql.push_str(&push_param(&mut params, Value::Integer(spec.offset)));
 
     BuiltClipboardQuery { sql, params }
+}
+
+fn resolve_full_text_search(db: &Database, spec: &ClipboardQuerySpec) -> ClipboardQuerySpec {
+    let mut resolved = spec.clone();
+    let Some(query) = spec
+        .text_query
+        .as_deref()
+        .filter(|query| !query.trim().is_empty() && !spec.exact_match)
+    else {
+        return resolved;
+    };
+
+    match crate::search::search_ids(db, query) {
+        Ok(item_ids) => {
+            resolved.text_query = None;
+            resolved.text_match_ids = Some(item_ids);
+        }
+        Err(error) => tracing::warn!(
+            "Full-text search failed for query {:?}: {}; falling back to SQLite LIKE",
+            query,
+            error
+        ),
+    }
+    resolved
 }
 
 fn push_param(params: &mut Vec<Value>, value: Value) -> String {
@@ -337,6 +379,7 @@ mod tests {
     fn build_clipboard_query_preserves_parameter_order() {
         let spec = ClipboardQuerySpec {
             text_query: Some("hello".into()),
+            text_match_ids: None,
             content_type: Some("image".into()),
             favorite_only: true,
             sensitive_only: Some(false),
@@ -417,6 +460,7 @@ mod tests {
 
         let spec = ClipboardQuerySpec {
             text_query: Some("exact target".into()),
+            text_match_ids: None,
             content_type: Some("text".into()),
             favorite_only: true,
             sensitive_only: Some(true),

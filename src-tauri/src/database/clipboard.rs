@@ -354,23 +354,58 @@ pub fn insert(
         ],
     )?;
 
-    clipboard_query::fetch_item_by_hash_locked(&conn, &item.hash)
+    let saved = clipboard_query::fetch_item_by_hash_locked(&conn, &item.hash)?;
+    drop(conn);
+    if let Err(error) = crate::search::index_clipboard_item(db, &saved) {
+        tracing::warn!(
+            "Failed to synchronize clipboard item {} to full-text search: {}",
+            saved.id,
+            error
+        );
+    }
+    Ok(saved)
 }
 
 pub fn delete(db: &Database, id: i64) -> Result<(), AppError> {
     let conn = db.get_connection()?;
-    conn.execute("DELETE FROM clipboard_items WHERE id = ?1", [id])?;
+    let deleted = conn.execute("DELETE FROM clipboard_items WHERE id = ?1", [id])?;
+    drop(conn);
+    if deleted > 0 {
+        if let Err(error) = crate::search::delete_items(db, &[id]) {
+            tracing::warn!("Failed to delete item {id} from full-text search: {error}");
+        }
+    }
     Ok(())
 }
 
 pub fn clear(db: &Database) -> Result<(), AppError> {
     let conn = db.get_connection()?;
     conn.execute("DELETE FROM clipboard_items", [])?;
+    drop(conn);
+    if let Err(error) = crate::search::clear(db) {
+        tracing::warn!("Failed to clear full-text search index: {error}");
+    }
     Ok(())
 }
 
 pub fn cleanup_old_records(db: &Database, max_count: i64) -> Result<(), AppError> {
     let conn = db.get_connection()?;
+    let deleted_ids = {
+        let mut statement = conn.prepare(
+            "SELECT id FROM clipboard_items
+             WHERE is_favorited = 0
+               AND id NOT IN (
+                   SELECT id FROM clipboard_items
+                   WHERE is_favorited = 0
+                   ORDER BY created_at DESC
+                   LIMIT ?1
+               )",
+        )?;
+        let ids = statement
+            .query_map([max_count], |row| row.get::<_, i64>(0))?
+            .collect::<Result<Vec<_>, _>>()?;
+        ids
+    };
     conn.execute(
         "DELETE FROM clipboard_items
          WHERE is_favorited = 0
@@ -382,6 +417,10 @@ pub fn cleanup_old_records(db: &Database, max_count: i64) -> Result<(), AppError
            )",
         [max_count],
     )?;
+    drop(conn);
+    if let Err(error) = crate::search::delete_items(db, &deleted_ids) {
+        tracing::warn!("Failed to remove expired items from full-text search: {error}");
+    }
     Ok(())
 }
 

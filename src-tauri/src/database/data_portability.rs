@@ -250,6 +250,9 @@ pub fn restore_database(
     let pre_restore_backup_path_str = pre_restore_backup_path.to_string_lossy().to_string();
     let pre_restore_backup_size = backup_database(db, &pre_restore_backup_path_str)?.size;
     restore_from_attached_database(db, input_path)?;
+    if let Err(error) = crate::search::rebuild(db) {
+        tracing::warn!("Failed to rebuild full-text search after database restore: {error}");
+    }
 
     let size = std::fs::metadata(input)
         .map_err(|e| AppError::System(format!("failed to inspect restore source: {}", e)))?
@@ -308,6 +311,10 @@ fn import_items(db: &Database, items: Vec<ClipboardItem>) -> Result<ImportSummar
         }
     }
     tx.commit()?;
+    drop(conn);
+    if let Err(error) = crate::search::rebuild(db) {
+        tracing::warn!("Failed to rebuild full-text search after import: {error}");
+    }
     Ok(ImportSummary { imported, skipped })
 }
 

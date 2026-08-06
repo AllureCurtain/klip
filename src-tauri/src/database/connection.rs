@@ -2,12 +2,13 @@ use crate::AppError;
 use rusqlite::Connection;
 use std::{
     path::{Path, PathBuf},
-    sync::Mutex,
+    sync::{Arc, Mutex},
 };
 use tauri::Manager;
 
 pub struct Database {
     conn: Mutex<Connection>,
+    search_index: Option<Arc<crate::search::SearchIndex>>,
 }
 
 impl Database {
@@ -39,10 +40,24 @@ impl Database {
 
         conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")?;
 
-        let db = Self {
+        let mut db = Self {
             conn: Mutex::new(conn),
+            search_index: None,
         };
         db.init_schema()?;
+
+        let index_dir = path
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .join(crate::search::INDEX_DIRECTORY_NAME);
+        match crate::search::open_shared(&index_dir, &db) {
+            Ok(index) => db.search_index = Some(index),
+            Err(error) => tracing::warn!(
+                "Full-text search unavailable at {}: {}; SQLite LIKE fallback remains active",
+                index_dir.display(),
+                error
+            ),
+        }
         Ok(db)
     }
 
@@ -50,6 +65,7 @@ impl Database {
     pub fn from_conn(conn: Connection) -> Self {
         Self {
             conn: Mutex::new(conn),
+            search_index: None,
         }
     }
 
@@ -73,6 +89,10 @@ impl Database {
         self.conn
             .lock()
             .map_err(|e| AppError::Database(format!("mutex poisoned: {}", e)))
+    }
+
+    pub(crate) fn search_index(&self) -> Option<&Arc<crate::search::SearchIndex>> {
+        self.search_index.as_ref()
     }
 }
 

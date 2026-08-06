@@ -8,6 +8,7 @@ pub mod http;
 pub mod llm;
 pub mod platform;
 pub mod qa;
+pub mod search;
 pub mod tray;
 pub mod window;
 

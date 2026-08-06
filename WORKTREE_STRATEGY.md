@@ -245,14 +245,14 @@ rich-text、search-tantivy、OCR 都要加新 IPC 命令和 HTTP 路由，因此
 现状：`database/clipboard_query.rs:178` 是 `format!("%{}%", text_query)`，纯 `LIKE`。
 
 任务清单：
-- [ ] 新增 `search/` 模块：索引创建、写入、查询；正式定义并实现 §5 的 `index_text(item_id, text)` 公共接口
-- [ ] 集成 `tantivy-jieba` 做中文分词（tantivy 0.24.x，版本要对齐 `tantivy-tokenizer-api`）
-- [ ] 索引目录走 `database::connection::app_data_dir()`（§3.2）
-- [ ] 写入策略：批量 + 定时 commit（如每 5s 或积攒 50 条）
-- [ ] 删除同步：剪贴板记录删除时同步删除索引项
-- [ ] segment 合并压缩；启动健康检测 + 索引损坏时从 SQLite 全量重建
-- [ ] Tantivy 异常时降级回 SQLite `LIKE`（前端无感知）
-- [ ] 切换 `clipboard_query.rs` 的 `text_query` 分支为 FTS 查询
+- [x] 新增 `search/` 模块：索引创建、写入、查询；正式定义并实现 §5 的 `index_text(item_id, text)` 公共接口
+- [x] 集成 `tantivy-jieba` 做中文分词（tantivy 0.24.x，版本要对齐 `tantivy-tokenizer-api`）
+- [x] 索引目录走 `database::connection::app_data_dir()`（§3.2）
+- [x] 写入策略：批量 + 定时 commit（如每 5s 或积攒 50 条）
+- [x] 删除同步：剪贴板记录删除时同步删除索引项
+- [x] segment 合并压缩；启动健康检测 + 索引损坏时从 SQLite 全量重建
+- [x] Tantivy 异常时降级回 SQLite `LIKE`（前端无感知）
+- [x] 切换 `clipboard_query.rs` 的 `text_query` 分支为 FTS 查询
 
 完成标准：
 - **10 万条数据**搜索在毫秒级。（1k 条的基准无意义 —— `LIKE` 在 1k 条上也是毫秒级，区分不出改进。）
