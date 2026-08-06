@@ -1,6 +1,6 @@
 # Foundation Implementation Progress
 
-- 最后更新时间：2026-08-07 02:17（Asia/Shanghai）
+- 最后更新时间：2026-08-07 03:01（Asia/Shanghai）
 - 当前分支：`feat/foundation`
 - 基准提交：`423ab24`（与 `main` / `origin/main` 一致）
 
@@ -15,10 +15,11 @@
 - `82fa3a1`：完成 Windows HWND、macOS `NSRunningApplication`、Linux X11 EWMH 的粘贴目标焦点恢复及 Wayland/其他平台无错误降级。
 - `1e5b63e`：完成 Windows/macOS/X11 来源追踪、DB v6 持久化与兼容恢复、API/前端来源展示及 Windows runtime acceptance。
 - `77d7959`：完成 foundation worktree 初始化、运行时隔离、单 worktree 串行执行与可选 sccache 的开发文档。
+- `ef2cdcc`：稳定 Windows Selenium clipboard E2E 的窗口恢复/刷新等待，隔离 HTTP 端口并传播 runner 失败退出码；记录最终运行时与默认目录回退边界。
 
 ## 当前任务
 
-- 当前任务：最终集成记录；默认目录回退的 Windows Known Folder 限制已确认并记录，正在提交 E2E 稳定性修复与进度证据，之后重新运行完整 `pnpm verify` 并准备最终文档/推送/PR。
+- 当前任务：最终交付准备；完整 verify 重跑已通过，正在提交最终进度/清单记录，随后检查 clean worktree、GitHub 认证并依次尝试 push 与 PR。
 - README 已补齐 `pnpm install --frozen-lockfile` worktree 初始化、`KLIP_DATA_DIR` / `KLIP_LOG_DIR` / `KLIP_HTTP_PORT`、单活动 worktree 串行执行和可选 sccache。CHANGELOG 已在 rich-text 提交中说明 DB v4 备份不能回退到只支持 v3 的旧版；各功能行为与限制已分布记录在 README、CHANGELOG、API、DATABASE 与 ARCHITECTURE。
 - `platform-source` 已在 `1e5b63e` 提交，§8.5 与串行功能队列均已据实勾选；macOS/Linux 真实桌面验收仍保持 SKIPPED，不影响已完成的代码、目标编译和 Windows 验收结论。
 - Windows 保留现有进程文件名和窗口标题行为；macOS 使用 `NSWorkspace.frontmostApplication`，Accessibility 未授权时保留应用名且窗口标题为空；X11 使用 EWMH 活动窗口/PID/标题并从 `/proc` 解析应用名；Wayland和其他不支持平台一次性提示后返回空来源。
@@ -98,6 +99,8 @@
 - 最终 Windows Selenium E2E：通过。临时 EdgeDriver `151.0.4129.59` 与 WebView2 匹配；真实 Tauri WebView 完成剪贴板捕获、关键词搜索、外部剪贴板覆盖后窗口显示、刷新 hydration、记录点击和剪贴板恢复，1 项通过；runner 现会传播 Mocha 失败退出码并隔离 HTTP 端口 `27718`。
 - 最终 Windows tauri:dev runtime：通过。证据目录 `D:\Study\cc\klip\.worktrees\foundation\e2e\.tmp\final-runtime-20260807-023846`；`KLIP_HTTP_PORT=27834`，数据/索引位于隔离 `data`，日志位于隔离 `logs`。目标窗体 `powershell.exe` / `Klip Final Acceptance Target 20260807-023846` 写入 `KLIP-FINAL-ACCEPTANCE-20260807-023846`；来源 API 保留应用与标题。显示 Klip 前台 HWND `21105954`，显示后 Klip HWND `3608040`，粘贴后恢复 `21105954`，目标文本框收到准确文本。Klip、Vite、Cargo、WebView、目标窗体均由验收脚本停止。
 - 默认目录回退尝试：健康端点 `27717` 通过，但在临时 `APPDATA=D:\Study\cc\klip\.worktrees\foundation\e2e\.tmp\default-runtime-20260807-024658\AppData\Roaming` / `LOCALAPPDATA` 下，Windows Tauri Known Folder API 仍解析到真实 `C:\Users\AllureLove\AppData\Roaming\com.klip.app`（诊断端点已返回该路径）；未发送剪贴板输入，端口已释放。标记 `SKIPPED/BLOCKED`：当前用户环境没有可安全替代 Known Folder 的 Windows 用户配置，解除条件是隔离测试用户/VM 或产品提供显式默认目录注入点。
+- 最终 `pnpm verify` 重跑首次结果：前端 lint、Vitest 20/149、build、rustfmt、Clippy 均通过；Cargo 在移除/重链 `src-tauri/target/debug/klip.exe` 时因残留进程 PID `40088`（启动于默认目录回退尝试）占用文件，报 Windows `os error 5`。已按精确可执行路径停止该 PID，未改动源码；清理后重跑。
+- 最终 `pnpm verify` 重跑：通过，用时 185.2 秒。ESLint 通过；20 个 Vitest 文件/149 项通过；生产构建通过；`cargo fmt -- --check` 与 `cargo clippy -- -D warnings` 通过；Rust library 143 项通过、1 项显式 100k 性能测试 ignored，另有 2 个 main 与 5 个 clipboard integration tests 通过。随后 `git diff --check` 通过。
 
 ## 技术决策
 
@@ -121,12 +124,12 @@
 
 - 最终 PR 创建存在外部认证风险：`gh auth status` 报 GitHub 账户 `AllureCurtain` 的 keyring token invalid，建议命令为 `gh auth login -h github.com`。实现与本地提交不受影响；最终仍会分别实测 `git push` 和 `gh pr create`，只有实际失败后才把对应交付项标为 BLOCKED。
 - 默认目录无 env 的安全回退验收为 `SKIPPED/BLOCKED`：Windows Known Folder API 忽略临时 `APPDATA` 覆盖，不能在真实用户目录上继续做写入验收；健康端点回落到 `27717` 已观察，数据/日志路径结论仅作为平台证据，不声称完整隔离通过。
-- Windows 浏览器/Word 真实富文本闭环、macOS/Linux 真实平台验收、推送和 PR 创建尚未执行；Windows 已通过真实剪贴板 OCR、platform-source 来源捕获及外部文本框“捕获 → 显示 Klip → 选择历史粘贴 → 焦点返回”闭环，但最终仍需补一次面向完整分支的运行时回归。
+- Windows 浏览器/Word 真实富文本闭环、macOS/Linux 真实平台验收、推送和 PR 创建仍未完成；Windows 完整分支已通过真实 Selenium WebView 与外部文本框“捕获 → 显示 Klip → 选择历史粘贴 → 焦点返回”闭环。富文本真实浏览器/Word 验收仍因未提供独立测试材料保持 SKIPPED。
 - SKIPPED：当前只有 Windows 真实桌面，无法实机验证 macOS `NSRunningApplication` 或 Linux X11/Wayland 桌面焦点行为；实际后端已分别通过 `aarch64-apple-darwin` / `x86_64-unknown-linux-gnu` 最小交叉静态编译。解除条件是提供对应真实桌面会话；不阻塞 Windows 验收及后续独立功能。
 - OCR 静态链接 BLOCKED 已解除：14.43 与官方静态包 ABI 不兼容，已改用官方 1.24.2 动态 DLL；DLL 入包后的 Windows 真实推理已通过，macOS/Linux 真实环境验收仍未执行且不得声称通过。
 - SKIPPED：用户未提供独立 rich-text 测试文件；已用内建恶意 HTML、DB migration/restore 和 Windows clipboard-rs 集成测试覆盖，若后续提供文件可在最终验收补跑。
 
 ## 下一步准确操作
 
-- 提交 E2E runner/测试稳定性修复与本进度记录；随后重新运行完整 `pnpm verify` 和 `git diff --check`。
-- 更新最终清单，记录默认回退 `SKIPPED/BLOCKED` 与解除条件，提交收尾文档后执行 `git push feat/foundation` 和面向 `main` 的 PR 创建。
+- 检查并提交本最终进度/清单记录，确认 `feat/foundation` 工作树干净且 `main` 未变化。
+- 实测 `gh auth status`、`git push -u origin feat/foundation`、`gh pr create --base main --head feat/foundation`；成功则记录 PR URL，失败则记录完整错误和准确恢复命令。
