@@ -40,6 +40,15 @@ fn main() {
             klip::database::init(app.handle().clone())?;
             tracing::info!("Database initialized");
 
+            // OCR owns one background worker and restores pending image jobs.
+            match klip::ocr::init(app.handle().clone()) {
+                Ok(()) => tracing::info!("OCR worker started"),
+                Err(error) => tracing::warn!(
+                    "OCR worker unavailable; clipboard capture remains active: {}",
+                    error
+                ),
+            }
+
             // Start the loopback HTTP API after the database is ready. It opens
             // its own SQLite connection while reusing the process-wide search writer.
             klip::http::start_server(app.handle().clone())?;

@@ -365,6 +365,26 @@ fn save_clipboard_item(
                 tracing::info!("clipboard-updated event emitted");
             }
 
+            if saved_item.content_type == database::ContentType::Image
+                && saved_item.ocr.as_ref().map(|ocr| ocr.status)
+                    == Some(database::OcrStatus::Pending)
+            {
+                if let Some(service) = app_handle.try_state::<crate::ocr::OcrService>() {
+                    if let Err(error) = service.enqueue(saved_item.id) {
+                        tracing::warn!(
+                            "Failed to enqueue OCR for clipboard item {}: {}",
+                            saved_item.id,
+                            error
+                        );
+                    }
+                } else {
+                    tracing::warn!(
+                        "OCR worker is unavailable; item {} remains pending",
+                        saved_item.id
+                    );
+                }
+            }
+
             if let Ok(max_count_str) = database::config::get(&db, registry::KEY_MAX_HISTORY_COUNT) {
                 if let Ok(max_count) = max_count_str.unwrap_or_default().parse::<i64>() {
                     if max_count > 0 {

@@ -41,6 +41,40 @@ pub struct ClipboardFormat {
     pub content: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum OcrStatus {
+    Pending,
+    Completed,
+    Failed,
+}
+
+impl OcrStatus {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Pending => "pending",
+            Self::Completed => "completed",
+            Self::Failed => "failed",
+        }
+    }
+
+    pub fn from_db(value: &str) -> Self {
+        match value {
+            "completed" => Self::Completed,
+            "failed" => Self::Failed,
+            _ => Self::Pending,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ClipboardOcr {
+    pub status: OcrStatus,
+    pub text: String,
+    pub error: Option<String>,
+    pub updated_at: i64,
+}
+
 impl ContentType {
     pub fn as_str(&self) -> &'static str {
         match self {
@@ -79,6 +113,8 @@ pub struct ClipboardItem {
     pub sensitivity_reason: Option<String>,
     #[serde(default)]
     pub formats: Vec<ClipboardFormat>,
+    #[serde(default)]
+    pub ocr: Option<ClipboardOcr>,
     pub tags: Vec<Tag>,
     pub created_at: i64,
     pub last_used_at: i64,

@@ -99,6 +99,26 @@ CREATE TABLE clipboard_formats (
 
 捕获文本时会原子写入纯文本与当前剪贴板携带的 HTML/RTF。同一纯文本再次捕获时，以最新格式集合替换旧集合，避免粘贴陈旧富格式。
 
+#### clipboard_ocr（图片识别状态表）
+
+图片捕获与 OCR 推理解耦：图片入库时原子创建 `pending` 状态，单后台 worker 完成推理后写入 `completed` 文本或 `failed` 错误。删除图片会通过外键级联删除 OCR 状态。
+
+```sql
+CREATE TABLE clipboard_ocr (
+    item_id    INTEGER PRIMARY KEY,
+    status     TEXT NOT NULL CHECK (status IN ('pending', 'completed', 'failed')),
+    text       TEXT NOT NULL DEFAULT '',
+    error      TEXT,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY (item_id) REFERENCES clipboard_items(id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_clipboard_ocr_status
+ON clipboard_ocr(status, updated_at);
+```
+
+只有 `completed` 的 OCR 文本进入 Tantivy 和 SQLite 搜索 fallback。启动时 worker 会按 `updated_at, item_id` 恢复全部 `pending` 任务；同一图片的失败状态在再次捕获时重置为 `pending`。
+
 ---
 
 ### 2.2 app_config (应用配置表)
@@ -244,6 +264,7 @@ pub struct ClipboardItem {
     pub is_sensitive: bool,
     pub sensitivity_reason: Option<String>,
     pub formats: Vec<ClipboardFormat>,
+    pub ocr: Option<ClipboardOcr>,
     pub tags: Vec<Tag>,
     pub created_at: i64,
     pub last_used_at: i64,
@@ -329,11 +350,11 @@ VALUES (?, ?, ?);
 
 ### 4.1 版本管理
 
-在 `app_config` 表中存储数据库版本。当前 schema 版本由后端常量 `CURRENT_DB_VERSION` 管理，当前值为 `4`：
+在 `app_config` 表中存储数据库版本。当前 schema 版本由后端常量 `CURRENT_DB_VERSION` 管理，当前值为 `5`：
 
 ```sql
 INSERT INTO app_config (key, value, updated_at)
-VALUES ('db_version', '4', strftime('%s', 'now') * 1000);
+VALUES ('db_version', '5', strftime('%s', 'now') * 1000);
 ```
 
 ### 4.2 迁移流程
@@ -344,6 +365,7 @@ VALUES ('db_version', '4', strftime('%s', 'now') * 1000);
 - v1 -> v2 会规范化旧热键配置，并迁移早期窗口尺寸默认值。
 - v2 -> v3 会把早期较小窗口尺寸迁移到当前默认尺寸。
 - v3 -> v4 会创建 `clipboard_formats`，并为既有文本记录回填纯文本格式。
+- v4 -> v5 会创建 `clipboard_ocr`，并把既有图片记录初始化为 `pending`。
 - 完成后写回当前 `db_version`。
 
 ```rust
@@ -358,6 +380,9 @@ fn run_migrations(db: &Connection) -> Result<()> {
     }
     if version < 4 {
         migrate_v3_to_v4(db)?;
+    }
+    if version < 5 {
+        migrate_v4_to_v5(db)?;
     }
 
     Ok(())
@@ -413,7 +438,7 @@ fn cleanup_old_records(db: &Connection, max_count: i64) -> Result<()> {
 
 ### 6.3 数据库恢复
 
-`restore_database` 会先用只读 SQLite 连接校验备份文件，执行 `PRAGMA integrity_check`，并确认必需表存在。恢复前会自动创建当前数据库的 `.pre-restore.bak` 备份。恢复时通过当前连接 `ATTACH DATABASE` 后导入数据，不直接替换已打开的数据库文件。v3 备份会在恢复后迁移并回填纯文本格式；v4 备份必须包含 `clipboard_formats`。由于旧版应用会拒绝更高 schema 版本，v4 备份不能恢复到只支持 v3 的 Klip。
+`restore_database` 会先用只读 SQLite 连接校验备份文件，执行 `PRAGMA integrity_check`，并确认必需表存在。恢复前会自动创建当前数据库的 `.pre-restore.bak` 备份。恢复时通过当前连接 `ATTACH DATABASE` 后导入数据，不直接替换已打开的数据库文件。v3 备份会迁移并回填纯文本格式；v4 备份必须包含 `clipboard_formats`，恢复后为图片补建 pending OCR；v5 备份还必须包含 `clipboard_ocr`，并保留 pending/completed/failed 状态。旧版应用会拒绝更高 schema 版本，因此 v5 备份不能恢复到只支持 v4 或更早 schema 的 Klip。
 
 ```rust
 pub struct RestoreSummary {
@@ -438,6 +463,7 @@ pub struct RestoreSummary {
 | idx_clipboard_preview | Tantivy 不可用时的 SQLite 搜索降级 |
 | idx_clipboard_content_type | 类型筛选 |
 | idx_clipboard_sensitive | 敏感条目筛选和排序 |
+| idx_clipboard_ocr_status | OCR pending 恢复和状态扫描 |
 | idx_clipboard_favorite_last_used | 收藏筛选和排序 |
 | idx_clipboard_item_tags_tag_id | 标签筛选 |
 | idx_snippets_updated_at | 片段列表排序 |

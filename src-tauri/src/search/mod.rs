@@ -1,4 +1,4 @@
-use crate::database::{ClipboardItem, ContentType, Database};
+use crate::database::{ClipboardItem, ContentType, Database, OcrStatus};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -485,7 +485,20 @@ fn register_tokenizer(index: &Index) {
 fn searchable_text(item: &ClipboardItem) -> String {
     let preview = item.preview.as_deref().unwrap_or_default();
     match item.content_type {
-        ContentType::Image => preview.to_string(),
+        ContentType::Image => {
+            let ocr_text = item
+                .ocr
+                .as_ref()
+                .filter(|ocr| ocr.status == OcrStatus::Completed)
+                .map(|ocr| ocr.text.trim())
+                .unwrap_or_default();
+            match (preview.is_empty(), ocr_text.is_empty()) {
+                (true, true) => String::new(),
+                (false, true) => preview.to_string(),
+                (true, false) => ocr_text.to_string(),
+                (false, false) => format!("{preview}\n{ocr_text}"),
+            }
+        }
         ContentType::Text | ContentType::File => {
             if preview.is_empty() || item.content.contains(preview) {
                 item.content.clone()
@@ -514,15 +527,29 @@ fn database_documents(db: &Database) -> Result<Vec<(i64, String)>, SearchError> 
         .get_connection()
         .map_err(|error| SearchError::Unavailable(error.to_string()))?;
     let mut statement = conn
-        .prepare("SELECT id, content_type, content, preview FROM clipboard_items ORDER BY id")
+        .prepare(
+            "SELECT i.id, i.content_type, i.content, i.preview, COALESCE(o.text, '')
+             FROM clipboard_items i
+             LEFT JOIN clipboard_ocr o ON o.item_id = i.id AND o.status = 'completed'
+             ORDER BY i.id",
+        )
         .map_err(|error| SearchError::Unavailable(error.to_string()))?;
     let rows = statement
         .query_map([], |row| {
             let content_type = ContentType::from_db(&row.get::<_, String>(1)?);
             let content = row.get::<_, String>(2)?;
             let preview = row.get::<_, Option<String>>(3)?;
+            let ocr_text = row.get::<_, String>(4)?;
             let text = match content_type {
-                ContentType::Image => preview.unwrap_or_default(),
+                ContentType::Image => {
+                    let preview = preview.unwrap_or_default();
+                    match (preview.is_empty(), ocr_text.is_empty()) {
+                        (true, true) => String::new(),
+                        (false, true) => preview,
+                        (true, false) => ocr_text,
+                        (false, false) => format!("{preview}\n{ocr_text}"),
+                    }
+                }
                 ContentType::Text | ContentType::File => match preview {
                     Some(preview) if !preview.is_empty() && !content.contains(&preview) => {
                         format!("{preview}\n{content}")
@@ -614,6 +641,19 @@ mod tests {
         crate::database::clipboard::insert(db, &item).expect("insert searchable text")
     }
 
+    fn insert_image(db: &Database, hash: &str) -> ClipboardItem {
+        let item = NewClipboardItem {
+            content_type: ContentType::Image,
+            data: vec![1, 2, 3],
+            preview: Some("image fixture".into()),
+            hash: hash.into(),
+            size: 3,
+            metadata: None,
+            formats: Vec::new(),
+        };
+        crate::database::clipboard::insert(db, &item).expect("insert searchable image")
+    }
+
     #[test]
     fn jieba_matches_non_contiguous_chinese_terms() {
         let (root, db) = temp_database("jieba");
@@ -680,6 +720,67 @@ mod tests {
 
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].id, expected.id);
+    }
+
+    #[test]
+    fn completed_ocr_text_is_searchable_after_incremental_update_and_rebuild() {
+        let (root, db) = temp_database("ocr-rebuild");
+        let image = insert_image(&db, "ocr-search-image");
+        crate::database::ocr::complete(&db, image.id, "离线发票号码 KLIP-2026").unwrap();
+        let completed = crate::database::clipboard::get_by_id(&db, image.id)
+            .unwrap()
+            .unwrap();
+
+        index_clipboard_item(&db, &completed).expect("index completed OCR text");
+        let incremental = crate::database::clipboard::search(&db, "发票号码", None, 20)
+            .expect("search incrementally indexed OCR text");
+        assert_eq!(
+            incremental.iter().map(|item| item.id).collect::<Vec<_>>(),
+            vec![image.id]
+        );
+
+        rebuild(&db).expect("rebuild index with OCR text");
+        let rebuilt = crate::database::clipboard::search(&db, "KLIP-2026", None, 20)
+            .expect("search rebuilt OCR text");
+        assert_eq!(
+            rebuilt.iter().map(|item| item.id).collect::<Vec<_>>(),
+            vec![image.id]
+        );
+
+        drop(db);
+        std::fs::remove_dir_all(root).expect("remove OCR search test directory");
+    }
+
+    #[test]
+    fn completed_ocr_text_is_available_in_sqlite_fallback() {
+        let connection = rusqlite::Connection::open_in_memory().expect("open in-memory database");
+        connection
+            .execute_batch("PRAGMA foreign_keys=ON;")
+            .expect("configure in-memory database");
+        let db = Database::from_conn(connection);
+        db.init_schema().expect("initialize schema");
+        let image = insert_image(&db, "ocr-fallback-image");
+        crate::database::ocr::complete(&db, image.id, "本地识别结果").unwrap();
+
+        let results = crate::database::clipboard::search(&db, "识别结果", None, 20)
+            .expect("search OCR text with SQLite fallback");
+
+        assert_eq!(
+            results.iter().map(|item| item.id).collect::<Vec<_>>(),
+            vec![image.id]
+        );
+
+        {
+            let conn = db.get_connection().unwrap();
+            conn.execute(
+                "UPDATE clipboard_ocr SET status = 'failed' WHERE item_id = ?1",
+                [image.id],
+            )
+            .unwrap();
+        }
+        let failed = crate::database::clipboard::search(&db, "识别结果", None, 20)
+            .expect("ignore failed OCR text in SQLite fallback");
+        assert!(failed.is_empty());
     }
 
     #[test]

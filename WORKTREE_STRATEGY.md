@@ -285,11 +285,11 @@ rich-text、search-tantivy、OCR 都要加新 IPC 命令和 HTTP 路由，因此
 **目标**：剪贴板图片离线识别文字并回灌搜索索引，使图片内容可搜索。
 
 任务清单：
-- [ ] 新增 `ocr/` 模块：`oar-ocr`（0.6.x）+ ONNX Runtime（`ort`）
-- [ ] 模型文件打包进安装包/资源目录
-- [ ] 捕获图片后**异步**跑识别（不阻塞主捕获线程）
-- [ ] 识别文字回灌 search 已实现的 `index_text`
-- [ ] 缩略图 / 识别状态在前端展示
+- [x] 新增 `ocr/` 模块：`oar-ocr`（0.6.x）+ ONNX Runtime（`ort`）
+- [x] 模型文件打包进安装包/资源目录
+- [x] 捕获图片后**异步**跑识别（不阻塞主捕获线程）
+- [x] 识别文字回灌 search 已实现的 `index_text`
+- [x] 缩略图 / 识别状态在前端展示
 
 完成标准：
 - 复制含文字的截图，搜索图中文字可定位该图
@@ -409,7 +409,7 @@ release profile 是 `panic = "abort"`。这意味着：
 **串行功能队列**
 - [x] 完成 §8.1 search-tantivy，针对性测试通过并 commit
 - [x] 完成 §8.2 rich-text 与 DB v4 migration，针对性测试通过并 commit
-- [ ] 完成 §8.3 OCR，针对性测试通过并 commit
+- [x] 完成 §8.3 OCR，针对性测试通过并 commit
 - [ ] 完成 §8.4 platform-focus，针对性测试通过并 commit
 - [ ] 完成 §8.5 platform-source，针对性测试通过并 commit
 

@@ -369,6 +369,7 @@ pub fn insert(
         &content_str,
         &item.formats,
     )?;
+    crate::database::ocr::ensure_for_image(&transaction, saved_id, item.content_type, now)?;
     transaction.commit()?;
 
     let saved = clipboard_query::fetch_item_by_hash_locked(&conn, &item.hash)?;

@@ -11,6 +11,7 @@ const storeState = vi.hoisted(() => ({
   fetchItems: vi.fn(),
   searchItems: vi.fn(),
   addItems: vi.fn(),
+  upsertItem: vi.fn(),
   setItems: vi.fn(),
   fetchTags: vi.fn(),
   clearSelection: vi.fn(),
@@ -22,6 +23,7 @@ const productivityState = vi.hoisted(() => ({
 
 const tauriMocks = vi.hoisted(() => ({
   clipboardUpdated: undefined as undefined | ((event: { payload: unknown }) => void),
+  clipboardItemUpdated: undefined as undefined | ((item: unknown) => void),
   configChanged: undefined as
     | undefined
     | ((key: string, value: string) => void),
@@ -34,6 +36,10 @@ const tauriMocks = vi.hoisted(() => ({
     return Promise.resolve(vi.fn());
   }),
   onClipboardCleared: vi.fn(() => Promise.resolve(vi.fn())),
+  onClipboardItemUpdated: vi.fn((callback: (item: unknown) => void) => {
+    tauriMocks.clipboardItemUpdated = callback;
+    return Promise.resolve(vi.fn());
+  }),
   onConfigChanged: vi.fn((callback: (key: string, value: string) => void) => {
     tauriMocks.configChanged = callback;
     return Promise.resolve(vi.fn());
@@ -76,6 +82,7 @@ vi.mock('@/lib/tauri', () => ({
     get: tauriMocks.configGet,
   },
   onClipboardCleared: tauriMocks.onClipboardCleared,
+  onClipboardItemUpdated: tauriMocks.onClipboardItemUpdated,
   onConfigChanged: tauriMocks.onConfigChanged,
   onOpenSettings: tauriMocks.onOpenSettings,
   onOpenAbout: tauriMocks.onOpenAbout,
@@ -130,6 +137,7 @@ describe('App status states', () => {
     storeState.error = null;
     productivityState.fetchProductivity.mockReset();
     tauriMocks.clipboardUpdated = undefined;
+    tauriMocks.clipboardItemUpdated = undefined;
     tauriMocks.configChanged = undefined;
     tauriMocks.openSettings = undefined;
     tauriMocks.openAbout = undefined;
@@ -185,6 +193,8 @@ describe('App status states', () => {
           is_favorited: false,
           is_sensitive: false,
           sensitivity_reason: null,
+          formats: [],
+          ocr: null,
           tags: [],
           created_at: 1,
           last_used_at: 1,
@@ -223,6 +233,8 @@ describe('App status states', () => {
           is_favorited: false,
           is_sensitive: false,
           sensitivity_reason: null,
+          formats: [],
+          ocr: null,
           tags: [],
           created_at: 1,
           last_used_at: 1,
@@ -231,6 +243,46 @@ describe('App status states', () => {
     });
 
     expect(storeState.addItems).not.toHaveBeenCalled();
+  });
+
+  it('upserts an OCR completion that newly matches the active search', async () => {
+    render(<App />);
+
+    act(() => {
+      headerMocks.props?.onSearchChange('发票号码');
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const updated = {
+      id: 3,
+      content_type: 'image' as const,
+      content: 'data:image/png;base64,AA==',
+      preview: 'Screenshot',
+      hash: 'hash-3',
+      size: 1,
+      metadata: null,
+      is_favorited: false,
+      is_sensitive: false,
+      sensitivity_reason: null,
+      formats: [],
+      ocr: {
+        status: 'completed' as const,
+        text: '离线发票号码',
+        error: null,
+        updated_at: 2,
+      },
+      tags: [],
+      created_at: 1,
+      last_used_at: 1,
+    };
+
+    act(() => {
+      tauriMocks.clipboardItemUpdated?.(updated);
+    });
+
+    expect(storeState.upsertItem).toHaveBeenCalledWith(updated);
   });
 
   it('opens the About tab from the tray about event', async () => {

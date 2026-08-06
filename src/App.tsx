@@ -11,6 +11,7 @@ import type { SettingsTab } from './components/settings/SettingsView';
 import { useProductivityStore } from './stores/productivityStore';
 import {
   onClipboardCleared,
+  onClipboardItemUpdated,
   onConfigChanged,
   onOpenAbout,
   onOpenSettings,
@@ -42,6 +43,7 @@ function App() {
     fetchItems,
     searchItems,
     addItems,
+    upsertItem,
     setItems,
     fetchTags,
     clearSelection,
@@ -122,26 +124,40 @@ function App() {
   }, [fetchItems, fetchProductivity, fetchTags, setItems]);
 
   useEffect(() => {
+    const matchesActiveFilters = (item: ClipboardItem) =>
+      clipboardItemMatchesFilters(item, searchQuery, {
+        contentType: contentType as 'text' | 'image' | 'file' | null,
+        favoriteOnly: showFavorites,
+        tagId: selectedTagId,
+        sensitiveOnly: advancedFilters.sensitiveOnly ?? null,
+        exactMatch: advancedFilters.exactMatch ?? false,
+        createdAfter: advancedFilters.createdAfter ?? null,
+        createdBefore: advancedFilters.createdBefore ?? null,
+      });
     const unlistenPromise = listen<ClipboardItem>('clipboard-updated', (event) => {
-      if (
-        clipboardItemMatchesFilters(event.payload, searchQuery, {
-          contentType: contentType as 'text' | 'image' | 'file' | null,
-          favoriteOnly: showFavorites,
-          tagId: selectedTagId,
-          sensitiveOnly: advancedFilters.sensitiveOnly ?? null,
-          exactMatch: advancedFilters.exactMatch ?? false,
-          createdAfter: advancedFilters.createdAfter ?? null,
-          createdBefore: advancedFilters.createdBefore ?? null,
-        })
-      ) {
+      if (matchesActiveFilters(event.payload)) {
         addItems([event.payload]);
+      }
+    });
+    const unlistenItemUpdatedPromise = onClipboardItemUpdated((item) => {
+      if (matchesActiveFilters(item)) {
+        upsertItem(item);
       }
     });
 
     return () => {
       unlistenPromise.then((fn) => fn());
+      unlistenItemUpdatedPromise.then((fn) => fn());
     };
-  }, [addItems, advancedFilters, contentType, searchQuery, selectedTagId, showFavorites]);
+  }, [
+    addItems,
+    advancedFilters,
+    contentType,
+    searchQuery,
+    selectedTagId,
+    showFavorites,
+    upsertItem,
+  ]);
 
   useEffect(() => {
     const trimmed = searchQuery.trim();

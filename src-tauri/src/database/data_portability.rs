@@ -191,6 +191,7 @@ pub fn import_csv(db: &Database, path: &str) -> Result<ImportSummary, AppError> 
             is_sensitive: row.is_sensitive,
             sensitivity_reason: empty_to_none(&row.sensitivity_reason),
             formats: Vec::new(),
+            ocr: None,
             tags: row
                 .tags
                 .split('|')
@@ -312,6 +313,13 @@ fn import_items(db: &Database, items: Vec<ClipboardItem>) -> Result<ImportSummar
                 &item.content,
                 &item.formats,
             )?;
+            crate::database::ocr::restore_for_import(
+                &tx,
+                item_id,
+                item.content_type,
+                item.ocr.as_ref(),
+                now_millis(),
+            )?;
         }
         for tag in item.tags {
             let tag_id = upsert_import_tag(&tx, &tag)?;
@@ -406,6 +414,7 @@ fn escape_sql_literal(value: &str) -> String {
 #[derive(Debug, Clone, Copy)]
 struct BackupLayout {
     has_clipboard_formats: bool,
+    has_clipboard_ocr: bool,
 }
 
 fn validate_backup_database(path: &Path) -> Result<BackupLayout, AppError> {
@@ -505,8 +514,30 @@ fn validate_backup_database(path: &Path) -> Result<BackupLayout, AppError> {
         )?;
     }
 
+    let has_clipboard_ocr: bool = conn
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'clipboard_ocr'",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .map_err(|e| AppError::InvalidInput(format!("invalid backup database: {}", e)))?
+        != 0;
+    if backup_version >= 5 && !has_clipboard_ocr {
+        return Err(AppError::InvalidInput(
+            "backup database is missing required table: clipboard_ocr".into(),
+        ));
+    }
+    if has_clipboard_ocr {
+        require_table_columns(
+            &conn,
+            "clipboard_ocr",
+            &["item_id", "status", "text", "error", "updated_at"],
+        )?;
+    }
+
     Ok(BackupLayout {
         has_clipboard_formats,
+        has_clipboard_ocr,
     })
 }
 
@@ -565,11 +596,18 @@ fn restore_from_attached_database(
     } else {
         ""
     };
+    let ocr_restore_sql = if layout.has_clipboard_ocr {
+        "INSERT INTO clipboard_ocr (item_id, status, text, error, updated_at)
+         SELECT item_id, status, text, error, updated_at FROM restore_db.clipboard_ocr;"
+    } else {
+        ""
+    };
     let result = conn.execute_batch(&format!(
         "BEGIN IMMEDIATE;
          DELETE FROM clipboard_item_tags;
          DELETE FROM tags;
          DELETE FROM clipboard_formats;
+         DELETE FROM clipboard_ocr;
          DELETE FROM clipboard_items;
          DELETE FROM app_config;
 
@@ -587,6 +625,8 @@ fn restore_from_attached_database(
          SELECT item_id, tag_id FROM restore_db.clipboard_item_tags;
 
          {format_restore_sql}
+
+         {ocr_restore_sql}
 
          INSERT INTO app_config (key, value, updated_at)
          SELECT key, value, updated_at FROM restore_db.app_config;
@@ -606,7 +646,9 @@ fn restore_from_attached_database(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::database::{ClipboardFormat, ClipboardFormatType, Database, NewClipboardItem};
+    use crate::database::{
+        ClipboardFormat, ClipboardFormatType, Database, NewClipboardItem, OcrStatus,
+    };
     use rusqlite::Connection;
     use sha2::Digest;
     use std::path::{Path, PathBuf};
@@ -655,6 +697,19 @@ mod tests {
                 format: ClipboardFormatType::Html,
                 content: html.to_string(),
             }],
+        };
+        crate::database::clipboard::insert(db, &item).unwrap()
+    }
+
+    fn insert_image(db: &Database, hash: &str) -> ClipboardItem {
+        let item = NewClipboardItem {
+            content_type: ContentType::Image,
+            data: vec![1, 2, 3],
+            preview: Some("image fixture".into()),
+            hash: hash.into(),
+            size: 3,
+            metadata: None,
+            formats: Vec::new(),
         };
         crate::database::clipboard::insert(db, &item).unwrap()
     }
@@ -955,7 +1010,7 @@ mod tests {
         let version = crate::database::config::get(&current, "db_version")
             .unwrap()
             .unwrap();
-        assert_eq!(version, "4");
+        assert_eq!(version, "5");
     }
 
     #[test]
@@ -969,6 +1024,14 @@ mod tests {
         insert_text(&current, "current-item");
         let source = create_db(&source_path);
         insert_rich_text(&source, "formatted", "<b>formatted</b>");
+        {
+            let conn = source.get_connection().unwrap();
+            conn.execute_batch(
+                "DROP TABLE clipboard_ocr;
+                 UPDATE app_config SET value = '4' WHERE key = 'db_version';",
+            )
+            .unwrap();
+        }
         backup_database(&source, backup_path.to_str().unwrap()).unwrap();
 
         restore_database(&current, &current_path, backup_path.to_str().unwrap()).unwrap();
@@ -978,6 +1041,30 @@ mod tests {
         assert!(restored[0].formats.iter().any(|format| {
             format.format == ClipboardFormatType::Html && format.content == "<b>formatted</b>"
         }));
+    }
+
+    #[test]
+    fn restore_preserves_v5_completed_ocr_state() {
+        let dir = temp_dir("v5-ocr-restore");
+        let current_path = dir.join("current.db");
+        let source_path = dir.join("source.db");
+        let backup_path = dir.join("source-backup.db");
+
+        let current = create_db(&current_path);
+        insert_text(&current, "current-item");
+        let source = create_db(&source_path);
+        let image = insert_image(&source, "v5-ocr-image");
+        crate::database::ocr::complete(&source, image.id, "备份中的识别文字").unwrap();
+        backup_database(&source, backup_path.to_str().unwrap()).unwrap();
+
+        restore_database(&current, &current_path, backup_path.to_str().unwrap()).unwrap();
+
+        let restored = crate::database::clipboard::get_list(&current, 10, 0).unwrap();
+        assert_eq!(restored.len(), 1);
+        let ocr = restored[0].ocr.as_ref().expect("restored OCR state");
+        assert_eq!(ocr.status, OcrStatus::Completed);
+        assert_eq!(ocr.text, "备份中的识别文字");
+        assert_eq!(ocr.error, None);
     }
 
     #[test]
@@ -1000,6 +1087,31 @@ mod tests {
         assert!(matches!(
             result,
             Err(AppError::InvalidInput(message)) if message.contains("clipboard_formats")
+        ));
+        assert_eq!(count_items(&current_path), 1);
+        assert_eq!(first_content(&current_path), "keep-current-data");
+    }
+
+    #[test]
+    fn restore_rejects_v5_backup_without_clipboard_ocr() {
+        let dir = temp_dir("v5-missing-ocr");
+        let current_path = dir.join("current.db");
+        let restore_path = dir.join("restore-v5.db");
+
+        let current = create_db(&current_path);
+        insert_text(&current, "keep-current-data");
+        let restore = create_db(&restore_path);
+        {
+            let conn = restore.get_connection().unwrap();
+            conn.execute("DROP TABLE clipboard_ocr", []).unwrap();
+        }
+        drop(restore);
+
+        let result = restore_database(&current, &current_path, restore_path.to_str().unwrap());
+
+        assert!(matches!(
+            result,
+            Err(AppError::InvalidInput(message)) if message.contains("clipboard_ocr")
         ));
         assert_eq!(count_items(&current_path), 1);
         assert_eq!(first_content(&current_path), "keep-current-data");

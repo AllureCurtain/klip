@@ -20,7 +20,9 @@
 | Tauri | 2.0 | 桌面应用框架 |
 | Rust | 1.95+ | 后端语言 |
 | rusqlite | 0.31 | SQLite 绑定 |
-| arboard | 3.x | 剪贴板操作 |
+| clipboard-rs | 0.3.5 | 跨平台剪贴板监听、读取和写回 |
+| Tantivy / tantivy-jieba | 0.24.2 / 0.16.0 | 全文索引和中文分词 |
+| oar-ocr / ONNX Runtime | 0.6.2 / 1.24.2 | 本地图片文字识别 |
 | serde | 1.x | 序列化 |
 
 ### 1.3 开发工具
@@ -53,8 +55,8 @@
 ┌─────────────────────────────────────────────────────────────┐
 │                      Backend (Rust)                          │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐          │
-│  │  Clipboard  │  │  Database   │  │   Config    │          │
-│  │  Monitor    │  │  (SQLite)   │  │  Commands   │          │
+│  │  Clipboard  │  │  Database   │  │ Search/OCR  │          │
+│  │  Monitor    │  │  (SQLite)   │  │  Workers    │          │
 │  └─────────────┘  └─────────────┘  └─────────────┘          │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐          │
 │  │   Hotkey    │  │   System    │  │   Commands  │          │
@@ -82,6 +84,8 @@
 ┌─────────────────┐
 │    Database     │  ← 存储 + 去重
 └────────┬────────┘
+         ├──── 图片 pending ────▶ OCR Worker ────▶ completed/failed
+         ├──── 可搜索文本 ──────▶ Tantivy Index
          │
          ▼
 ┌─────────────────┐
@@ -170,10 +174,14 @@ src-tauri/src/
 │   ├── clipboard.rs     # 剪贴板 CRUD
 │   ├── config.rs        # 配置 CRUD
 │   ├── data_portability.rs # JSON/CSV 导入导出、数据库备份恢复
+│   ├── ocr.rs          # OCR pending/completed/failed 持久化与 hydration
 │   ├── productization.rs   # 筛选、标签、敏感内容扫描
 │   └── types.rs         # 数据类型（ClipboardItem, SystemInfo 等）
 │
 ├── search/              # Tantivy 全文索引、jieba 分词、健康检测和 SQLite 重建
+│   └── mod.rs
+│
+├── ocr/                 # 单 worker 队列、模型校验/缓存、图片解码和本地推理
 │   └── mod.rs
 │
 ├── hotkey/              # 快捷键管理
@@ -203,6 +211,8 @@ fn start_monitor(app_handle: AppHandle) {
     watcher.start_watch();
 }
 ```
+
+图片写入 SQLite 后只向单 OCR worker 入队，不在 clipboard watcher 回调中加载模型或推理。worker 从 Tauri resources 校验并复制 PP-OCRv5 模型到 `{app_data_dir}/ocr-models`，Windows 从平台专用资源显式加载已校验的 ONNX Runtime DLL并关闭 telemetry；其他平台沿 `ort` 的静态 runtime 构建路径，但真实运行结果必须分别在对应系统验收。推理完成后事务更新 `clipboard_ocr`，调用 search 的 `index_text` 路径，并发送 `clipboard-item-updated`。
 
 ### 4.2 快捷键处理流程
 
@@ -259,6 +269,8 @@ interface ClipboardItem {
   is_favorited: boolean;
   is_sensitive: boolean;
   sensitivity_reason: string | null;
+  formats: ClipboardFormat[];
+  ocr: ClipboardOcr | null;
   tags: Tag[];
   created_at: number;
   last_used_at: number;
@@ -330,6 +342,7 @@ interface AppConfig {
 | 事件 | 数据 | 说明 |
 |------|------|------|
 | `clipboard-updated` | ClipboardItem | 剪贴板更新 |
+| `clipboard-item-updated` | ClipboardItem | OCR 等后台任务更新已有条目 |
 | `clipboard-cleared` | void | 剪贴板历史清空 |
 | `config-changed` | { key, value } | 配置变更 |
 

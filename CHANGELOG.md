@@ -4,6 +4,8 @@
 
 ### Added
 
+- Offline image OCR using bundled PP-OCRv5 detection/recognition models and ONNX Runtime, with background processing, searchable recognized text, live status updates, and no runtime model downloads.
+- OCR migration, backup/restore, search rebuild/fallback, real Chinese inference, and frontend status regression coverage.
 - Rich-text clipboard capture and replay with plain-text, HTML, and RTF representations stored together; HTML previews are sanitized with a strict DOMPurify allowlist.
 - Tantivy full-text indexing with jieba Chinese tokenization, batched background commits, corruption recovery from SQLite, and transparent `LIKE` fallback when the index is unavailable.
 - Regression coverage for Data Management settings path actions, restore cancellation, file path input labels, and Settings general/behavior control labels.
@@ -33,6 +35,8 @@
 
 ### Changed
 
+- Database schema version 5 adds `clipboard_ocr`. Version 4 databases and backups migrate automatically, while schema-v5 backups require `clipboard_ocr` and cannot be restored by Klip versions that only support v4.
+- Windows packages add about 21.5 MB of PP-OCRv5 model assets plus a 14.1 MB ONNX Runtime DLL; the verified models are copied to an app-data cache on first OCR use.
 - Database schema version 4 adds `clipboard_formats`. Version 3 databases and backups migrate automatically, but backups created by schema v4 cannot be restored by older Klip versions that only support v3.
 - README now uses a richer project-homepage structure with install guidance, core workflows, current limits, local development, release checks, and documentation links.
 - About copy, package metadata, and contribution scope now consistently describe Klip as a Windows-first local clipboard MVP.

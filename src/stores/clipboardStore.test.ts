@@ -60,6 +60,7 @@ function makeItem(id: number, overrides: Partial<ClipboardItem> = {}): Clipboard
     is_sensitive: false,
     sensitivity_reason: null,
     formats: [],
+    ocr: null,
     tags: [],
     created_at: Date.now(),
     last_used_at: Date.now(),
@@ -195,6 +196,38 @@ describe('clipboardStore', () => {
 
       expect(clipboardApi.clear).toHaveBeenCalled();
       expect(useClipboardStore.getState().items).toEqual([]);
+    });
+  });
+
+  describe('upsertItem', () => {
+    it('replaces an existing pending OCR item without changing its position', () => {
+      const first = makeItem(1);
+      const pending = makeItem(2, {
+        content_type: 'image',
+        ocr: { status: 'pending', text: '', error: null, updated_at: 1 },
+      });
+      useClipboardStore.setState({ items: [first, pending] });
+      const completed = makeItem(2, {
+        content_type: 'image',
+        ocr: { status: 'completed', text: '识别文字', error: null, updated_at: 2 },
+      });
+
+      useClipboardStore.getState().upsertItem(completed);
+
+      expect(useClipboardStore.getState().items).toEqual([first, completed]);
+    });
+
+    it('prepends an OCR item that newly matches the active search', () => {
+      const existing = makeItem(1);
+      const completed = makeItem(2, {
+        content_type: 'image',
+        ocr: { status: 'completed', text: '识别文字', error: null, updated_at: 2 },
+      });
+      useClipboardStore.setState({ items: [existing] });
+
+      useClipboardStore.getState().upsertItem(completed);
+
+      expect(useClipboardStore.getState().items).toEqual([completed, existing]);
     });
   });
 

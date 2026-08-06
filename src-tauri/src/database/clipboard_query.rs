@@ -71,6 +71,7 @@ pub(crate) fn fetch_items_locked(
         })?
         .collect::<Result<Vec<_>, _>>()?;
     crate::database::formats::hydrate(conn, &mut items)?;
+    crate::database::ocr::hydrate(conn, &mut items)?;
     Ok(items)
 }
 
@@ -107,6 +108,7 @@ pub(crate) fn fetch_item_by_id_locked(
         .optional()?;
     if let Some(item) = item.as_mut() {
         crate::database::formats::hydrate(conn, std::slice::from_mut(item))?;
+        crate::database::ocr::hydrate(conn, std::slice::from_mut(item))?;
     }
     Ok(item)
 }
@@ -118,6 +120,7 @@ pub(crate) fn fetch_item_by_id_required_locked(
     let mut stmt = conn.prepare(&format!("{} WHERE id = ?1", clipboard_item_select_sql()))?;
     let mut item = stmt.query_row([id], |row| Ok(clipboard_item_from_row(row)))?;
     crate::database::formats::hydrate(conn, std::slice::from_mut(&mut item))?;
+    crate::database::ocr::hydrate(conn, std::slice::from_mut(&mut item))?;
     Ok(item)
 }
 
@@ -128,6 +131,7 @@ pub(crate) fn fetch_item_by_hash_locked(
     let mut stmt = conn.prepare(&format!("{} WHERE hash = ?1", clipboard_item_select_sql()))?;
     let mut item = stmt.query_row([hash], |row| Ok(clipboard_item_from_row(row)))?;
     crate::database::formats::hydrate(conn, std::slice::from_mut(&mut item))?;
+    crate::database::ocr::hydrate(conn, std::slice::from_mut(&mut item))?;
     Ok(item)
 }
 
@@ -193,7 +197,7 @@ fn build_clipboard_query(spec: &ClipboardQuerySpec) -> BuiltClipboardQuery {
         let placeholder = push_param(&mut params, Value::Text(pattern));
         let content_clause = if spec.exact_match { "=" } else { "LIKE" };
         clauses.push(format!(
-            "(preview {op} {p} OR (content_type != 'image' AND content {op} {p}))",
+            "(preview {op} {p} OR (content_type != 'image' AND content {op} {p}) OR id IN (SELECT item_id FROM clipboard_ocr WHERE status = 'completed' AND text {op} {p}))",
             op = content_clause,
             p = placeholder
         ));
@@ -306,6 +310,7 @@ fn clipboard_item_from_row(row: &rusqlite::Row<'_>) -> ClipboardItem {
         is_sensitive: row.get::<_, i64>(10).unwrap_or(0) != 0,
         sensitivity_reason: row.get(11).unwrap_or(None),
         formats: Vec::new(),
+        ocr: None,
         tags: Vec::new(),
     }
 }
@@ -404,7 +409,7 @@ mod tests {
         let query = build_clipboard_query(&spec);
         assert_eq!(
             query.sql,
-            "SELECT id, content_type, content, preview, hash, size, metadata, is_favorited, created_at, last_used_at, is_sensitive, sensitivity_reason FROM clipboard_items WHERE (preview = ?1 OR (content_type != 'image' AND content = ?1)) AND content_type = ?2 AND is_favorited = 1 AND is_sensitive = ?3 AND id IN (SELECT item_id FROM clipboard_item_tags WHERE tag_id = ?4) AND created_at >= ?5 AND created_at <= ?6 ORDER BY last_used_at DESC, created_at DESC LIMIT ?7 OFFSET ?8"
+            "SELECT id, content_type, content, preview, hash, size, metadata, is_favorited, created_at, last_used_at, is_sensitive, sensitivity_reason FROM clipboard_items WHERE (preview = ?1 OR (content_type != 'image' AND content = ?1) OR id IN (SELECT item_id FROM clipboard_ocr WHERE status = 'completed' AND text = ?1)) AND content_type = ?2 AND is_favorited = 1 AND is_sensitive = ?3 AND id IN (SELECT item_id FROM clipboard_item_tags WHERE tag_id = ?4) AND created_at >= ?5 AND created_at <= ?6 ORDER BY last_used_at DESC, created_at DESC LIMIT ?7 OFFSET ?8"
         );
         assert_eq!(
             query.params,

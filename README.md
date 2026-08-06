@@ -83,6 +83,7 @@ Klip 是一个本地单机剪贴板管理器。系统剪贴板通常只能记住
 ### 搜索和筛选
 
 - 支持基于 Tantivy + jieba 的全文关键词搜索，可按拆分后的中文词组命中结果。
+- 图片在后台使用本地 PP-OCRv5 模型识别文字，识别完成后可直接搜索截图中的中英文内容；推理不联网、不上传图片。
 - 支持文本、图片、文件类型筛选。
 - 支持收藏、标签、敏感内容、精确匹配和日期范围筛选。
 - 搜索框默认聚焦，适合用快捷键唤起后直接输入。
@@ -151,7 +152,9 @@ Klip 是一个本地单机剪贴板管理器。系统剪贴板通常只能记住
 
 ## 隐私和数据
 
-Klip 将历史记录、标签、片段、来源规则和设置保存在本地 SQLite 数据库 `klip.db` 中；全文索引保存在同一应用数据目录下的 `search-index`，可以随时从 SQLite 重建。
+Klip 将历史记录、图片 OCR 状态与文字、标签、片段、来源规则和设置保存在本地 SQLite 数据库 `klip.db` 中；全文索引保存在同一应用数据目录下的 `search-index`，可以随时从 SQLite 重建。OCR 模型随安装包提供，首次使用时会校验 SHA-256 后复制到同一数据目录下的 `ocr-models`，运行时不下载模型。
+
+Windows 安装资源中，PP-OCRv5 检测/识别模型和字典约 21.5 MB，ONNX Runtime DLL 约 14.1 MB，合计使安装资源增加约 36 MB；应用数据目录中的模型缓存还会占用约 21.5 MB。来源、许可证和精确哈希见 `src-tauri/resources/ocr/README.md` 与 `src-tauri/resources/onnxruntime/README.md`。
 
 | 平台 | 数据库位置 |
 |------|------------|
@@ -242,6 +245,7 @@ pnpm release:smoke
 | 数据库 | SQLite, rusqlite |
 | 全文搜索 | Tantivy, tantivy-jieba |
 | 剪贴板 | clipboard-rs |
+| 图片 OCR | oar-ocr, PP-OCRv5, ONNX Runtime |
 | 测试 | Vitest, Testing Library, Selenium WebDriver |
 
 ## 文档地图

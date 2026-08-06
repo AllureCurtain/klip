@@ -79,6 +79,7 @@ fn create_clipboard_tables(conn: &Connection) -> Result<(), AppError> {
     )?;
 
     create_clipboard_format_table(conn)?;
+    create_clipboard_ocr_table(conn)?;
 
     Ok(())
 }
@@ -97,6 +98,26 @@ pub(crate) fn create_clipboard_format_table(conn: &Connection) -> Result<(), App
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_clipboard_formats_format
          ON clipboard_formats(format, item_id)",
+        [],
+    )?;
+    Ok(())
+}
+
+pub(crate) fn create_clipboard_ocr_table(conn: &Connection) -> Result<(), AppError> {
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS clipboard_ocr (
+            item_id    INTEGER PRIMARY KEY,
+            status     TEXT NOT NULL CHECK(status IN ('pending', 'completed', 'failed')),
+            text       TEXT NOT NULL DEFAULT '',
+            error      TEXT,
+            updated_at INTEGER NOT NULL,
+            FOREIGN KEY (item_id) REFERENCES clipboard_items(id) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_clipboard_ocr_status
+         ON clipboard_ocr(status, updated_at)",
         [],
     )?;
     Ok(())

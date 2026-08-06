@@ -49,6 +49,7 @@ interface ClipboardStore {
   toggleSelected: (id: number) => void;
   clearSelection: () => void;
   addItems: (items: ClipboardItem[]) => void;
+  upsertItem: (item: ClipboardItem) => void;
   setItems: (items: ClipboardItem[]) => void;
   currentQuery: string | null;
   currentOptions: ClipboardQueryOptions;
@@ -326,6 +327,18 @@ export const useClipboardStore = create<ClipboardStore>((set) => ({
         (item) => !existingIds.has(item.id)
       );
       return { items: [...uniqueNewItems, ...state.items] };
+    });
+  },
+
+  upsertItem: (updatedItem: ClipboardItem) => {
+    set((state) => {
+      const existingIndex = state.items.findIndex((item) => item.id === updatedItem.id);
+      if (existingIndex === -1) {
+        return { items: [updatedItem, ...state.items] };
+      }
+      const items = [...state.items];
+      items[existingIndex] = updatedItem;
+      return { items };
     });
   },
 

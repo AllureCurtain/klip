@@ -10,6 +10,7 @@ export interface ClipboardItem {
   is_sensitive: boolean;
   sensitivity_reason: string | null;
   formats: ClipboardFormat[];
+  ocr: ClipboardOcr | null;
   tags: Tag[];
   created_at: number;
   last_used_at: number;
@@ -18,6 +19,13 @@ export interface ClipboardItem {
 export interface ClipboardFormat {
   format: 'text' | 'html' | 'rtf';
   content: string;
+}
+
+export interface ClipboardOcr {
+  status: 'pending' | 'completed' | 'failed';
+  text: string;
+  error: string | null;
+  updated_at: number;
 }
 
 export interface Tag {

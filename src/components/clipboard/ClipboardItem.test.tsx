@@ -40,6 +40,7 @@ function makeTextItem(overrides: Partial<ClipboardItemType> = {}): ClipboardItem
     is_sensitive: false,
     sensitivity_reason: null,
     formats: [],
+    ocr: null,
     tags: [],
     created_at: 1_714_000_000_000,
     last_used_at: 1_714_000_000_000,
@@ -317,6 +318,53 @@ describe('ClipboardItem', () => {
     fireEvent.click(previewButton);
 
     expect(screen.getByText('图片预览')).toBeTruthy();
+  });
+
+  it('shows pending, completed, empty, and failed OCR states on image rows', () => {
+    const { rerender } = render(
+      <ClipboardItem
+        item={makeImageItem({
+          ocr: { status: 'pending', text: '', error: null, updated_at: 1 },
+        })}
+        index={1}
+        isSelected={false}
+      />
+    );
+    expect(screen.getByText('正在识别')).toBeTruthy();
+
+    rerender(
+      <ClipboardItem
+        item={makeImageItem({
+          ocr: { status: 'completed', text: '发票号码 2026', error: null, updated_at: 2 },
+        })}
+        index={1}
+        isSelected={false}
+      />
+    );
+    expect(screen.getByText('文字已识别')).toBeTruthy();
+    expect(screen.getByText('发票号码 2026')).toBeTruthy();
+
+    rerender(
+      <ClipboardItem
+        item={makeImageItem({
+          ocr: { status: 'completed', text: '', error: null, updated_at: 3 },
+        })}
+        index={1}
+        isSelected={false}
+      />
+    );
+    expect(screen.getByText('未检测到文字')).toBeTruthy();
+
+    rerender(
+      <ClipboardItem
+        item={makeImageItem({
+          ocr: { status: 'failed', text: '', error: 'model error', updated_at: 4 },
+        })}
+        index={1}
+        isSelected={false}
+      />
+    );
+    expect(screen.getByText('识别失败').getAttribute('title')).toBe('model error');
   });
 
   it('keeps batch selection out of the default item surface', () => {

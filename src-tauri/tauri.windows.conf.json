@@ -1,0 +1,8 @@
+{
+  "bundle": {
+    "resources": [
+      "resources/ocr/*",
+      "resources/onnxruntime/windows-x86_64/*"
+    ]
+  }
+}

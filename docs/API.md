@@ -703,6 +703,17 @@ const unlisten = await listen('clipboard-updated', (event) => {
 
 ---
 
+#### `clipboard-item-updated`
+
+已有条目的后台状态发生变化时触发。当前由图片 OCR 在 `pending` 转为 `completed` 或 `failed` 后发送完整 `ClipboardItem`；前端应按 `id` 替换已有条目，若 OCR 文本首次命中当前搜索则插入结果。
+
+**数据**:
+```typescript
+ClipboardItem
+```
+
+---
+
 #### `clipboard-cleared`
 
 剪贴板历史清空时触发。
@@ -749,6 +760,12 @@ interface ClipboardItem {
     format: 'text' | 'html' | 'rtf';
     content: string;
   }>;
+  ocr: {
+    status: 'pending' | 'completed' | 'failed';
+    text: string;
+    error: string | null;
+    updated_at: number;
+  } | null;
   tags: Tag[];
   created_at: number;   // 毫秒时间戳
   last_used_at: number; // 毫秒时间戳
@@ -1041,6 +1058,9 @@ export const systemApi = {
 // 事件监听
 export const onClipboardUpdated = (callback: (item: ClipboardItem) => void) =>
   listen('clipboard-updated', (event) => callback(event.payload as ClipboardItem));
+
+export const onClipboardItemUpdated = (callback: (item: ClipboardItem) => void) =>
+  listen('clipboard-item-updated', (event) => callback(event.payload as ClipboardItem));
 
 export const onClipboardCleared = (callback: () => void) =>
   listen('clipboard-cleared', () => callback());

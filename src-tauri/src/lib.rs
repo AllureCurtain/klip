@@ -6,6 +6,7 @@ pub mod error;
 pub mod hotkey;
 pub mod http;
 pub mod llm;
+pub mod ocr;
 pub mod platform;
 pub mod qa;
 pub mod search;

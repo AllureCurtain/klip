@@ -20,6 +20,7 @@ function makeItem(overrides: Partial<ClipboardItem>): ClipboardItem {
     is_sensitive: false,
     sensitivity_reason: null,
     formats: [],
+    ocr: null,
     tags: [],
     created_at: 1,
     last_used_at: 1,

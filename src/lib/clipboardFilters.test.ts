@@ -21,6 +21,7 @@ function makeItem(overrides: Partial<ClipboardItem> = {}): ClipboardItem {
     is_sensitive: false,
     sensitivity_reason: null,
     formats: [],
+    ocr: null,
     tags: [],
     created_at: 1_000,
     last_used_at: 1_000,
@@ -111,5 +112,28 @@ describe('clipboardFilters', () => {
 
     expect(clipboardItemMatchesFilters(image, 'token-inside-base64', {})).toBe(false);
     expect(clipboardItemMatchesFilters(image, 'screenshot', {})).toBe(true);
+  });
+
+  it('matches only completed OCR text for image updates', () => {
+    const image = makeItem({
+      content_type: 'image',
+      preview: 'screenshot',
+      content: 'data:image/png;base64,AA==',
+      ocr: {
+        status: 'completed',
+        text: '离线发票号码',
+        error: null,
+        updated_at: 2_000,
+      },
+    });
+
+    expect(clipboardItemMatchesFilters(image, '发票号码', {})).toBe(true);
+    expect(
+      clipboardItemMatchesFilters(
+        { ...image, ocr: { ...image.ocr!, status: 'pending' } },
+        '发票号码',
+        {}
+      )
+    ).toBe(false);
   });
 });

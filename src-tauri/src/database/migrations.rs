@@ -42,6 +42,11 @@ const MIGRATIONS: &[Migration] = &[
         _name: "preserve rich clipboard formats",
         run: migrate_to_v4,
     },
+    Migration {
+        version: 5,
+        _name: "persist image OCR state",
+        run: migrate_to_v5,
+    },
 ];
 
 fn read_schema_version(conn: &Connection) -> Result<i64, AppError> {
@@ -98,6 +103,18 @@ fn migrate_to_v4(conn: &Connection, _now: i64) -> Result<(), AppError> {
          FROM clipboard_items
          WHERE content_type = 'text'",
         [],
+    )?;
+    Ok(())
+}
+
+fn migrate_to_v5(conn: &Connection, now: i64) -> Result<(), AppError> {
+    crate::database::schema::create_clipboard_ocr_table(conn)?;
+    conn.execute(
+        "INSERT OR IGNORE INTO clipboard_ocr (item_id, status, text, error, updated_at)
+         SELECT id, 'pending', '', NULL, ?1
+         FROM clipboard_items
+         WHERE content_type = 'image'",
+        [now],
     )?;
     Ok(())
 }

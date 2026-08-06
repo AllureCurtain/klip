@@ -44,6 +44,12 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 tantivy = "=0.24.2"
 # 0.16 is the release compatible with Tantivy 0.24's tokenizer API 0.5.
 tantivy-jieba = "=0.16.0"
+# Pin the OCR API and ONNX Runtime integration used by the bundled PP-OCRv5 models.
+oar-ocr = "=0.6.2"
+# oar-ocr 0.6.2 declares caret ranges; newer 0.6.x core / ORT rc releases are
+# source-incompatible. Direct constraints keep Cargo updates on the tested pair.
+oar-ocr-core = { version = "=0.6.2", default-features = false }
+ort = { version = "=2.0.0-rc.12", default-features = false }
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
@@ -52,6 +58,9 @@ tower = { version = "0.5", features = ["util"] }
 dirs = "6"
 
 [target.'cfg(windows)'.dependencies]
+# The official static ONNX Runtime 1.24.2 build requires a newer MSVC STL than
+# our supported toolchain. Load the bundled runtime DLL explicitly on Windows.
+ort = { version = "=2.0.0-rc.12", default-features = false, features = ["api-24", "load-dynamic"] }
 windows = { version = "0.59", features = [
     "Win32_System_DataExchange",
     "Win32_System_Threading",

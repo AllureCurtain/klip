@@ -112,10 +112,16 @@ export function clipboardItemMatchesFilters(
   const preview = item.preview?.toLocaleLowerCase() ?? '';
   const searchableContent =
     item.content_type === 'image' ? '' : item.content.toLocaleLowerCase();
+  const searchableOcr =
+    item.ocr?.status === 'completed' ? item.ocr.text.toLocaleLowerCase() : '';
 
   if (filters.exactMatch) {
-    return preview === query || searchableContent === query;
+    return preview === query || searchableContent === query || searchableOcr === query;
   }
 
-  return preview.includes(query) || searchableContent.includes(query);
+  return (
+    preview.includes(query) ||
+    searchableContent.includes(query) ||
+    searchableOcr.includes(query)
+  );
 }

@@ -315,7 +315,7 @@ mod tests {
             .unwrap()
             .unwrap();
 
-        assert_eq!(version, "4");
+        assert_eq!(version, "5");
     }
 
     #[test]
@@ -378,7 +378,9 @@ mod tests {
              VALUES ('db_version', '3', 1);
              INSERT INTO clipboard_items
                (content_type, content, preview, hash, size, created_at, last_used_at)
-             VALUES ('text', 'legacy text', 'legacy text', 'legacy-hash', 11, 1, 1);",
+             VALUES
+               ('text', 'legacy text', 'legacy text', 'legacy-hash', 11, 1, 1),
+               ('image', 'data:image/png;base64,AA==', 'legacy image', 'legacy-image-hash', 1, 2, 2);",
         )
         .unwrap();
 
@@ -400,9 +402,58 @@ mod tests {
                 |row| Ok((row.get(0)?, row.get(1)?)),
             )
             .unwrap();
+        let image_ocr_status: String = conn
+            .query_row(
+                "SELECT status FROM clipboard_ocr WHERE item_id = 2",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
 
-        assert_eq!(version, "4");
+        assert_eq!(version, "5");
         assert_eq!(format, ("text".into(), "legacy text".into()));
+        assert_eq!(image_ocr_status, "pending");
+    }
+
+    #[test]
+    fn v4_database_is_migrated_with_pending_image_ocr() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch("PRAGMA foreign_keys=ON;").unwrap();
+        let db = Database::from_conn(conn);
+        db.init_schema().unwrap();
+        {
+            let conn = db.get_connection().unwrap();
+            conn.execute_batch(
+                "DROP TABLE clipboard_ocr;
+                 UPDATE app_config SET value = '4' WHERE key = 'db_version';
+                 INSERT INTO clipboard_items
+                   (content_type, content, preview, hash, size, created_at, last_used_at)
+                 VALUES
+                   ('image', 'data:image/png;base64,AA==', 'v4 image', 'v4-image-hash', 1, 2, 2);",
+            )
+            .unwrap();
+        }
+
+        db.init_schema().unwrap();
+
+        let conn = db.get_connection().unwrap();
+        let version: String = conn
+            .query_row(
+                "SELECT value FROM app_config WHERE key = 'db_version'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let status: String = conn
+            .query_row(
+                "SELECT status FROM clipboard_ocr WHERE item_id = 1",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+
+        assert_eq!(version, "5");
+        assert_eq!(status, "pending");
     }
 
     #[test]
@@ -441,7 +492,7 @@ mod tests {
         let version = crate::database::config::get(&db, "db_version")
             .unwrap()
             .unwrap();
-        assert_eq!(version, "4");
+        assert_eq!(version, "5");
         drop(db);
 
         let backups = std::fs::read_dir(&dir)
