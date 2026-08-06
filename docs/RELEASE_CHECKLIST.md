@@ -2,25 +2,27 @@
 
 Use this checklist for Windows-first release verification. The current public release is `v0.1.2`.
 
+Foundation closeout status below reflects the Windows `feat/foundation` worktree on 2026-08-07. Checked items have current evidence; `BLOCKED` and `SKIPPED` items must not be treated as release approval.
+
 ## 1. Preflight
 
-- [ ] `git status --short` is clean or only contains intentional release changes.
-- [ ] Versions match in `package.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json`.
-- [ ] `CHANGELOG.md` includes the version being released.
-- [ ] `pnpm release:readiness` reports the expected Windows signing and update feed readiness for this release.
-- [ ] `pnpm test:coverage` succeeds and records current frontend source coverage in release notes.
-- [ ] `pnpm audit --registry=https://registry.npmjs.org --audit-level high` reports no high or critical advisories.
-- [ ] RustSec audit in GitHub Actions reports no unreviewed Rust advisories for the release build.
-- [ ] `pnpm release:verify -SkipBundle` succeeds.
+- [x] `git status --short` is clean or only contains intentional release changes.
+- [x] Versions match in `package.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json` (`1.0.0`).
+- [ ] BLOCKED: `CHANGELOG.md` still identifies `v0.1.2` as the public release and does not contain the build metadata version `1.0.0`; release version ownership must resolve this before shipping.
+- [x] `pnpm release:readiness` reports unsigned installers, no timestamp URL, and manual/GitHub Release distribution because no update feed is configured.
+- [x] `pnpm test:coverage` succeeds: 20 files / 149 tests; statements 72.39%, branches 71.56%, functions 71.63%, lines 74.30%.
+- [ ] BLOCKED: full `pnpm audit --registry=https://registry.npmjs.org --audit-level high` reports 19 high advisories in development/test tooling; the production-only audit reports no known vulnerabilities.
+- [ ] BLOCKED: local `cargo audit` reports 22 allowed warnings, and PR #4 currently has no GitHub Actions check result to establish the stricter release gate.
+- [ ] BLOCKED: `pnpm release:verify -SkipBundle` stops before build because `CHANGELOG.md` does not mention metadata version `1.0.0`.
 - [ ] `pnpm e2e` succeeds on a Windows desktop session with `tauri-driver` and Edge WebDriver installed.
 
 ## 2. Installer Build
 
-- [ ] Run `pnpm release:verify` on Windows.
-- [ ] Confirm MSI exists at `src-tauri/target/release/bundle/msi/`.
-- [ ] Confirm NSIS installer exists at `src-tauri/target/release/bundle/nsis/`.
+- [ ] BLOCKED: full `pnpm release:verify` inherits the unresolved changelog/build-version mismatch.
+- [x] MSI exists at `src-tauri/target/release/bundle/msi/Klip_1.0.0_x64_en-US.msi` (32,542,720 bytes; SHA-256 `2FF01714E3334780F85D4FB71453EF8A310456D001449C0B2190CE5F54CDE434`).
+- [x] NSIS installer exists at `src-tauri/target/release/bundle/nsis/Klip_1.0.0_x64-setup.exe` (29,027,941 bytes; SHA-256 `0FA03449A06AAE6CE247AD24956B08A20022F104F0894C803B844BB5B470E06F`).
 - [ ] Run `pnpm release:smoke` and confirm local/GitHub installer assets are present.
-- [ ] Record installer filenames and file sizes in release notes.
+- [ ] BLOCKED: installer filenames, sizes, hashes, and unsigned status are recorded here, but final release notes depend on resolving whether the next release is `1.0.0` or follows `v0.1.2`.
 
 ## 3. Fresh Install Smoke Test
 

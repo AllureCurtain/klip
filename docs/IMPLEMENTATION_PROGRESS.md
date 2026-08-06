@@ -1,6 +1,6 @@
 # Foundation Implementation Progress
 
-- 最后更新时间：2026-08-07 07:32（Asia/Shanghai）
+- 最后更新时间：2026-08-07 07:44（Asia/Shanghai）
 - 当前分支：`feat/foundation`
 - 基准提交：`423ab24`（与 `main` / `origin/main` 一致）
 
@@ -20,10 +20,14 @@
 - `c853468`：记录首次成功 push、pre-push verify 与 PR 准备状态。
 - `387392b`：记录 PR #4 创建、平台限制与最终交付状态。
 - `c880bff`：完成最终交付状态记录并确认 PR 保持 OPEN、未合并。
+- `64af869`：修正最终交付状态中的过时表述并同步 PR 描述。
+- `210b940`：把实施策略中的当前数据库版本和迁移链修正为 schema v6。
+- `ec9f0a1`：记录 npm 开发/测试依赖高危审计阻塞。
+- `64be1de`：记录生产 npm 审计、RustSec warnings 和发布版本元数据阻塞。
 
 ## 当前任务
 
-- 当前任务：Windows 发布清单与验收证据收尾；先运行可安全执行的 readiness、coverage、audit、release verify 和现有 E2E，再按证据更新清单。
+- 当前任务：继续 Windows 发布验收；运行 installer smoke 和当前 HEAD 的 Selenium E2E，按实际结果更新发布清单并独立提交。
 - README 已补齐 `pnpm install --frozen-lockfile` worktree 初始化、`KLIP_DATA_DIR` / `KLIP_LOG_DIR` / `KLIP_HTTP_PORT`、单活动 worktree 串行执行和可选 sccache。CHANGELOG 已在 rich-text 提交中说明 DB v4 备份不能回退到只支持 v3 的旧版；各功能行为与限制已分布记录在 README、CHANGELOG、API、DATABASE 与 ARCHITECTURE。
 - `platform-source` 已在 `1e5b63e` 提交，§8.5 与串行功能队列均已据实勾选；macOS/Linux 真实桌面验收仍保持 SKIPPED，不影响已完成的代码、目标编译和 Windows 验收结论。
 - Windows 保留现有进程文件名和窗口标题行为；macOS 使用 `NSWorkspace.frontmostApplication`，Accessibility 未授权时保留应用名且窗口标题为空；X11 使用 EWMH 活动窗口/PID/标题并从 `/proc` 解析应用名；Wayland和其他不支持平台一次性提示后返回空来源。
@@ -44,6 +48,7 @@
 - 发布 preflight：`pnpm audit --prod --registry=https://registry.npmjs.org --audit-level high` 通过，生产依赖未发现已知漏洞。
 - 发布 preflight：本地 `cargo audit` 扫描完成并 exit 0，但报告 22 个允许的 RustSec warnings（gtk3/`paste`/`ttf-parser`/unic 维护状态，以及 `anyhow`、`glib`、`lru`、`memmap2` unsound advisory）；不能据此声称 GitHub Actions 的“无未审查 advisory”门项通过。
 - 发布 verify 阻塞：`pnpm release:verify -SkipBundle` 在构建前失败，三处构建元数据为 `1.0.0`，但 `CHANGELOG.md` 当前公开记录为 `v0.1.2`，脚本报 `CHANGELOG.md does not mention version 1.0.0`。未擅自改版本号或添加误导性 changelog 条目；受影响下游为 release verify 和依赖它的 installer smoke。
+- Windows installer build：直接运行 `pnpm tauri:build` 通过，用时 549.6 秒；生成 `Klip_1.0.0_x64_en-US.msi`（32,542,720 B，SHA-256 `2FF01714E3334780F85D4FB71453EF8A310456D001449C0B2190CE5F54CDE434`）和 `Klip_1.0.0_x64-setup.exe`（29,027,941 B，SHA-256 `0FA03449A06AAE6CE247AD24956B08A20022F104F0894C803B844BB5B470E06F`）；两项 Authenticode 状态均为 `NotSigned`。
 - Windows runtime smoke：`pnpm tauri:dev` 已启动 `klip.exe`；`KLIP_DATA_DIR=C:\tmp\klip-foundation\data` 下生成 `klip.db`/WAL，`KLIP_LOG_DIR=C:\tmp\klip-foundation\logs` 下生成日志文件；进程已停止。完整 UI 闭环尚未执行。
 - search 依赖核验：`tantivy 0.24.2` 使用 `tantivy-tokenizer-api 0.5`；选择同样依赖 tokenizer API 0.5 的 `tantivy-jieba 0.16.0`，避免同时链接不兼容的 tokenizer trait 版本。
 - search 首轮专项测试：未进入测试执行，测试编译因两个既有 `ClipboardQuerySpec` 字面量缺少新增的 `text_match_ids` 字段而失败（`clipboard_query.rs:380`、`:460`）；业务代码 `cargo check` 已通过。处理：补齐测试字段后原命令重跑，不跳过测试。
@@ -142,8 +147,10 @@
 - SKIPPED：当前只有 Windows 真实桌面，无法实机验证 macOS `NSRunningApplication` 或 Linux X11/Wayland 桌面焦点行为；实际后端已分别通过 `aarch64-apple-darwin` / `x86_64-unknown-linux-gnu` 最小交叉静态编译。解除条件是提供对应真实桌面会话；不阻塞 Windows 验收及后续独立功能。
 - OCR 静态链接 BLOCKED 已解除：14.43 与官方静态包 ABI 不兼容，已改用官方 1.24.2 动态 DLL；DLL 入包后的 Windows 真实推理已通过，macOS/Linux 真实环境验收仍未执行且不得声称通过。
 - SKIPPED：用户未提供独立 rich-text 测试文件；已用内建恶意 HTML、DB migration/restore 和 Windows clipboard-rs 集成测试覆盖，若后续提供文件可在最终验收补跑。
+- BLOCKED：发布元数据 `1.0.0` 与公开文档/CHANGELOG `v0.1.2` 冲突；解除条件是发布负责人确定下一版本并同步三处构建元数据、README、CHANGELOG 和发布说明。
+- BLOCKED：完整 npm audit 有 19 项开发/测试工具链 high advisory，本地 RustSec 扫描另有 22 个允许 warning；生产 npm audit通过，但不能替代完整发布安全门。解除条件是评审并升级/覆盖对应依赖后重跑完整 npm/RustSec 审计。
 
 ## 下一步准确操作
 
-- 无剩余自动实施或交付命令；后续由 PR #4 审查流程决定是否合并，本执行不 merge main。
+- 下一步运行 `pnpm release:smoke` 和 `pnpm e2e`；记录可安全完成的 Windows 验收证据后运行最终 `pnpm verify`，更新并推送 PR #4，不 merge main。
 - 解除默认目录回退阻塞需隔离 Windows 测试用户/VM；真实 macOS/Linux 与浏览器/Word 富文本验收需对应桌面/应用环境和测试材料。
