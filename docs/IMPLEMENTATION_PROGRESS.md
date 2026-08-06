@@ -1,6 +1,6 @@
 # Foundation Implementation Progress
 
-- 最后更新时间：2026-08-07 03:01（Asia/Shanghai）
+- 最后更新时间：2026-08-07 03:06（Asia/Shanghai）
 - 当前分支：`feat/foundation`
 - 基准提交：`423ab24`（与 `main` / `origin/main` 一致）
 
@@ -16,10 +16,11 @@
 - `1e5b63e`：完成 Windows/macOS/X11 来源追踪、DB v6 持久化与兼容恢复、API/前端来源展示及 Windows runtime acceptance。
 - `77d7959`：完成 foundation worktree 初始化、运行时隔离、单 worktree 串行执行与可选 sccache 的开发文档。
 - `ef2cdcc`：稳定 Windows Selenium clipboard E2E 的窗口恢复/刷新等待，隔离 HTTP 端口并传播 runner 失败退出码；记录最终运行时与默认目录回退边界。
+- `f9dbea2`：记录最终 verify、Windows 运行时证据、默认目录回退限制和收尾清单。
 
 ## 当前任务
 
-- 当前任务：最终交付准备；完整 verify 重跑已通过，正在提交最终进度/清单记录，随后检查 clean worktree、GitHub 认证并依次尝试 push 与 PR。
+- 当前任务：创建面向 `main` 的 PR；`feat/foundation` 已成功推送到 `origin`，正在提交本次 push 证据后再次推送，再用完整 PR 描述创建 PR。
 - README 已补齐 `pnpm install --frozen-lockfile` worktree 初始化、`KLIP_DATA_DIR` / `KLIP_LOG_DIR` / `KLIP_HTTP_PORT`、单活动 worktree 串行执行和可选 sccache。CHANGELOG 已在 rich-text 提交中说明 DB v4 备份不能回退到只支持 v3 的旧版；各功能行为与限制已分布记录在 README、CHANGELOG、API、DATABASE 与 ARCHITECTURE。
 - `platform-source` 已在 `1e5b63e` 提交，§8.5 与串行功能队列均已据实勾选；macOS/Linux 真实桌面验收仍保持 SKIPPED，不影响已完成的代码、目标编译和 Windows 验收结论。
 - Windows 保留现有进程文件名和窗口标题行为；macOS 使用 `NSWorkspace.frontmostApplication`，Accessibility 未授权时保留应用名且窗口标题为空；X11 使用 EWMH 活动窗口/PID/标题并从 `/proc` 解析应用名；Wayland和其他不支持平台一次性提示后返回空来源。
@@ -101,6 +102,7 @@
 - 默认目录回退尝试：健康端点 `27717` 通过，但在临时 `APPDATA=D:\Study\cc\klip\.worktrees\foundation\e2e\.tmp\default-runtime-20260807-024658\AppData\Roaming` / `LOCALAPPDATA` 下，Windows Tauri Known Folder API 仍解析到真实 `C:\Users\AllureLove\AppData\Roaming\com.klip.app`（诊断端点已返回该路径）；未发送剪贴板输入，端口已释放。标记 `SKIPPED/BLOCKED`：当前用户环境没有可安全替代 Known Folder 的 Windows 用户配置，解除条件是隔离测试用户/VM 或产品提供显式默认目录注入点。
 - 最终 `pnpm verify` 重跑首次结果：前端 lint、Vitest 20/149、build、rustfmt、Clippy 均通过；Cargo 在移除/重链 `src-tauri/target/debug/klip.exe` 时因残留进程 PID `40088`（启动于默认目录回退尝试）占用文件，报 Windows `os error 5`。已按精确可执行路径停止该 PID，未改动源码；清理后重跑。
 - 最终 `pnpm verify` 重跑：通过，用时 185.2 秒。ESLint 通过；20 个 Vitest 文件/149 项通过；生产构建通过；`cargo fmt -- --check` 与 `cargo clippy -- -D warnings` 通过；Rust library 143 项通过、1 项显式 100k 性能测试 ignored，另有 2 个 main 与 5 个 clipboard integration tests 通过。随后 `git diff --check` 通过。
+- push：通过。`git push -u origin feat/foundation` 的 pre-push verify 全绿，远端新建 `origin/feat/foundation`；GitHub 提示 PR 创建入口 `https://github.com/AllureCurtain/klip/pull/new/feat/foundation`。本次 push 未修改 `main`。
 
 ## 技术决策
 
@@ -131,5 +133,5 @@
 
 ## 下一步准确操作
 
-- 检查并提交本最终进度/清单记录，确认 `feat/foundation` 工作树干净且 `main` 未变化。
-- 实测 `gh auth status`、`git push -u origin feat/foundation`、`gh pr create --base main --head feat/foundation`；成功则记录 PR URL，失败则记录完整错误和准确恢复命令。
+- 提交本次 push/PR 记录并再次推送，确认 `feat/foundation` 工作树干净且 `main` 未变化。
+- 使用完整功能摘要、commit 清单、测试证据、DB v4/v5/v6、OCR 体积、平台降级和所有跳过项调用 `gh pr create --base main --head feat/foundation`，记录 PR URL 或完整外部错误。
