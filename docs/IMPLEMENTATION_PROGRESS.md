@@ -1,6 +1,6 @@
 # Foundation Implementation Progress
 
-- 最后更新时间：2026-08-07 07:30（Asia/Shanghai）
+- 最后更新时间：2026-08-07 07:32（Asia/Shanghai）
 - 当前分支：`feat/foundation`
 - 基准提交：`423ab24`（与 `main` / `origin/main` 一致）
 
@@ -41,6 +41,9 @@
 - 发布 preflight：`pnpm release:readiness` 通过，但报告未配置 Windows 签名证书、时间戳 URL 和更新源，相关发布项需按无签名/手工分发边界记录。
 - 发布 preflight：`pnpm test:coverage` 通过，20 个文件/149 项测试；V8 总覆盖率为 statements 72.39%、branches 71.56%、functions 71.63%、lines 74.30%。
 - 发布 preflight 阻塞：`pnpm audit --registry=https://registry.npmjs.org --audit-level high` 失败，报告 31 项（3 low、9 moderate、19 high），包括 Vite 6.4.2 Windows `server.fs.deny` 绕过、Selenium 传递依赖 `tmp`/`ws`，以及 Vitest/jsdom/ESLint/Mocha 工具链的 `undici`、`brace-expansion`、`js-yaml`。已用 `pnpm why` 确认来源；未运行会大幅重写 lockfile 的自动修复，发布安全审计保持 BLOCKED，受影响下游为 release checklist 的审计门项。
+- 发布 preflight：`pnpm audit --prod --registry=https://registry.npmjs.org --audit-level high` 通过，生产依赖未发现已知漏洞。
+- 发布 preflight：本地 `cargo audit` 扫描完成并 exit 0，但报告 22 个允许的 RustSec warnings（gtk3/`paste`/`ttf-parser`/unic 维护状态，以及 `anyhow`、`glib`、`lru`、`memmap2` unsound advisory）；不能据此声称 GitHub Actions 的“无未审查 advisory”门项通过。
+- 发布 verify 阻塞：`pnpm release:verify -SkipBundle` 在构建前失败，三处构建元数据为 `1.0.0`，但 `CHANGELOG.md` 当前公开记录为 `v0.1.2`，脚本报 `CHANGELOG.md does not mention version 1.0.0`。未擅自改版本号或添加误导性 changelog 条目；受影响下游为 release verify 和依赖它的 installer smoke。
 - Windows runtime smoke：`pnpm tauri:dev` 已启动 `klip.exe`；`KLIP_DATA_DIR=C:\tmp\klip-foundation\data` 下生成 `klip.db`/WAL，`KLIP_LOG_DIR=C:\tmp\klip-foundation\logs` 下生成日志文件；进程已停止。完整 UI 闭环尚未执行。
 - search 依赖核验：`tantivy 0.24.2` 使用 `tantivy-tokenizer-api 0.5`；选择同样依赖 tokenizer API 0.5 的 `tantivy-jieba 0.16.0`，避免同时链接不兼容的 tokenizer trait 版本。
 - search 首轮专项测试：未进入测试执行，测试编译因两个既有 `ClipboardQuerySpec` 字面量缺少新增的 `text_match_ids` 字段而失败（`clipboard_query.rs:380`、`:460`）；业务代码 `cargo check` 已通过。处理：补齐测试字段后原命令重跑，不跳过测试。
