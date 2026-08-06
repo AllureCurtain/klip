@@ -1,6 +1,6 @@
 # Foundation Implementation Progress
 
-- 最后更新时间：2026-08-07 03:13（Asia/Shanghai）
+- 最后更新时间：2026-08-07 03:15（Asia/Shanghai）
 - 当前分支：`feat/foundation`
 - 基准提交：`423ab24`（与 `main` / `origin/main` 一致）
 
@@ -19,6 +19,7 @@
 - `f9dbea2`：记录最终 verify、Windows 运行时证据、默认目录回退限制和收尾清单。
 - `c853468`：记录首次成功 push、pre-push verify 与 PR 准备状态。
 - `387392b`：记录 PR #4 创建、平台限制与最终交付状态。
+- `c880bff`：完成最终交付状态记录并确认 PR 保持 OPEN、未合并。
 
 ## 当前任务
 
@@ -26,7 +27,7 @@
 - README 已补齐 `pnpm install --frozen-lockfile` worktree 初始化、`KLIP_DATA_DIR` / `KLIP_LOG_DIR` / `KLIP_HTTP_PORT`、单活动 worktree 串行执行和可选 sccache。CHANGELOG 已在 rich-text 提交中说明 DB v4 备份不能回退到只支持 v3 的旧版；各功能行为与限制已分布记录在 README、CHANGELOG、API、DATABASE 与 ARCHITECTURE。
 - `platform-source` 已在 `1e5b63e` 提交，§8.5 与串行功能队列均已据实勾选；macOS/Linux 真实桌面验收仍保持 SKIPPED，不影响已完成的代码、目标编译和 Windows 验收结论。
 - Windows 保留现有进程文件名和窗口标题行为；macOS 使用 `NSWorkspace.frontmostApplication`，Accessibility 未授权时保留应用名且窗口标题为空；X11 使用 EWMH 活动窗口/PID/标题并从 `/proc` 解析应用名；Wayland和其他不支持平台一次性提示后返回空来源。
-- Windows 完整“监听 → 捕获 → 选择历史 → 粘贴”闭环仍列为最终运行时验收项。
+- Windows 完整“监听 → 捕获 → 选择历史 → 粘贴 → 焦点返回”闭环已通过最终 Selenium WebView 和外部文本框运行时验收。
 
 ## 已运行的测试及结果
 
@@ -130,7 +131,7 @@
 
 - RESOLVED：`gh auth status` 最终确认 `AllureCurtain` keyring token 有效；push 和 PR #4 创建均成功。
 - 默认目录无 env 的安全回退验收为 `SKIPPED/BLOCKED`：Windows Known Folder API 忽略临时 `APPDATA` 覆盖，不能在真实用户目录上继续做写入验收；健康端点回落到 `27717` 已观察，数据/日志路径结论仅作为平台证据，不声称完整隔离通过。
-- Windows 浏览器/Word 真实富文本闭环、macOS/Linux 真实平台验收、推送和 PR 创建仍未完成；Windows 完整分支已通过真实 Selenium WebView 与外部文本框“捕获 → 显示 Klip → 选择历史粘贴 → 焦点返回”闭环。富文本真实浏览器/Word 验收仍因未提供独立测试材料保持 SKIPPED。
+- Windows 浏览器/Word 真实富文本闭环与 macOS/Linux 真实平台验收保持 SKIPPED；Windows 完整分支已通过真实 Selenium WebView 与外部文本框“捕获 → 显示 Klip → 选择历史粘贴 → 焦点返回”闭环，分支 push 和 PR #4 创建均已完成。富文本真实浏览器/Word 验收仍因未提供独立测试材料保持 SKIPPED。
 - SKIPPED：当前只有 Windows 真实桌面，无法实机验证 macOS `NSRunningApplication` 或 Linux X11/Wayland 桌面焦点行为；实际后端已分别通过 `aarch64-apple-darwin` / `x86_64-unknown-linux-gnu` 最小交叉静态编译。解除条件是提供对应真实桌面会话；不阻塞 Windows 验收及后续独立功能。
 - OCR 静态链接 BLOCKED 已解除：14.43 与官方静态包 ABI 不兼容，已改用官方 1.24.2 动态 DLL；DLL 入包后的 Windows 真实推理已通过，macOS/Linux 真实环境验收仍未执行且不得声称通过。
 - SKIPPED：用户未提供独立 rich-text 测试文件；已用内建恶意 HTML、DB migration/restore 和 Windows clipboard-rs 集成测试覆盖，若后续提供文件可在最终验收补跑。
