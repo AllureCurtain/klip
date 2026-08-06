@@ -411,7 +411,7 @@ release profile 是 `panic = "abort"`。这意味着：
 - [x] 完成 §8.2 rich-text 与 DB v4 migration，针对性测试通过并 commit
 - [x] 完成 §8.3 OCR，针对性测试通过并 commit
 - [x] 完成 §8.4 platform-focus，针对性测试通过并 commit
-- [ ] 完成 §8.5 platform-source，针对性测试通过并 commit
+- [x] 完成 §8.5 platform-source，针对性测试通过并 commit
 
 **工具链与文档**
 - [ ] README 补充可选 sccache、三个运行时 env、单 worktree 初始化和串行执行规则

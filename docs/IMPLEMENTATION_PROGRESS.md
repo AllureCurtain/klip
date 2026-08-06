@@ -13,11 +13,12 @@
 - `3669c83`：完成 DB v4 多格式存储、clipboard-rs HTML/RTF 捕获与写回、v3/v4 备份兼容和 DOMPurify 安全预览。
 - `58da1e8`：完成 DB v5 图片 OCR、PP-OCRv5/ONNX Runtime 离线资源、异步 worker、搜索回灌、前端状态和 Windows runtime acceptance。
 - `82fa3a1`：完成 Windows HWND、macOS `NSRunningApplication`、Linux X11 EWMH 的粘贴目标焦点恢复及 Wayland/其他平台无错误降级。
+- `1e5b63e`：完成 Windows/macOS/X11 来源追踪、DB v6 持久化与兼容恢复、API/前端来源展示及 Windows runtime acceptance。
 
 ## 当前任务
 
-- 当前任务：`platform-source` 功能块已完成实现、文档、针对性验证和 Windows runtime acceptance；正在执行只暂存本功能相关文件、检查 staged diff 并创建 `feat: track clipboard source across supported platforms` commit。
-- §8.5 实施项已据实勾选；串行队列的“通过并 commit”项须等 commit 实际创建后再勾选。macOS/Linux 真实桌面验收仍保持 SKIPPED，不影响已完成的代码、目标编译和 Windows 验收结论。
+- 当前任务：工具链与文档清单；先补齐 README 的可选 sccache、三个隔离 env、单 worktree 初始化与串行执行规则，再核对各功能 CHANGELOG/用户可见说明。
+- `platform-source` 已在 `1e5b63e` 提交，§8.5 与串行功能队列均已据实勾选；macOS/Linux 真实桌面验收仍保持 SKIPPED，不影响已完成的代码、目标编译和 Windows 验收结论。
 - Windows 保留现有进程文件名和窗口标题行为；macOS 使用 `NSWorkspace.frontmostApplication`，Accessibility 未授权时保留应用名且窗口标题为空；X11 使用 EWMH 活动窗口/PID/标题并从 `/proc` 解析应用名；Wayland和其他不支持平台一次性提示后返回空来源。
 - Windows 完整“监听 → 捕获 → 选择历史 → 粘贴”闭环仍列为最终运行时验收项。
 
@@ -105,12 +106,12 @@
 ## 阻塞或跳过项
 
 - 最终 PR 创建存在外部认证风险：`gh auth status` 报 GitHub 账户 `AllureCurtain` 的 keyring token invalid，建议命令为 `gh auth login -h github.com`。实现与本地提交不受影响；最终仍会分别实测 `git push` 和 `gh pr create`，只有实际失败后才把对应交付项标为 BLOCKED。
-- Windows 浏览器/Word 真实富文本闭环、macOS/Linux 真实平台验收、platform-source、推送和 PR 创建尚未执行；Windows 已通过真实剪贴板 OCR 链路及外部文本框“捕获 → 显示 Klip → 选择历史粘贴 → 焦点返回”闭环，但最终仍需补一次面向完整分支的运行时回归。
+- Windows 浏览器/Word 真实富文本闭环、macOS/Linux 真实平台验收、推送和 PR 创建尚未执行；Windows 已通过真实剪贴板 OCR、platform-source 来源捕获及外部文本框“捕获 → 显示 Klip → 选择历史粘贴 → 焦点返回”闭环，但最终仍需补一次面向完整分支的运行时回归。
 - SKIPPED：当前只有 Windows 真实桌面，无法实机验证 macOS `NSRunningApplication` 或 Linux X11/Wayland 桌面焦点行为；实际后端已分别通过 `aarch64-apple-darwin` / `x86_64-unknown-linux-gnu` 最小交叉静态编译。解除条件是提供对应真实桌面会话；不阻塞 Windows 验收及后续独立功能。
 - OCR 静态链接 BLOCKED 已解除：14.43 与官方静态包 ABI 不兼容，已改用官方 1.24.2 动态 DLL；DLL 入包后的 Windows 真实推理已通过，macOS/Linux 真实环境验收仍未执行且不得声称通过。
 - SKIPPED：用户未提供独立 rich-text 测试文件；已用内建恶意 HTML、DB migration/restore 和 Windows clipboard-rs 集成测试覆盖，若后续提供文件可在最终验收补跑。
 
 ## 下一步准确操作
 
-- 只暂存 platform-source 的代码、测试、Cargo、CHANGELOG、API/DATABASE/ARCHITECTURE、`WORKTREE_STRATEGY.md` 与本进度记录；运行 `git diff --cached --check` 并审查 staged stat 后提交 `feat: track clipboard source across supported platforms`。
-- 提交后把 commit SHA 写入本文件，切换当前任务到工具链/最终验证并创建独立 milestone progress commit；随后继续 README/toolchain checklist，不提前 push。
+- 只暂存 `WORKTREE_STRATEGY.md` 与 `docs/IMPLEMENTATION_PROGRESS.md`，提交 `docs: record platform source milestone`。
+- 随后审查 README 开发章节和 CHANGELOG，补齐工具链清单并针对文档运行 `git diff --check`；提交后再进入提交历史审查、最终 `pnpm verify`、完整 Windows runtime regression 和 env fallback 验收。
