@@ -10,11 +10,12 @@
 - `d30e26c`：独立初始化本持续实施进度记录并审核单 worktree 策略。
 - `909040d`：完成 clipboard-rs 统一 backend、哈希抑制、monitor/writer/format 迁移及针对性验证。
 - `0dc501b`：完成 Tantivy 全文索引、jieba 中文分词、批量/定时提交、删除同步、损坏重建和 SQLite `LIKE` 降级。
+- `3669c83`：完成 DB v4 多格式存储、clipboard-rs HTML/RTF 捕获与写回、v3/v4 备份兼容和 DOMPurify 安全预览。
 
 ## 当前任务
 
-- 当前任务：rich-text 功能块已完成实现与验证，正在创建 `feat: preserve rich clipboard formats` 里程碑提交；提交后再把当前任务切换为 OCR。
-- rich-text 数据模型采用“`clipboard_items.content` 保持纯文本事实源 + `clipboard_formats` 保存 text/html/rtf”的兼容结构；同哈希的后续捕获以最新格式集合替换旧集合。
+- 当前任务：OCR 功能块；先核验 `oar-ocr 0.6.x`、`ort`、模型许可证/下载来源、Windows 动态库分发和 `tauri.conf.json` 资源布局，再确定可离线构建的实现路径。
+- rich-text 已在 `3669c83` 提交；工作树应只包含本次 OCR 启动进度记录。
 - Windows 完整“监听 → 捕获 → 选择历史 → 粘贴”闭环仍列为最终运行时验收项。
 
 ## 已运行的测试及结果
@@ -65,4 +66,4 @@
 
 ## 下一步准确操作
 
-- 仅暂存 rich-text 相关代码、依赖、测试和文档，提交 `feat: preserve rich clipboard formats`；记录 commit SHA 后确认工作树干净，再把“当前任务”切换为 OCR 并审查 `oar-ocr`/`ort` 的可用版本与模型分发条件。
+- 仅提交本次 rich-text SHA 与 OCR 当前任务记录；确认工作树干净后检查 crates.io/本地 registry 中 `oar-ocr 0.6.x` 和 `ort` 的准确 API/feature，审查 `tauri.conf.json` 资源配置并记录模型获取与体积证据。
