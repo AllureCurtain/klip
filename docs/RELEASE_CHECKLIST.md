@@ -15,6 +15,7 @@ Foundation closeout status below reflects the Windows `feat/foundation` worktree
 - [ ] BLOCKED: local `cargo audit` reports 22 allowed warnings, and PR #4 currently has no GitHub Actions check result to establish the stricter release gate.
 - [ ] BLOCKED: `pnpm release:verify -SkipBundle` stops before build because `CHANGELOG.md` does not mention metadata version `1.0.0`.
 - [x] `pnpm e2e` succeeds on the current Windows desktop with `tauri-driver` and the matching EdgeDriver/WebView2 `151.0.4129.59`; 1 Selenium flow passed.
+- [x] Final foundation `pnpm verify` passes: ESLint, 20 Vitest files / 149 tests, production build, rustfmt, Clippy, 143 Rust library tests (1 explicit performance test ignored), 2 main tests, and 5 clipboard integration tests.
 
 ## 2. Installer Build
 

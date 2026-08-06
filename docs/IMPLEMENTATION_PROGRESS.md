@@ -1,6 +1,6 @@
 # Foundation Implementation Progress
 
-- 最后更新时间：2026-08-07 07:53（Asia/Shanghai）
+- 最后更新时间：2026-08-07 07:57（Asia/Shanghai）
 - 当前分支：`feat/foundation`
 - 基准提交：`423ab24`（与 `main` / `origin/main` 一致）
 
@@ -26,10 +26,11 @@
 - `64be1de`：记录生产 npm 审计、RustSec warnings 和发布版本元数据阻塞。
 - `e0fef43`：记录 Windows MSI/NSIS 构建、大小、哈希、签名状态和发布清单证据。
 - `c29b71f`：记录本地-only installer smoke 通过、GitHub release 缺失和清洁用户/VM 安装跳过边界。
+- `87d9572`：记录当前 HEAD Windows Selenium E2E 使用匹配 EdgeDriver 重跑通过。
 
 ## 当前任务
 
-- 当前任务：最终全量验证与交付同步；运行 `pnpm verify`，确认工作树/进程/端口干净，更新并推送现有 PR #4。
+- 当前任务：最终状态复核与交付同步；确认工作树、main、PR #4、进程/端口和文档阻塞项，随后推送现有分支。
 - README 已补齐 `pnpm install --frozen-lockfile` worktree 初始化、`KLIP_DATA_DIR` / `KLIP_LOG_DIR` / `KLIP_HTTP_PORT`、单活动 worktree 串行执行和可选 sccache。CHANGELOG 已在 rich-text 提交中说明 DB v4 备份不能回退到只支持 v3 的旧版；各功能行为与限制已分布记录在 README、CHANGELOG、API、DATABASE 与 ARCHITECTURE。
 - `platform-source` 已在 `1e5b63e` 提交，§8.5 与串行功能队列均已据实勾选；macOS/Linux 真实桌面验收仍保持 SKIPPED，不影响已完成的代码、目标编译和 Windows 验收结论。
 - Windows 保留现有进程文件名和窗口标题行为；macOS 使用 `NSWorkspace.frontmostApplication`，Accessibility 未授权时保留应用名且窗口标题为空；X11 使用 EWMH 活动窗口/PID/标题并从 `/proc` 解析应用名；Wayland和其他不支持平台一次性提示后返回空来源。
@@ -54,6 +55,7 @@
 - Installer smoke：完整 `pnpm release:smoke` 因 GitHub 不存在 `v1.0.0` release/资产而失败；随后按脚本支持的 `-SkipGitHub` 不同路径执行本地-only smoke，通过版本一致性、两项产物存在性/大小/哈希检查，并确认当前 `klip.exe` 进程数和已安装 Klip 注册表项均为 0。
 - 当前 HEAD Windows `pnpm e2e` 首次运行：前端和 Tauri debug build 通过，业务测试未开始；PATH 中 EdgeDriver 148 与 WebView2 `151.0.4129.59` 不匹配，Selenium `before all` 返回 `SessionNotCreatedError`，runner 正确以 exit 1 失败。已定位 ignored 缓存 `e2e/.tmp/edgedriver-151.0.4129.59/msedgedriver.exe`，下一步临时前置该目录后重跑同一 E2E。
 - 当前 HEAD Windows Selenium E2E 重跑：通过。临时前置 `e2e/.tmp/edgedriver-151.0.4129.59/msedgedriver.exe`，EdgeDriver/WebView2 均为 `151.0.4129.59`；1 项业务测试通过，覆盖文本捕获、关键词搜索、窗口显示/刷新、历史条目点击和剪贴板恢复，runner 退出清理正常。
+- 最终 `pnpm verify`（2026-08-07 07:53）：通过，用时 202.5 秒；ESLint、Vitest 20/149、生产构建、cargo fmt、Clippy、Rust library 143（1 ignored）、main 2 和 clipboard integration 5 全部通过。
 - Windows runtime smoke：`pnpm tauri:dev` 已启动 `klip.exe`；`KLIP_DATA_DIR=C:\tmp\klip-foundation\data` 下生成 `klip.db`/WAL，`KLIP_LOG_DIR=C:\tmp\klip-foundation\logs` 下生成日志文件；进程已停止。完整 UI 闭环尚未执行。
 - search 依赖核验：`tantivy 0.24.2` 使用 `tantivy-tokenizer-api 0.5`；选择同样依赖 tokenizer API 0.5 的 `tantivy-jieba 0.16.0`，避免同时链接不兼容的 tokenizer trait 版本。
 - search 首轮专项测试：未进入测试执行，测试编译因两个既有 `ClipboardQuerySpec` 字面量缺少新增的 `text_match_ids` 字段而失败（`clipboard_query.rs:380`、`:460`）；业务代码 `cargo check` 已通过。处理：补齐测试字段后原命令重跑，不跳过测试。
