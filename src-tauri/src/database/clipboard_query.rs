@@ -65,11 +65,12 @@ pub(crate) fn fetch_items_locked(
 ) -> Result<Vec<ClipboardItem>, AppError> {
     let built = build_clipboard_query(spec);
     let mut stmt = conn.prepare(&built.sql)?;
-    let items = stmt
+    let mut items = stmt
         .query_map(params_from_iter(built.params), |row| {
             Ok(clipboard_item_from_row(row))
         })?
         .collect::<Result<Vec<_>, _>>()?;
+    crate::database::formats::hydrate(conn, &mut items)?;
     Ok(items)
 }
 
@@ -101,9 +102,13 @@ pub(crate) fn fetch_item_by_id_locked(
     id: i64,
 ) -> Result<Option<ClipboardItem>, AppError> {
     let mut stmt = conn.prepare(&format!("{} WHERE id = ?1", clipboard_item_select_sql()))?;
-    stmt.query_row([id], |row| Ok(clipboard_item_from_row(row)))
-        .optional()
-        .map_err(Into::into)
+    let mut item = stmt
+        .query_row([id], |row| Ok(clipboard_item_from_row(row)))
+        .optional()?;
+    if let Some(item) = item.as_mut() {
+        crate::database::formats::hydrate(conn, std::slice::from_mut(item))?;
+    }
+    Ok(item)
 }
 
 pub(crate) fn fetch_item_by_id_required_locked(
@@ -111,7 +116,9 @@ pub(crate) fn fetch_item_by_id_required_locked(
     id: i64,
 ) -> Result<ClipboardItem, AppError> {
     let mut stmt = conn.prepare(&format!("{} WHERE id = ?1", clipboard_item_select_sql()))?;
-    Ok(stmt.query_row([id], |row| Ok(clipboard_item_from_row(row)))?)
+    let mut item = stmt.query_row([id], |row| Ok(clipboard_item_from_row(row)))?;
+    crate::database::formats::hydrate(conn, std::slice::from_mut(&mut item))?;
+    Ok(item)
 }
 
 pub(crate) fn fetch_item_by_hash_locked(
@@ -119,7 +126,9 @@ pub(crate) fn fetch_item_by_hash_locked(
     hash: &str,
 ) -> Result<ClipboardItem, AppError> {
     let mut stmt = conn.prepare(&format!("{} WHERE hash = ?1", clipboard_item_select_sql()))?;
-    Ok(stmt.query_row([hash], |row| Ok(clipboard_item_from_row(row)))?)
+    let mut item = stmt.query_row([hash], |row| Ok(clipboard_item_from_row(row)))?;
+    crate::database::formats::hydrate(conn, std::slice::from_mut(&mut item))?;
+    Ok(item)
 }
 
 pub(crate) fn hydrate_tags(
@@ -296,6 +305,7 @@ fn clipboard_item_from_row(row: &rusqlite::Row<'_>) -> ClipboardItem {
         last_used_at: row.get(9).unwrap_or(0),
         is_sensitive: row.get::<_, i64>(10).unwrap_or(0) != 0,
         sensitivity_reason: row.get(11).unwrap_or(None),
+        formats: Vec::new(),
         tags: Vec::new(),
     }
 }

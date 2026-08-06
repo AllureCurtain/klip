@@ -2,7 +2,7 @@ pub mod file;
 pub mod image;
 pub mod text;
 
-use crate::database::types::ContentType;
+use crate::database::types::{ClipboardFormat, ContentType};
 
 pub trait ClipboardFormatStrategy: Send + Sync {
     fn content_type(&self) -> ContentType;
@@ -34,6 +34,7 @@ pub struct ExtractedContent {
     pub hash: String,
     pub size: i64,
     pub metadata: Option<String>,
+    pub formats: Vec<ClipboardFormat>,
 }
 
 pub struct FormatStrategyRegistry {

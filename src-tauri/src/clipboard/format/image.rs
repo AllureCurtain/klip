@@ -49,6 +49,7 @@ impl ClipboardFormatStrategy for ImageStrategy {
             hash,
             size,
             metadata: Some(metadata),
+            formats: Vec::new(),
         })
     }
 }

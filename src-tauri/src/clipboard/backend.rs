@@ -62,6 +62,13 @@ pub struct ClipboardImage {
     pub height: u32,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClipboardText {
+    pub text: String,
+    pub html: Option<String>,
+    pub rtf: Option<String>,
+}
+
 fn context() -> Result<ClipboardContext, ClipboardError> {
     let mut last = String::new();
     for attempt in 1..=MAX_ATTEMPTS {
@@ -148,6 +155,35 @@ pub fn available_formats() -> Vec<String> {
 
 pub fn read_text() -> Result<String, ClipboardError> {
     with_retry(|ctx| ctx.get_text().map_err(|e| e.to_string())).map_err(read_err)
+}
+
+pub fn read_text_formats() -> Result<ClipboardText, ClipboardError> {
+    with_retry(|ctx| {
+        let contents = ctx
+            .get(&[ContentFormat::Text, ContentFormat::Html, ContentFormat::Rtf])
+            .map_err(|e| e.to_string())?;
+        collect_text_formats(contents)
+    })
+    .map_err(read_err)
+}
+
+fn collect_text_formats(contents: Vec<ClipboardContent>) -> Result<ClipboardText, String> {
+    let mut text = None;
+    let mut html = None;
+    let mut rtf = None;
+    for content in contents {
+        match content {
+            ClipboardContent::Text(value) => text = Some(value),
+            ClipboardContent::Html(value) => html = Some(value),
+            ClipboardContent::Rtf(value) => rtf = Some(value),
+            ClipboardContent::Image(_)
+            | ClipboardContent::Files(_)
+            | ClipboardContent::Other(_, _) => {}
+        }
+    }
+
+    text.map(|text| ClipboardText { text, html, rtf })
+        .ok_or_else(|| "clipboard did not contain a plain-text representation".to_string())
 }
 
 pub fn read_image() -> Result<ClipboardImage, ClipboardError> {
@@ -258,7 +294,24 @@ fn hex_value(byte: &u8) -> Option<u8> {
 // clipboard first, so a second call discards whatever the first one wrote.
 
 pub fn write_text(text: &str) -> Result<(), ClipboardError> {
-    let contents = || vec![ClipboardContent::Text(text.to_string())];
+    write_text_formats(text, None, None)
+}
+
+pub fn write_text_formats(
+    text: &str,
+    html: Option<&str>,
+    rtf: Option<&str>,
+) -> Result<(), ClipboardError> {
+    let contents = || {
+        let mut contents = vec![ClipboardContent::Text(text.to_string())];
+        if let Some(html) = html.filter(|value| !value.is_empty()) {
+            contents.push(ClipboardContent::Html(html.to_string()));
+        }
+        if let Some(rtf) = rtf.filter(|value| !value.is_empty()) {
+            contents.push(ClipboardContent::Rtf(rtf.to_string()));
+        }
+        contents
+    };
     with_retry(|ctx| ctx.set(contents()).map_err(|e| e.to_string())).map_err(write_err)
 }
 
@@ -392,5 +445,26 @@ mod tests {
     #[test]
     fn drop_effect_copy_serializes_to_four_le_bytes() {
         assert_eq!(DROP_EFFECT_COPY.to_le_bytes(), [5, 0, 0, 0]);
+    }
+
+    #[test]
+    fn collect_text_formats_keeps_all_supported_representations() {
+        let content = collect_text_formats(vec![
+            ClipboardContent::Html("<b>Hello</b>".into()),
+            ClipboardContent::Text("Hello".into()),
+            ClipboardContent::Rtf(r"{\rtf1\b Hello}".into()),
+        ])
+        .unwrap();
+
+        assert_eq!(content.text, "Hello");
+        assert_eq!(content.html.as_deref(), Some("<b>Hello</b>"));
+        assert_eq!(content.rtf.as_deref(), Some(r"{\rtf1\b Hello}"));
+    }
+
+    #[test]
+    fn collect_text_formats_requires_plain_text_for_hash_and_search() {
+        let result = collect_text_formats(vec![ClipboardContent::Html("<b>Hello</b>".into())]);
+
+        assert!(result.is_err());
     }
 }

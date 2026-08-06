@@ -410,6 +410,7 @@ mod tests {
             hash,
             size: content.len() as i64,
             metadata: None,
+            formats: Vec::new(),
         };
         let saved = crate::database::clipboard::insert(db, &item).unwrap();
         let conn = db.get_connection().unwrap();

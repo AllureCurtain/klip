@@ -745,6 +745,10 @@ interface ClipboardItem {
   is_favorited: boolean;
   is_sensitive: boolean;
   sensitivity_reason: string | null;
+  formats: Array<{
+    format: 'text' | 'html' | 'rtf';
+    content: string;
+  }>;
   tags: Tag[];
   created_at: number;   // 毫秒时间戳
   last_used_at: number; // 毫秒时间戳

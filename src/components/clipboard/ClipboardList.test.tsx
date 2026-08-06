@@ -58,6 +58,7 @@ function makeTextItem(overrides: Partial<ClipboardItemType> = {}): ClipboardItem
     is_favorited: false,
     is_sensitive: false,
     sensitivity_reason: null,
+    formats: [],
     tags: [],
     created_at: Date.now(),
     last_used_at: Date.now(),

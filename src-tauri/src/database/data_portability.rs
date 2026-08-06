@@ -190,6 +190,7 @@ pub fn import_csv(db: &Database, path: &str) -> Result<ImportSummary, AppError> 
             is_favorited: row.is_favorited,
             is_sensitive: row.is_sensitive,
             sensitivity_reason: empty_to_none(&row.sensitivity_reason),
+            formats: Vec::new(),
             tags: row
                 .tags
                 .split('|')
@@ -244,12 +245,13 @@ pub fn restore_database(
     input_path: &str,
 ) -> Result<RestoreSummary, AppError> {
     let input = Path::new(input_path);
-    validate_backup_database(input)?;
+    let layout = validate_backup_database(input)?;
 
     let pre_restore_backup_path = pre_restore_backup_path(db_path);
     let pre_restore_backup_path_str = pre_restore_backup_path.to_string_lossy().to_string();
     let pre_restore_backup_size = backup_database(db, &pre_restore_backup_path_str)?.size;
-    restore_from_attached_database(db, input_path)?;
+    restore_from_attached_database(db, input_path, layout)?;
+    db.init_schema()?;
     if let Err(error) = crate::search::rebuild(db) {
         tracing::warn!("Failed to rebuild full-text search after database restore: {error}");
     }
@@ -302,6 +304,15 @@ fn import_items(db: &Database, items: Vec<ClipboardItem>) -> Result<ImportSummar
             [&hash],
             |row| row.get(0),
         )?;
+        if result != 0 {
+            crate::database::formats::replace_for_item(
+                &tx,
+                item_id,
+                item.content_type,
+                &item.content,
+                &item.formats,
+            )?;
+        }
         for tag in item.tags {
             let tag_id = upsert_import_tag(&tx, &tag)?;
             tx.execute(
@@ -392,7 +403,12 @@ fn escape_sql_literal(value: &str) -> String {
     value.replace('\'', "''")
 }
 
-fn validate_backup_database(path: &Path) -> Result<(), AppError> {
+#[derive(Debug, Clone, Copy)]
+struct BackupLayout {
+    has_clipboard_formats: bool,
+}
+
+fn validate_backup_database(path: &Path) -> Result<BackupLayout, AppError> {
     let conn = Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
         .map_err(|e| AppError::InvalidInput(format!("invalid backup database: {}", e)))?;
     let integrity: String = conn
@@ -468,7 +484,30 @@ fn validate_backup_database(path: &Path) -> Result<(), AppError> {
         )));
     }
 
-    Ok(())
+    let has_clipboard_formats: bool = conn
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'clipboard_formats'",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .map_err(|e| AppError::InvalidInput(format!("invalid backup database: {}", e)))?
+        != 0;
+    if backup_version >= 4 && !has_clipboard_formats {
+        return Err(AppError::InvalidInput(
+            "backup database is missing required table: clipboard_formats".into(),
+        ));
+    }
+    if has_clipboard_formats {
+        require_table_columns(
+            &conn,
+            "clipboard_formats",
+            &["item_id", "format", "content"],
+        )?;
+    }
+
+    Ok(BackupLayout {
+        has_clipboard_formats,
+    })
 }
 
 fn require_table_columns(
@@ -509,17 +548,28 @@ fn pre_restore_backup_path(db_path: &Path) -> PathBuf {
     db_path.with_file_name(format!("{}.pre-restore.bak", file_name))
 }
 
-fn restore_from_attached_database(db: &Database, input_path: &str) -> Result<(), AppError> {
+fn restore_from_attached_database(
+    db: &Database,
+    input_path: &str,
+    layout: BackupLayout,
+) -> Result<(), AppError> {
     let conn = db.get_connection()?;
     conn.execute_batch(&format!(
         "ATTACH DATABASE '{}' AS restore_db;",
         escape_sql_literal(input_path)
     ))?;
 
-    let result = conn.execute_batch(
+    let format_restore_sql = if layout.has_clipboard_formats {
+        "INSERT INTO clipboard_formats (item_id, format, content)
+         SELECT item_id, format, content FROM restore_db.clipboard_formats;"
+    } else {
+        ""
+    };
+    let result = conn.execute_batch(&format!(
         "BEGIN IMMEDIATE;
          DELETE FROM clipboard_item_tags;
          DELETE FROM tags;
+         DELETE FROM clipboard_formats;
          DELETE FROM clipboard_items;
          DELETE FROM app_config;
 
@@ -536,10 +586,12 @@ fn restore_from_attached_database(db: &Database, input_path: &str) -> Result<(),
          INSERT INTO clipboard_item_tags (item_id, tag_id)
          SELECT item_id, tag_id FROM restore_db.clipboard_item_tags;
 
+         {format_restore_sql}
+
          INSERT INTO app_config (key, value, updated_at)
          SELECT key, value, updated_at FROM restore_db.app_config;
-         COMMIT;",
-    );
+         COMMIT;"
+    ));
 
     if let Err(error) = result {
         let _ = conn.execute_batch("ROLLBACK;");
@@ -554,7 +606,7 @@ fn restore_from_attached_database(db: &Database, input_path: &str) -> Result<(),
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::database::Database;
+    use crate::database::{ClipboardFormat, ClipboardFormatType, Database, NewClipboardItem};
     use rusqlite::Connection;
     use sha2::Digest;
     use std::path::{Path, PathBuf};
@@ -591,6 +643,22 @@ mod tests {
         .unwrap();
     }
 
+    fn insert_rich_text(db: &Database, content: &str, html: &str) -> ClipboardItem {
+        let item = NewClipboardItem {
+            content_type: ContentType::Text,
+            data: content.as_bytes().to_vec(),
+            preview: Some(content.to_string()),
+            hash: normal_text_hash(content),
+            size: content.len() as i64,
+            metadata: None,
+            formats: vec![ClipboardFormat {
+                format: ClipboardFormatType::Html,
+                content: html.to_string(),
+            }],
+        };
+        crate::database::clipboard::insert(db, &item).unwrap()
+    }
+
     fn count_items(path: &Path) -> i64 {
         Connection::open(path)
             .unwrap()
@@ -624,7 +692,7 @@ mod tests {
         let json_path = dir.join("items.json");
         let db = create_db(&db_path);
         let content = "same text content";
-        insert_text_with_hash(&db, content, &normal_text_hash(content));
+        insert_rich_text(&db, content, "<b>same text content</b>");
         std::fs::write(
             &json_path,
             serde_json::json!({
@@ -656,6 +724,11 @@ mod tests {
         assert_eq!(summary.imported, 0);
         assert_eq!(summary.skipped, 1);
         assert_eq!(count_items(&db_path), 1);
+        let existing = crate::database::clipboard::get_list(&db, 10, 0).unwrap();
+        assert!(existing[0]
+            .formats
+            .iter()
+            .any(|format| format.format == ClipboardFormatType::Html));
     }
 
     #[test]
@@ -850,6 +923,86 @@ mod tests {
             Err(AppError::InvalidInput(message)) if message.contains("newer database schema")
         ));
         assert_eq!(count_items(&current_path), 1);
+    }
+
+    #[test]
+    fn restore_migrates_v3_backup_and_backfills_plain_text_format() {
+        let dir = temp_dir("v3-restore");
+        let current_path = dir.join("current.db");
+        let restore_path = dir.join("restore-v3.db");
+
+        let current = create_db(&current_path);
+        insert_text(&current, "current-item");
+        let legacy = create_db(&restore_path);
+        insert_text(&legacy, "legacy-v3-item");
+        {
+            let conn = legacy.get_connection().unwrap();
+            conn.execute_batch(
+                "DROP TABLE clipboard_formats;
+                 UPDATE app_config SET value = '3' WHERE key = 'db_version';",
+            )
+            .unwrap();
+        }
+        drop(legacy);
+
+        restore_database(&current, &current_path, restore_path.to_str().unwrap()).unwrap();
+
+        let restored = crate::database::clipboard::get_list(&current, 10, 0).unwrap();
+        assert_eq!(restored.len(), 1);
+        assert_eq!(restored[0].content, "legacy-v3-item");
+        assert_eq!(restored[0].formats.len(), 1);
+        assert_eq!(restored[0].formats[0].format, ClipboardFormatType::Text);
+        let version = crate::database::config::get(&current, "db_version")
+            .unwrap()
+            .unwrap();
+        assert_eq!(version, "4");
+    }
+
+    #[test]
+    fn restore_preserves_v4_rich_formats() {
+        let dir = temp_dir("v4-rich-restore");
+        let current_path = dir.join("current.db");
+        let source_path = dir.join("source.db");
+        let backup_path = dir.join("source-backup.db");
+
+        let current = create_db(&current_path);
+        insert_text(&current, "current-item");
+        let source = create_db(&source_path);
+        insert_rich_text(&source, "formatted", "<b>formatted</b>");
+        backup_database(&source, backup_path.to_str().unwrap()).unwrap();
+
+        restore_database(&current, &current_path, backup_path.to_str().unwrap()).unwrap();
+
+        let restored = crate::database::clipboard::get_list(&current, 10, 0).unwrap();
+        assert_eq!(restored.len(), 1);
+        assert!(restored[0].formats.iter().any(|format| {
+            format.format == ClipboardFormatType::Html && format.content == "<b>formatted</b>"
+        }));
+    }
+
+    #[test]
+    fn restore_rejects_v4_backup_without_clipboard_formats() {
+        let dir = temp_dir("v4-missing-formats");
+        let current_path = dir.join("current.db");
+        let restore_path = dir.join("restore-v4.db");
+
+        let current = create_db(&current_path);
+        insert_text(&current, "keep-current-data");
+        let restore = create_db(&restore_path);
+        {
+            let conn = restore.get_connection().unwrap();
+            conn.execute("DROP TABLE clipboard_formats", []).unwrap();
+        }
+        drop(restore);
+
+        let result = restore_database(&current, &current_path, restore_path.to_str().unwrap());
+
+        assert!(matches!(
+            result,
+            Err(AppError::InvalidInput(message)) if message.contains("clipboard_formats")
+        ));
+        assert_eq!(count_items(&current_path), 1);
+        assert_eq!(first_content(&current_path), "keep-current-data");
     }
 
     #[test]

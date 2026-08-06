@@ -39,6 +39,7 @@ function makeTextItem(overrides: Partial<ClipboardItemType> = {}): ClipboardItem
     is_favorited: false,
     is_sensitive: false,
     sensitivity_reason: null,
+    formats: [],
     tags: [],
     created_at: 1_714_000_000_000,
     last_used_at: 1_714_000_000_000,
@@ -240,6 +241,51 @@ describe('ClipboardItem', () => {
     );
 
     expect(screen.getByText('已隐藏敏感内容').getAttribute('title')).toBeNull();
+  });
+
+  it('renders allowed rich text while stripping executable HTML', () => {
+    render(
+      <ClipboardItem
+        item={makeTextItem({
+          content: 'Safe rich text',
+          preview: 'Safe rich text',
+          formats: [
+            {
+              format: 'html',
+              content:
+                '<b>Safe</b><script>window.__xss = true</script><img src=x onerror="window.__xss = true"><a href="javascript:window.__xss = true" onclick="window.__xss = true">link</a>',
+            },
+          ],
+        })}
+        index={1}
+        isSelected={false}
+      />
+    );
+
+    const preview = screen.getByTestId('rich-text-preview');
+    expect(preview.querySelector('b')?.textContent).toBe('Safe');
+    expect(preview.querySelector('script')).toBeNull();
+    expect(preview.querySelector('img')).toBeNull();
+    expect(preview.querySelector('[onclick]')).toBeNull();
+    expect(preview.querySelector('[onerror]')).toBeNull();
+    expect(preview.querySelector('a')?.getAttribute('href')).toBeNull();
+  });
+
+  it('falls back to plain text when sanitization removes all HTML', () => {
+    render(
+      <ClipboardItem
+        item={makeTextItem({
+          content: 'Plain fallback',
+          preview: 'Plain fallback',
+          formats: [{ format: 'html', content: '<script>window.__xss = true</script>' }],
+        })}
+        index={1}
+        isSelected={false}
+      />
+    );
+
+    expect(screen.queryByTestId('rich-text-preview')).toBeNull();
+    expect(screen.getByText('Plain fallback')).toBeTruthy();
   });
 
   it('shows sensitive text previews when masking is disabled', () => {

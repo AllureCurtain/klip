@@ -4,6 +4,7 @@
 
 ### Added
 
+- Rich-text clipboard capture and replay with plain-text, HTML, and RTF representations stored together; HTML previews are sanitized with a strict DOMPurify allowlist.
 - Tantivy full-text indexing with jieba Chinese tokenization, batched background commits, corruption recovery from SQLite, and transparent `LIKE` fallback when the index is unavailable.
 - Regression coverage for Data Management settings path actions, restore cancellation, file path input labels, and Settings general/behavior control labels.
 - Regression coverage for Header icon-only actions.
@@ -32,6 +33,7 @@
 
 ### Changed
 
+- Database schema version 4 adds `clipboard_formats`. Version 3 databases and backups migrate automatically, but backups created by schema v4 cannot be restored by older Klip versions that only support v3.
 - README now uses a richer project-homepage structure with install guidance, core workflows, current limits, local development, release checks, and documentation links.
 - About copy, package metadata, and contribution scope now consistently describe Klip as a Windows-first local clipboard MVP.
 - README now presents Klip as a Windows-first local clipboard MVP and clearly separates current features from post-MVP services.

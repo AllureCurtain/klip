@@ -103,6 +103,7 @@ impl ClipboardFormatStrategy for FileStrategy {
             hash,
             size,
             metadata: Some(metadata),
+            formats: Vec::new(),
         })
     }
 }

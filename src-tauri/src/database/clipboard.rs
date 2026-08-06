@@ -87,6 +87,7 @@ mod tests {
             hash,
             size: content.len() as i64,
             metadata: None,
+            formats: Vec::new(),
         };
         insert(db, &item).unwrap()
     }
@@ -256,6 +257,7 @@ mod tests {
             hash,
             size: 21,
             metadata: None,
+            formats: Vec::new(),
         };
 
         let result = insert(&db, &item);
@@ -329,9 +331,10 @@ pub fn insert(
         ));
     }
 
-    let conn = db.get_connection()?;
+    let mut conn = db.get_connection()?;
+    let transaction = conn.transaction()?;
 
-    conn.execute(
+    transaction.execute(
         "INSERT INTO clipboard_items
          (content_type, content, preview, hash, size, metadata, is_sensitive,
           sensitivity_reason, created_at, last_used_at)
@@ -353,6 +356,20 @@ pub fn insert(
             now,
         ],
     )?;
+
+    let saved_id: i64 = transaction.query_row(
+        "SELECT id FROM clipboard_items WHERE hash = ?1",
+        [&item.hash],
+        |row| row.get(0),
+    )?;
+    crate::database::formats::replace_for_item(
+        &transaction,
+        saved_id,
+        item.content_type,
+        &content_str,
+        &item.formats,
+    )?;
+    transaction.commit()?;
 
     let saved = clipboard_query::fetch_item_by_hash_locked(&conn, &item.hash)?;
     drop(conn);

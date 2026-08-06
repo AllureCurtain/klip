@@ -1089,6 +1089,7 @@ mod tests {
             hash,
             size: content.len() as i64,
             metadata: None,
+            formats: Vec::new(),
         };
         crate::database::clipboard::insert(db, &item).unwrap();
     }

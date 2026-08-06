@@ -9,9 +9,15 @@ export interface ClipboardItem {
   is_favorited: boolean;
   is_sensitive: boolean;
   sensitivity_reason: string | null;
+  formats: ClipboardFormat[];
   tags: Tag[];
   created_at: number;
   last_used_at: number;
+}
+
+export interface ClipboardFormat {
+  format: 'text' | 'html' | 'rtf';
+  content: string;
 }
 
 export interface Tag {

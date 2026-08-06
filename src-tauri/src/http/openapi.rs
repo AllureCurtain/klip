@@ -178,6 +178,20 @@ pub fn build_openapi() -> serde_json::Value {
     schemas.insert("ContentType".into(), content_type_enum());
 
     schemas.insert(
+        "ClipboardFormat".into(),
+        obj(
+            &[
+                (
+                    "format",
+                    serde_json::json!({ "type": "string", "enum": ["text", "html", "rtf"] }),
+                ),
+                ("content", s_str()),
+            ],
+            &["format", "content"],
+        ),
+    );
+
+    schemas.insert(
         "ClipboardItem".into(),
         obj(
             &[
@@ -203,6 +217,7 @@ pub fn build_openapi() -> serde_json::Value {
                     v["nullable"] = true.into();
                     v
                 }),
+                ("formats", arr("ClipboardFormat")),
                 ("tags", arr("Tag")),
                 ("created_at", s_i64()),
                 ("last_used_at", s_i64()),
@@ -215,6 +230,7 @@ pub fn build_openapi() -> serde_json::Value {
                 "size",
                 "is_favorited",
                 "is_sensitive",
+                "formats",
                 "tags",
                 "created_at",
                 "last_used_at",

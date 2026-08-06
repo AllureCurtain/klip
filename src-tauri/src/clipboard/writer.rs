@@ -11,7 +11,7 @@
 use base64::Engine;
 
 use crate::clipboard::{backend, hash, suppress};
-use crate::database::types::ContentType;
+use crate::database::types::{ClipboardFormat, ClipboardFormatType, ContentType};
 use crate::AppError;
 
 const PNG_DATA_URL_PREFIX: &str = "data:image/png;base64,";
@@ -25,6 +25,7 @@ pub fn copy_to_clipboard(
     content: &str,
     content_type: &ContentType,
     _metadata: Option<&str>,
+    formats: &[ClipboardFormat],
 ) -> Result<(), AppError> {
     // Arm before writing. Arming afterwards would leave a window in which the
     // clipboard has already changed but the monitor has nothing to match
@@ -32,7 +33,7 @@ pub fn copy_to_clipboard(
     suppress::arm(hash::hash_stored_content(content_type.as_str(), content));
 
     let result = match content_type {
-        ContentType::Text => backend::write_text(content).map_err(AppError::from),
+        ContentType::Text => write_text(content, formats),
         ContentType::Image => write_image(content),
         ContentType::File => write_files(content),
     };
@@ -44,6 +45,19 @@ pub fn copy_to_clipboard(
     }
 
     result
+}
+
+fn write_text(content: &str, formats: &[ClipboardFormat]) -> Result<(), AppError> {
+    let html = format_content(formats, ClipboardFormatType::Html);
+    let rtf = format_content(formats, ClipboardFormatType::Rtf);
+    backend::write_text_formats(content, html, rtf).map_err(AppError::from)
+}
+
+fn format_content(formats: &[ClipboardFormat], expected: ClipboardFormatType) -> Option<&str> {
+    formats
+        .iter()
+        .find(|format| format.format == expected && !format.content.is_empty())
+        .map(|format| format.content.as_str())
 }
 
 fn write_image(content: &str) -> Result<(), AppError> {
@@ -101,5 +115,28 @@ mod tests {
         let err = write_files("C:/not/json.txt").unwrap_err();
 
         assert!(matches!(err, AppError::Clipboard(msg) if msg.contains("invalid file path JSON")));
+    }
+
+    #[test]
+    fn format_content_selects_the_requested_rich_representation() {
+        let formats = vec![
+            ClipboardFormat {
+                format: ClipboardFormatType::Html,
+                content: "<b>Hello</b>".into(),
+            },
+            ClipboardFormat {
+                format: ClipboardFormatType::Rtf,
+                content: r"{\rtf1\b Hello}".into(),
+            },
+        ];
+
+        assert_eq!(
+            format_content(&formats, ClipboardFormatType::Html),
+            Some("<b>Hello</b>")
+        );
+        assert_eq!(
+            format_content(&formats, ClipboardFormatType::Rtf),
+            Some(r"{\rtf1\b Hello}")
+        );
     }
 }

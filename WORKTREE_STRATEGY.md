@@ -267,13 +267,13 @@ rich-text、search-tantivy、OCR 都要加新 IPC 命令和 HTTP 路由，因此
 现状：`database/types.rs:5` 的 `ContentType` 只有 Text / Image / File，没有富文本概念，要从零建。
 
 任务清单：
-- [ ] 后端落地 `clipboard_formats(item_id, format, content)` 多格式存储
-- [ ] 新增 migration，`CURRENT_DB_VERSION` 3 → 4，并补齐迁移测试和备份兼容性说明
-- [ ] monitor 捕获时优先取 HTML/RTF（clipboard-rs `get_html()` / `get_rich_text()`），无富文本则回退纯文本
-- [ ] 将富文本提取出的可搜索纯文本送入 search 已实现的 `index_text`
-- [ ] writer 粘贴时同时写入纯文本 + HTML（多格式粘贴）
-- [ ] 前端列表/详情渲染 HTML，用 DOMPurify 做 XSS 过滤（仅保留 `<b>/<i>/<a>/<table>/<code>` 等安全标签）
-- [ ] 通过用户提供的测试文件
+- [x] 后端落地 `clipboard_formats(item_id, format, content)` 多格式存储
+- [x] 新增 migration，`CURRENT_DB_VERSION` 3 → 4，并补齐迁移测试和备份兼容性说明
+- [x] monitor 使用 clipboard-rs 单次读取纯文本 + HTML/RTF，无富文本时保留纯文本
+- [x] 富文本条目的纯文本事实源沿既有 insert 路径送入 search 的 `index_text`
+- [x] writer 单次写入纯文本 + HTML/RTF（多格式粘贴）
+- [x] 前端列表渲染 HTML，用 DOMPurify 做 XSS 过滤（仅保留 `<b>/<i>/<a>/<table>/<code>` 等安全标签）
+- [ ] SKIPPED：未提供独立 rich-text 测试文件；已用内建恶意 HTML、DB migration/restore 和 Windows clipboard-rs 集成测试覆盖
 
 完成标准：
 - 从浏览器/Word 复制带格式文本，Klip 记录保留 HTML；粘贴回 Word 保格式，粘贴到记事本为纯文本
@@ -408,7 +408,7 @@ release profile 是 `panic = "abort"`。这意味着：
 
 **串行功能队列**
 - [x] 完成 §8.1 search-tantivy，针对性测试通过并 commit
-- [ ] 完成 §8.2 rich-text 与 DB v4 migration，针对性测试通过并 commit
+- [x] 完成 §8.2 rich-text 与 DB v4 migration，针对性测试通过并 commit
 - [ ] 完成 §8.3 OCR，针对性测试通过并 commit
 - [ ] 完成 §8.4 platform-focus，针对性测试通过并 commit
 - [ ] 完成 §8.5 platform-source，针对性测试通过并 commit

@@ -37,6 +37,11 @@ const MIGRATIONS: &[Migration] = &[
         _name: "raise packaged window size minimums",
         run: migrate_to_v3,
     },
+    Migration {
+        version: 4,
+        _name: "preserve rich clipboard formats",
+        run: migrate_to_v4,
+    },
 ];
 
 fn read_schema_version(conn: &Connection) -> Result<i64, AppError> {
@@ -81,6 +86,18 @@ fn migrate_to_v3(conn: &Connection, now: i64) -> Result<(), AppError> {
         "UPDATE app_config SET value = '760', updated_at = ?1
          WHERE key = 'window_height' AND CAST(value AS INTEGER) <= 720",
         [&now.to_string()],
+    )?;
+    Ok(())
+}
+
+fn migrate_to_v4(conn: &Connection, _now: i64) -> Result<(), AppError> {
+    crate::database::schema::create_clipboard_format_table(conn)?;
+    conn.execute(
+        "INSERT OR IGNORE INTO clipboard_formats (item_id, format, content)
+         SELECT id, 'text', content
+         FROM clipboard_items
+         WHERE content_type = 'text'",
+        [],
     )?;
     Ok(())
 }

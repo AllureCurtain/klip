@@ -343,6 +343,7 @@ fn process_extracted_content(extracted: ExtractedContent) -> Option<NewClipboard
         hash: extracted.hash,
         size: extracted.size,
         metadata: extracted.metadata,
+        formats: extracted.formats,
     })
 }
 
@@ -572,6 +573,7 @@ mod tests {
             hash: format!("{:x}", Sha256::digest(content.as_bytes())),
             size: content.len() as i64,
             metadata: None,
+            formats: Vec::new(),
         }
     }
 

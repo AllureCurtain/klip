@@ -63,6 +63,7 @@ fn copy_loaded_item(db: &Database, item: &ClipboardItem) -> Result<(), AppError>
         &item.content,
         &item.content_type,
         item.metadata.as_deref(),
+        &item.formats,
     )?;
     let _ = database::clipboard::touch_last_used(db, item.id);
     Ok(())
@@ -126,6 +127,7 @@ mod tests {
             hash,
             size: content.len() as i64,
             metadata: None,
+            formats: Vec::new(),
         };
         let saved = database::clipboard::insert(db, &item).unwrap();
         let conn = db.get_connection().unwrap();

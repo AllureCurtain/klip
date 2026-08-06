@@ -8,6 +8,39 @@ pub enum ContentType {
     File,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ClipboardFormatType {
+    Text,
+    Html,
+    Rtf,
+}
+
+impl ClipboardFormatType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Text => "text",
+            Self::Html => "html",
+            Self::Rtf => "rtf",
+        }
+    }
+
+    pub fn from_db(value: &str) -> Option<Self> {
+        match value {
+            "text" => Some(Self::Text),
+            "html" => Some(Self::Html),
+            "rtf" => Some(Self::Rtf),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ClipboardFormat {
+    pub format: ClipboardFormatType,
+    pub content: String,
+}
+
 impl ContentType {
     pub fn as_str(&self) -> &'static str {
         match self {
@@ -44,6 +77,8 @@ pub struct ClipboardItem {
     pub is_favorited: bool,
     pub is_sensitive: bool,
     pub sensitivity_reason: Option<String>,
+    #[serde(default)]
+    pub formats: Vec<ClipboardFormat>,
     pub tags: Vec<Tag>,
     pub created_at: i64,
     pub last_used_at: i64,
@@ -57,6 +92,7 @@ pub struct NewClipboardItem {
     pub hash: String,
     pub size: i64,
     pub metadata: Option<String>,
+    pub formats: Vec<ClipboardFormat>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

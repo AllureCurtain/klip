@@ -609,6 +609,7 @@ mod tests {
             hash: format!("{:x}", Sha256::digest(content.as_bytes())),
             size: content.len() as i64,
             metadata: None,
+            formats: Vec::new(),
         };
         crate::database::clipboard::insert(db, &item).expect("insert searchable text")
     }
