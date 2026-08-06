@@ -14,7 +14,7 @@ Foundation closeout status below reflects the Windows `feat/foundation` worktree
 - [ ] BLOCKED: full `pnpm audit --registry=https://registry.npmjs.org --audit-level high` reports 19 high advisories in development/test tooling; the production-only audit reports no known vulnerabilities.
 - [ ] BLOCKED: local `cargo audit` reports 22 allowed warnings, and PR #4 currently has no GitHub Actions check result to establish the stricter release gate.
 - [ ] BLOCKED: `pnpm release:verify -SkipBundle` stops before build because `CHANGELOG.md` does not mention metadata version `1.0.0`.
-- [ ] `pnpm e2e` succeeds on a Windows desktop session with `tauri-driver` and Edge WebDriver installed.
+- [x] `pnpm e2e` succeeds on the current Windows desktop with `tauri-driver` and the matching EdgeDriver/WebView2 `151.0.4129.59`; 1 Selenium flow passed.
 
 ## 2. Installer Build
 
