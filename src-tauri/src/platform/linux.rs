@@ -141,7 +141,7 @@ fn command_exists(command: &str) -> bool {
         .unwrap_or(false)
 }
 
-fn is_wayland_session() -> bool {
+pub(crate) fn is_wayland_session() -> bool {
     std::env::var("XDG_SESSION_TYPE")
         .map(|value| value.eq_ignore_ascii_case("wayland"))
         .unwrap_or(false)

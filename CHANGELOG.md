@@ -4,6 +4,7 @@
 
 ### Added
 
+- Cross-platform paste target restoration: Win32 foreground windows, macOS running applications, and X11 EWMH active windows are captured before Klip opens and reactivated before synthetic paste; Wayland and unsupported platforms degrade without an error.
 - Offline image OCR using bundled PP-OCRv5 detection/recognition models and ONNX Runtime, with background processing, searchable recognized text, live status updates, and no runtime model downloads.
 - OCR migration, backup/restore, search rebuild/fallback, real Chinese inference, and frontend status regression coverage.
 - Rich-text clipboard capture and replay with plain-text, HTML, and RTF representations stored together; HTML previews are sanitized with a strict DOMPurify allowlist.

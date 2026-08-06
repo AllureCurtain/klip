@@ -152,7 +152,7 @@ src/
 ```
 src-tauri/src/
 ├── main.rs              # 应用启动、tracing 初始化、窗口焦点处理
-├── lib.rs               # 模块导出、托盘点击守卫、前台窗口捕获/恢复
+├── lib.rs               # 模块导出、托盘点击守卫
 │
 ├── commands/            # IPC 命令
 │   ├── mod.rs           # 基础剪贴板、配置、窗口、系统命令
@@ -183,6 +183,10 @@ src-tauri/src/
 │
 ├── ocr/                 # 单 worker 队列、模型校验/缓存、图片解码和本地推理
 │   └── mod.rs
+│
+├── platform/            # 平台差异与优雅降级
+│   ├── focus/           # Windows HWND / macOS app PID / X11 window 焦点捕获恢复
+│   └── linux.rs         # XDG 目录、autostart、Wayland 检测与 Linux 模拟粘贴
 │
 ├── hotkey/              # 快捷键管理
 │   ├── mod.rs
@@ -227,7 +231,20 @@ fn register_hotkeys(app: &AppHandle) {
 }
 ```
 
-### 4.3 前端状态管理
+### 4.3 粘贴目标焦点恢复
+
+所有显示主窗口的既有入口都汇聚到 `window::controller`，并在 `show` / `set_focus` 之前调用 `platform::focus::capture_previous_foreground()`。用户选择历史后，粘贴流程先写入系统剪贴板并隐藏 Klip，再调用 `restore_previous_foreground()`，最后发送平台粘贴按键。
+
+| 平台 | 捕获标识 | 恢复方式 | 降级边界 |
+|------|----------|----------|----------|
+| Windows | 前台 HWND，跳过 Klip 自身 PID | 校验 `IsWindow` 后调用 `SetForegroundWindow` | 目标失效或系统拒绝激活时返回未恢复 |
+| macOS | `NSWorkspace.frontmostApplication` 的 PID | `NSRunningApplication.activateWithOptions` | 应用退出或系统拒绝激活时返回未恢复 |
+| Linux X11 | EWMH `_NET_ACTIVE_WINDOW` | 向根窗口发送 `_NET_ACTIVE_WINDOW` client message | 无 EWMH window manager 时返回未恢复 |
+| Linux Wayland / 其他平台 | 不保存 | 不请求 | 静默返回未尝试，不抛错 |
+
+Windows 已用真实外部文本框完成显示 Klip、选择历史、恢复焦点并粘贴的运行时闭环。macOS/Linux 后端已做对应目标的静态编译，真实桌面会话仍需分别验收，不能视为已经实机通过。
+
+### 4.4 前端状态管理
 
 ```typescript
 // clipboardStore.ts

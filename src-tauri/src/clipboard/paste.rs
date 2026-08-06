@@ -86,7 +86,9 @@ fn simulate_platform_paste() -> Result<(), AppError> {
 
     #[cfg(target_os = "macos")]
     {
-        std::thread::sleep(std::time::Duration::from_millis(50));
+        std::thread::sleep(std::time::Duration::from_millis(30));
+        let _ = crate::restore_previous_foreground();
+        std::thread::sleep(std::time::Duration::from_millis(120));
         if let Ok(mut enigo) = enigo::Enigo::new(&enigo::Settings::default()) {
             use enigo::Keyboard;
             let _ = enigo.key(enigo::Key::Meta, enigo::Direction::Press);
@@ -98,6 +100,7 @@ fn simulate_platform_paste() -> Result<(), AppError> {
 
     #[cfg(target_os = "linux")]
     {
+        let _ = crate::restore_previous_foreground();
         crate::platform::linux::simulate_paste()
     }
 }

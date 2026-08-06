@@ -1,6 +1,6 @@
 # Foundation Implementation Progress
 
-- 最后更新时间：2026-08-07 01:20（Asia/Shanghai）
+- 最后更新时间：2026-08-07 01:51（Asia/Shanghai）
 - 当前分支：`feat/foundation`
 - 基准提交：`423ab24`（与 `main` / `origin/main` 一致）
 
@@ -15,8 +15,8 @@
 
 ## 当前任务
 
-- 当前任务：`platform-focus` 功能块；先审查现有 `PREV_FOREGROUND_HWND`、窗口显示与粘贴调用链以及 `platform/` 模块边界，再按现有模式抽象平台无关的“上一个前台窗口”接口。
-- OCR 已在 `58da1e8` 提交；当前工作树只应包含本次里程碑进度记录，提交后再开始修改 `platform-focus` 代码。
+- 当前任务：`platform-focus` 功能块收尾；三套后端静态检查、Windows 真实粘贴焦点闭环和针对性测试均已通过，正在同步清单、审查差异并创建独立功能 commit。
+- OCR 已在 `58da1e8` 提交；当前未提交差异仅属于 `platform-focus` 及其进度记录。
 - Windows 完整“监听 → 捕获 → 选择历史 → 粘贴”闭环仍列为最终运行时验收项。
 
 ## 已运行的测试及结果
@@ -68,6 +68,11 @@
 - OCR 完整 `pnpm verify`：通过。ESLint 通过；20 个 Vitest 文件/147 项通过；生产构建通过；rustfmt 与 `cargo clippy -- -D warnings` 通过；Rust library 134 项通过、1 项显式 100k 性能测试 ignored，另有 2 个 main 与 5 个 clipboard integration tests 通过；真实中文 OCR fixture 包含在全量测试中。
 - OCR Windows runtime acceptance：通过。以 `KLIP_DATA_DIR=C:\tmp\klip-foundation-ocr-runtime-20260807-0110\data`、`KLIP_LOG_DIR=...\logs`、`KLIP_HTTP_PORT=27831` 和 `KLIP_E2E_SHOW_WINDOW=true` 启动 `pnpm tauri:dev`；健康端点返回 `status=ok`。通过 Windows STA API 把 `chinese-text.png` 写入真实系统图片剪贴板后，monitor 保存 `id=1` / `content_type=image`，后台 OCR 返回 `status=completed` 和“剪贴板搜索测试\nKlip OCR 2026”，两个 HTTP 搜索词均命中该图片。
 - OCR runtime 目录与资源证据：隔离数据目录生成 `klip.db`、Tantivy `search-index` 和 `ocr-models`；缓存模型大小及 SHA-256 与打包资源三项完全一致。隔离日志记录 OCR worker/clipboard monitor 启动、`http://127.0.0.1:27831` 监听、图片捕获、模型从隔离缓存初始化和索引 commit；验收后 Tauri、Vite、Cargo 及其子进程已全部停止。
+- platform-focus Windows 首轮构建：`cargo fmt --all` 与 `cargo check` 通过；现有 Win32 HWND 行为已移入 `platform::focus`，macOS 使用前台进程 PID / `NSRunningApplication`，Linux X11 使用 EWMH `_NET_ACTIVE_WINDOW`，Wayland 与其他平台返回未尝试且不报错。
+- platform-focus Linux 全仓交叉检查：已安装 Rust `x86_64-unknown-linux-gnu` 标准库目标；`cargo check --lib --target x86_64-unknown-linux-gnu` 在第三方 `zstd-sys` 构建脚本阶段失败，因为 Windows 主机缺少 `x86_64-linux-gnu-gcc`。失败发生在 Klip/X11 后端编译前，下一步用只依赖 `x11rb` 的临时最小 crate 编译实际后端文件；真实 Linux 运行仍保持 SKIPPED。
+- platform-focus 目标后端静态编译：使用仓库外临时最小 crate 直接 `include!` 实际 `platform/focus/linux.rs` 与 `macos.rs`；`cargo check --target x86_64-unknown-linux-gnu` 和 `cargo check --target aarch64-apple-darwin` 均通过。输出只有临时 harness 未调用函数导致的 `dead_code` warning，实际后端无类型/API 错误。
+- platform-focus Windows 专项：`cargo fmt --all -- --check`、`cargo test platform::focus -- --test-threads=1`（1 项）、`cargo test clipboard::paste -- --test-threads=1`（4 项）和 `cargo clippy -- -D warnings` 全部通过。
+- platform-focus Windows runtime acceptance：通过。隔离端口 `27832` 启动应用，将唯一文本捕获为 `id=1`；外部 WinForms 文本框在显示 Klip 前为前台 `HWND 0x20e1a` / PID 8080，`POST /api/window/show` 后前台切至 Klip，`POST /api/clipboard/1/paste` 后恢复到同一目标 HWND，并完整收到 `KLIP-FOCUS-ACCEPTANCE-20260807-0145`。日志同时记录 `focus capture` 和 `focus restore`；Tauri/Vite/Cargo/WebView 与测试窗体进程已全部停止。
 
 ## 技术决策
 
@@ -83,14 +88,16 @@
 - OCR 固定 `oar-ocr = "=0.6.2"`，使用 PP-OCRv5 mobile 检测/识别模型与中文通用字典；模型打包随应用分发，运行时不联网下载。
 - `oar-ocr` 的 0.6.x 依赖范围不能任由 Cargo 升到不兼容的 core/ort 组合；必须把验证通过的传递版本一并锁定，并在升级时重新做编译与推理验收。
 - OCR 的 ONNX Runtime 分发必须同时满足本机 MSVC ABI、离线运行和安装包携带；若官方静态库与现有 toolset 不兼容，优先切换 `ORT_PREFER_DYNAMIC_LINK=1` + 显式打包 `onnxruntime.dll`，而不是伪造缺失 STL 符号或升级整机工具链后声称项目本身可复现。
+- 焦点恢复以平台进程/窗口标识为短期进程内状态：Windows 保存 HWND，macOS 保存前台应用 PID，Linux X11 保存 EWMH 活动窗口；捕获到 Klip 自身时保留上一外部目标，失效目标清空。Wayland 没有通用激活协议，明确静默跳过。
 
 ## 阻塞或跳过项
 
 - 最终 PR 创建存在外部认证风险：`gh auth status` 报 GitHub 账户 `AllureCurtain` 的 keyring token invalid，建议命令为 `gh auth login -h github.com`。实现与本地提交不受影响；最终仍会分别实测 `git push` 和 `gh pr create`，只有实际失败后才把对应交付项标为 BLOCKED。
-- Windows 手工 UI 完整“选择历史 → 粘贴”闭环、浏览器/Word 真实富文本闭环、macOS/Linux 真实平台验收、platform-focus、platform-source、推送和 PR 创建尚未执行；Windows OCR 的真实剪贴板捕获与搜索链路已通过。
+- Windows 浏览器/Word 真实富文本闭环、macOS/Linux 真实平台验收、platform-source、推送和 PR 创建尚未执行；Windows 已通过真实剪贴板 OCR 链路及外部文本框“捕获 → 显示 Klip → 选择历史粘贴 → 焦点返回”闭环，但最终仍需补一次面向完整分支的运行时回归。
+- SKIPPED：当前只有 Windows 真实桌面，无法实机验证 macOS `NSRunningApplication` 或 Linux X11/Wayland 桌面焦点行为；实际后端已分别通过 `aarch64-apple-darwin` / `x86_64-unknown-linux-gnu` 最小交叉静态编译。解除条件是提供对应真实桌面会话；不阻塞 Windows 验收及后续独立功能。
 - OCR 静态链接 BLOCKED 已解除：14.43 与官方静态包 ABI 不兼容，已改用官方 1.24.2 动态 DLL；DLL 入包后的 Windows 真实推理已通过，macOS/Linux 真实环境验收仍未执行且不得声称通过。
 - SKIPPED：用户未提供独立 rich-text 测试文件；已用内建恶意 HTML、DB migration/restore 和 Windows clipboard-rs 集成测试覆盖，若后续提供文件可在最终验收补跑。
 
 ## 下一步准确操作
 
-- 只暂存 `docs/IMPLEMENTATION_PROGRESS.md` 并提交 OCR 里程碑进度；确认工作树干净后读取 `src-tauri/src/lib.rs`、`commands/mod.rs`、`platform/mod.rs` 及 Windows/macOS/Linux 平台文件，定位焦点捕获和恢复的全部调用点与已有平台依赖。
+- 更新 `WORKTREE_STRATEGY.md` 的 platform-focus 已完成项，运行 `git diff --check` 和最终针对性验证；仅暂存 platform-focus 代码、依赖、文档与进度记录，提交 `feat: restore paste focus across platforms`。随后记录 SHA 并把“当前任务”切换为 `platform-source`。

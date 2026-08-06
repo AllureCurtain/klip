@@ -308,11 +308,11 @@ rich-text、search-tantivy、OCR 都要加新 IPC 命令和 HTTP 路由，因此
 现状：`lib.rs:37` 的 `PREV_FOREGROUND_HWND: AtomicI64` + `lib.rs:90` 的 `GetForegroundWindow`，纯 Win32。
 
 任务清单：
-- [ ] 抽象焦点恢复接口（把"`AtomicI64` 存 HWND"抽象成平台无关的"上一个前台窗口"概念）
-- [ ] Windows：保留现有 Win32 实现
-- [ ] macOS：用 `NSRunningApplication` 恢复
-- [ ] Linux(X11)：用 X11 恢复；Wayland 检测到就跳过（`platform/linux.rs:207` 已有 `is_wayland_session()` 可复用）
-- [ ] 不支持的平台：优雅跳过，不报错
+- [x] 抽象焦点恢复接口（把"`AtomicI64` 存 HWND"抽象成平台无关的"上一个前台窗口"概念）
+- [x] Windows：保留现有 Win32 实现
+- [x] macOS：用 `NSRunningApplication` 恢复
+- [x] Linux(X11)：用 X11 恢复；Wayland 检测到就跳过（`platform/linux.rs:207` 已有 `is_wayland_session()` 可复用）
+- [x] 不支持的平台：优雅跳过，不报错
 
 完成标准：
 - 三平台粘贴后焦点回到原应用；不支持平台静默降级，无异常
@@ -410,7 +410,7 @@ release profile 是 `panic = "abort"`。这意味着：
 - [x] 完成 §8.1 search-tantivy，针对性测试通过并 commit
 - [x] 完成 §8.2 rich-text 与 DB v4 migration，针对性测试通过并 commit
 - [x] 完成 §8.3 OCR，针对性测试通过并 commit
-- [ ] 完成 §8.4 platform-focus，针对性测试通过并 commit
+- [x] 完成 §8.4 platform-focus，针对性测试通过并 commit
 - [ ] 完成 §8.5 platform-source，针对性测试通过并 commit
 
 **工具链与文档**
