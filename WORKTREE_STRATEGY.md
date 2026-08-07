@@ -424,6 +424,7 @@ release profile 是 `panic = "abort"`。这意味着：
 - [x] Windows `tauri:dev` 和核心剪贴板闭环通过；能执行的平台专项验证全部完成
 - [ ] 三个 env 生效：数据、日志、HTTP 端口进入指定位置；不设置时回落默认（SKIPPED/BLOCKED：Windows Known Folder API 不接受临时 APPDATA 覆盖，默认数据/日志安全隔离需测试用户或 VM）
 - [x] 最终文档/集成修复提交后，`feat/foundation` 工作树干净
+- [ ] CI OCR 字典资源在 Windows checkout 后保持 LF 字节并通过 backend/RustSec checks（待修复推送后的 Actions run 确认）
 - [x] 推送 `feat/foundation`，创建面向 `main` 的 PR
 - [x] PR 描述包含功能摘要、commit 清单、测试证据、DB migration、OCR 模型体积和平台降级边界
 - [x] 不直接 push 或 merge main；是否合并由 PR 审查流程决定

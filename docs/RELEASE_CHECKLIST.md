@@ -16,6 +16,7 @@ Foundation closeout status below reflects the Windows `feat/foundation` worktree
 - [ ] BLOCKED: `pnpm release:verify -SkipBundle` stops before build because `CHANGELOG.md` does not mention metadata version `1.0.0`.
 - [x] `pnpm e2e` succeeds on the current Windows desktop with `tauri-driver` and the matching EdgeDriver/WebView2 `151.0.4129.59`; 1 Selenium flow passed.
 - [x] Final foundation `pnpm verify` passes: ESLint, 20 Vitest files / 149 tests, production build, rustfmt, Clippy, 143 Rust library tests (1 explicit performance test ignored), 2 main tests, and 5 clipboard integration tests.
+- [ ] BLOCKED/PENDING: GitHub Actions run `31136758905` failed only because the Windows checkout converted `ppocrv5_dict.txt` from LF to CRLF; `.gitattributes` now sets `-text`, pending a new backend/RustSec run.
 
 ## 2. Installer Build
 
