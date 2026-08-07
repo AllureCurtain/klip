@@ -12,11 +12,11 @@ Foundation closeout status below reflects the Windows `feat/foundation` worktree
 - [x] `pnpm release:readiness` reports unsigned installers, no timestamp URL, and manual/GitHub Release distribution because no update feed is configured.
 - [x] `pnpm test:coverage` succeeds: 20 files / 149 tests; statements 72.39%, branches 71.56%, functions 71.63%, lines 74.30%.
 - [x] Full `pnpm audit --registry=https://registry.npmjs.org --audit-level high` passes after same-major toolchain updates and precise transitive overrides; no known vulnerabilities remain.
-- [ ] BLOCKED: local `cargo audit` reports 22 allowed warnings, and PR #4 currently has no GitHub Actions check result to establish the stricter release gate.
+- [x] GitHub Actions run `31140025857` passes `rustsec/audit-check@v2`; local `cargo audit` still reports 22 allowed maintenance/unsound warnings for release-owner review.
 - [ ] BLOCKED: `pnpm release:verify -SkipBundle` stops before build because `CHANGELOG.md` does not mention metadata version `1.0.0`.
 - [x] `pnpm e2e` succeeds on the current Windows desktop with `tauri-driver` and the matching EdgeDriver/WebView2 `151.0.4129.59`; 1 Selenium flow passed.
 - [x] Final foundation `pnpm verify` passes: ESLint, 20 Vitest files / 149 tests, production build, rustfmt, Clippy, 143 Rust library tests (1 explicit performance test ignored), 2 main tests, and 5 clipboard integration tests.
-- [ ] BLOCKED/PENDING: GitHub Actions run `31136758905` failed only because the Windows checkout converted `ppocrv5_dict.txt` from LF to CRLF; `.gitattributes` now sets `-text`, pending a new backend/RustSec run.
+- [x] GitHub Actions run `31140025857` passes all frontend jobs plus backend fmt, Clippy, cargo test, and RustSec after `.gitattributes` preserves `ppocrv5_dict.txt` bytes on Windows checkout.
 
 ## 2. Installer Build
 
