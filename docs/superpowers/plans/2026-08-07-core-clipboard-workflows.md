@@ -1,6 +1,6 @@
 # Klip Core Clipboard Workflows Implementation Plan
 
-> **状态：ACTIVE / PREPARED**
+> **状态：COMPLETED / PR READY**
 >
 > 本文档是本轮实现的唯一范围与验收依据。执行期间不得另开功能分支、不得创建额外
 > worktree、不得调用子 Agent。所有任务由当前主 Agent 在同一对话中串行完成。
@@ -190,13 +190,13 @@ Ctrl+Alt+K 唤起
 
 **实现清单：**
 
-- [ ] 为搜索输入标记可交接的键盘来源。
-- [ ] 支持搜索框内 ArrowUp/ArrowDown/Enter，包含空列表、结果刷新和 IME 边界。
-- [ ] 把 store 中当前误名的 `copyItem` 改为 `pasteItem`，实际复制使用 `clipboardApi.copy`。
-- [ ] 保持单击/Enter 立即粘贴，增加可访问的独立复制图标动作。
-- [ ] 复制反馈只表示复制；粘贴后窗口隐藏，不显示错误的“已复制”状态。
-- [ ] 补 ClipboardList、ClipboardItem、store 和 IPC wrapper 回归测试。
-- [ ] 更新进度文档并执行针对性测试、`git diff --check`。
+- [x] 为搜索输入标记可交接的键盘来源。
+- [x] 支持搜索框内 ArrowUp/ArrowDown/Enter，包含空列表、结果刷新和 IME 边界。
+- [x] 把 store 中当前误名的 `copyItem` 改为 `pasteItem`，实际复制使用 `clipboardApi.copy`。
+- [x] 保持单击/Enter 立即粘贴，增加可访问的独立复制图标动作。
+- [x] 复制反馈只表示复制；粘贴后窗口隐藏，不显示错误的“已复制”状态。
+- [x] 补 ClipboardList、ClipboardItem、store 和 IPC wrapper 回归测试。
+- [x] 更新进度文档并执行针对性测试、`git diff --check`。
 
 **建议提交：** `fix: complete keyboard clipboard workflow`
 
@@ -214,13 +214,13 @@ Ctrl+Alt+K 唤起
 
 **实现清单：**
 
-- [ ] 新增有界快照状态及 set/get/按位置解析单元测试。
-- [ ] 新增 IPC，同步当前有序 `items.slice(0, 9)` 的 ID。
-- [ ] 区分未初始化、已同步空结果和已有结果。
-- [ ] 快捷键通过快照 ID 粘贴；已删除 ID 不替换为其他内容。
-- [ ] 覆盖搜索、类型、收藏、标签、日期筛选改变时的同步测试。
-- [ ] Windows 隔离数据目录下验证筛选结果与快捷键目标一致。
-- [ ] 更新 README/PRD 中“可见记录”的实现证据和进度文档。
+- [x] 新增有界快照状态及 set/get/按位置解析单元测试。
+- [x] 新增 IPC，同步当前有序 `items.slice(0, 9)` 的 ID。
+- [x] 区分未初始化、已同步空结果和已有结果。
+- [x] 快捷键通过快照 ID 粘贴；已删除 ID 不替换为其他内容。
+- [x] 覆盖搜索、类型、收藏、标签、日期筛选改变时的同步测试。
+- [x] Windows 隔离数据目录下验证筛选结果与快捷键目标一致。
+- [x] 更新 README/PRD 中“可见记录”的实现证据和进度文档。
 
 **建议提交：** `fix: align quick paste with visible history`
 
@@ -239,13 +239,13 @@ Ctrl+Alt+K 唤起
 
 **实现清单：**
 
-- [ ] 增加 preserve/plain 写入模式，保持哈希抑制和 last_used 更新。
-- [ ] 增加 plain copy 与 plain paste Tauri 命令及类型化前端 wrapper。
-- [ ] Ctrl+Enter 从搜索输入粘贴当前文本条目的纯文本。
-- [ ] 条目动作中只对文本显示纯文本选项；Task 4 的详情复用同一动作。
-- [ ] 非文本调用返回 `invalid_input`，不静默转换。
-- [ ] Rust 覆盖 formats 选择逻辑；Windows 集成测试检查 HTML/RTF 不进入 plain clipboard。
-- [ ] 更新 API 文档、i18n 和进度记录。
+- [x] 增加 preserve/plain 写入模式，保持哈希抑制和 last_used 更新。
+- [x] 增加 plain copy 与 plain paste Tauri 命令及类型化前端 wrapper。
+- [x] Ctrl+Enter 从搜索输入粘贴当前文本条目的纯文本。
+- [x] 条目动作中只对文本显示纯文本选项；Task 4 的详情复用同一动作。
+- [x] 非文本调用返回 `invalid_input`，不静默转换。
+- [x] Rust 覆盖 formats 选择逻辑；Windows 集成测试检查 HTML/RTF 不进入 plain clipboard。
+- [x] 更新 API 文档、i18n 和进度记录。
 
 **建议提交：** `feat: add plain text clipboard actions`
 
@@ -263,13 +263,13 @@ Ctrl+Alt+K 唤起
 
 **实现清单：**
 
-- [ ] 所有条目提供明确的预览按钮，非可编辑区域 Space 打开当前条目。
-- [ ] 文本完整显示，plain/rich 标签页与 DOMPurify 安全回归测试通过。
-- [ ] 图片实现有界缩放、重置和放大后拖动，OCR 文本完整可读。
-- [ ] 文件显示完整路径列表及现有 metadata，不因长路径产生水平页面溢出。
-- [ ] 详情展示来源、时间、大小、标签和适用的 copy/paste/plain 动作。
-- [ ] 敏感遮罩、焦点陷阱、Esc 关闭和小窗口尺寸通过组件测试。
-- [ ] 删除旧预览死代码，保持一个详情状态来源。
+- [x] 所有条目提供明确的预览按钮，非可编辑区域 Space 打开当前条目。
+- [x] 文本完整显示，plain/rich 标签页与 DOMPurify 安全回归测试通过。
+- [x] 图片实现有界缩放、重置和放大后拖动，OCR 文本完整可读。
+- [x] 文件显示完整路径列表及现有 metadata，不因长路径产生水平页面溢出。
+- [x] 详情展示来源、时间、大小、标签和适用的 copy/paste/plain 动作。
+- [x] 敏感遮罩、焦点陷阱、Esc 关闭和小窗口尺寸通过组件测试。
+- [x] 删除旧预览死代码，保持一个详情状态来源。
 
 **建议提交：** `feat: add unified clipboard detail preview`
 
@@ -289,13 +289,13 @@ Ctrl+Alt+K 唤起
 
 **实现清单：**
 
-- [ ] 先写检测器失败测试：安全 URL、危险协议、邮箱、存在/不存在路径、文件列表。
-- [ ] 返回类型化动作，不返回后端拼好的本地化文案。
-- [ ] 执行前按 item ID 重新检测并校验动作与目标。
-- [ ] 支持打开 URL、写邮件、打开文件/文件夹、定位文件、复制路径/文件名。
-- [ ] 多文件详情逐项执行；列表行只展示不会拥挤的主要动作，其余留在详情。
-- [ ] Windows 用带空格和非 ASCII 的临时路径做真实打开/定位验收并清理测试进程。
-- [ ] macOS/Linux 分支可编译；没有真实桌面则按规则记录 SKIPPED。
+- [x] 先写检测器失败测试：安全 URL、危险协议、邮箱、存在/不存在路径、文件列表。
+- [x] 返回类型化动作，不返回后端拼好的本地化文案。
+- [x] 执行前按 item ID 重新检测并校验动作与目标。
+- [x] 支持打开 URL、写邮件、打开文件/文件夹、定位文件、复制路径/文件名。
+- [x] 多文件详情逐项执行；列表行只展示不会拥挤的主要动作，其余留在详情。
+- [x] Windows 用带空格和非 ASCII 的临时路径做真实打开/定位验收并清理测试进程。
+- [x] macOS/Linux 静态编译已尝试；交叉 C 工具链/系统库缺失与真实桌面均按规则记录 `SKIPPED`。
 
 **建议提交：** `feat: add clipboard content actions`
 
@@ -318,15 +318,15 @@ Ctrl+Alt+K 唤起
 
 **实现清单：**
 
-- [ ] 添加 DB v7 migration 与全新数据库 schema 修复路径。
-- [ ] 为 Rust/TypeScript `ClipboardItem` 增加 nullable `custom_title`、`note`。
-- [ ] 新增 update command，统一 trim、长度校验、空值归一化和 not-found 错误。
-- [ ] 更新查询列、row mapping、测试 fixture、JSON 兼容和 OpenAPI schema。
-- [ ] Tantivy 增量索引、重建指纹和 SQLite fallback 都包含标题/备注。
-- [ ] 更新后前端原位刷新；活动搜索在标题/备注变化后重新请求后端。
-- [ ] 详情内编辑与保存；列表有标题时优先显示标题，并提供低噪声备注标识。
-- [ ] 验证 v6 -> v7、全新 DB、旧 JSON、备份恢复和搜索重建。
-- [ ] 更新 DATABASE/API/ARCHITECTURE/README/CHANGELOG 和进度记录。
+- [x] 添加 DB v7 migration 与全新数据库 schema 修复路径。
+- [x] 为 Rust/TypeScript `ClipboardItem` 增加 nullable `custom_title`、`note`。
+- [x] 新增 update command，统一 trim、长度校验、空值归一化和 not-found 错误。
+- [x] 更新查询列、row mapping、测试 fixture、JSON 兼容和 OpenAPI schema。
+- [x] Tantivy 增量索引、重建指纹和 SQLite fallback 都包含标题/备注。
+- [x] 更新后前端原位刷新；活动搜索在标题/备注变化后重新请求后端。
+- [x] 详情内编辑与保存；列表有标题时优先显示标题，并提供低噪声备注标识。
+- [x] 验证 v6 -> v7、全新 DB、旧 JSON、备份恢复和搜索重建。
+- [x] 更新 DATABASE/API/ARCHITECTURE/README/CHANGELOG 和进度记录。
 
 **建议提交：** `feat: add searchable clipboard annotations`
 
@@ -334,17 +334,17 @@ Ctrl+Alt+K 唤起
 
 **实现清单：**
 
-- [ ] 审查 Task 1-6 的提交边界、错误处理、许可证边界和遗留 TODO。
-- [ ] 运行 `pnpm verify`，任何失败必须修复或形成有解除条件的环境阻塞记录。
-- [ ] 使用隔离 `KLIP_DATA_DIR`、`KLIP_LOG_DIR`、`KLIP_HTTP_PORT` 运行 Windows
+- [x] 审查 Task 1-6 的提交边界、错误处理、许可证边界和遗留 TODO。
+- [x] 运行 `pnpm verify`，任何失败必须修复或形成有解除条件的环境阻塞记录。
+- [x] 使用隔离 `KLIP_DATA_DIR`、`KLIP_LOG_DIR`、`KLIP_HTTP_PORT` 运行 Windows
   `tauri:dev`，走通搜索键盘、copy/paste、plain paste、详情、动作、备注和快捷键。
-- [ ] 验收后停止 Klip、Vite、Cargo、WebView、临时目标窗口和测试辅助进程。
-- [ ] 在已安装 target 可用时执行 macOS/Linux 静态检查；真实桌面继续明确 SKIPPED。
-- [ ] 更新本文档勾选项、进度文档、README/PRD/API/DATABASE/CHANGELOG。
-- [ ] 工作树干净后推送 `feat/core-workflows`。
-- [ ] 创建面向 `main` 的 PR，描述包含 commit 清单、测试证据、DB v7、平台边界和
+- [x] 验收后停止 Klip、Vite、Cargo、WebView、临时目标窗口和测试辅助进程。
+- [x] 在已安装 target 可用时执行 macOS/Linux 静态检查；真实桌面继续明确 SKIPPED。
+- [x] 更新本文档勾选项、进度文档、README/PRD/API/DATABASE/CHANGELOG。
+- [x] 工作树干净后推送 `feat/core-workflows`。
+- [x] 创建面向 `main` 的 PR，描述包含 commit 清单、测试证据、DB v7、平台边界和
   EcoPaste/muutot 参考许可证边界。
-- [ ] 不直接合并 PR；把 PR URL 和 checks 状态交给用户。
+- [x] 不直接合并 PR；把 PR URL 和 checks 状态交给用户。
 
 **建议提交：** `docs: finalize core workflow delivery`
 

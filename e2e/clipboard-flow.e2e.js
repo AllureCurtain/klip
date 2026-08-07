@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Builder, By, until } from 'selenium-webdriver';
+import { Builder, By, Key, until } from 'selenium-webdriver';
 
 const remoteUrl = process.env.SELENIUM_REMOTE_URL ?? 'http://127.0.0.1:4444';
 const appPath = process.env.KLIP_E2E_APP;
@@ -127,6 +127,17 @@ function sendWindowsQuickPaste(index) {
   );
 }
 
+async function isKlipWindowVisible(driver) {
+  const result = await driver.executeAsyncScript(`
+const done = arguments[arguments.length - 1];
+window.__TAURI_INTERNALS__.invoke('plugin:window|is_visible', { label: 'main' })
+  .then((visible) => done({ visible }))
+  .catch((error) => done({ error: String(error) }));
+`);
+  if (result.error) throw new Error(`Failed to query Tauri window visibility: ${result.error}`);
+  return result.visible;
+}
+
 function explorerWindowMatches(folderPath, selectedPath) {
   requireWindowsClipboard();
   const script = `
@@ -183,23 +194,92 @@ async function waitForExplorerWindow(driver, folderPath, selectedPath, label) {
   throw new Error(`Timed out waiting for Explorer ${label}`);
 }
 
-async function waitForActionButton(driver, labels) {
-  return driver.wait(
+async function findActionButtons(driver, label) {
+  const ariaMatches = await driver.findElements(By.css(`button[aria-label="${label}"]`));
+  const textMatches = await driver.findElements(
+    By.xpath(`//button[normalize-space(.)="${label}"]`),
+  );
+  return [...ariaMatches, ...textMatches];
+}
+
+async function clickActionButton(driver, labels) {
+  await driver.wait(
     async () => {
       for (const label of labels) {
-        const matches = await driver.findElements(By.css(`button[aria-label="${label}"]`));
+        const matches = await findActionButtons(driver, label);
         for (const match of matches) {
           try {
-            if (await match.isDisplayed()) return match;
+            if (!(await match.isDisplayed())) continue;
+            await match.click();
+            return true;
           } catch {
-            // Async action refresh can replace the node between lookup and visibility check.
+            // Retry when an active-search refresh replaces the control before click.
           }
         }
       }
       return false;
     },
     15000,
-    `Timed out waiting for action: ${labels.join(' / ')}`,
+    `Timed out clicking action: ${labels.join(' / ')}`,
+  );
+}
+
+async function replaceFieldText(driver, id, value) {
+  const applied = await driver.executeScript(
+    `
+const field = document.getElementById(arguments[0]);
+if (!field) throw new Error('Missing field: ' + arguments[0]);
+const prototype = field instanceof HTMLTextAreaElement
+  ? HTMLTextAreaElement.prototype
+  : HTMLInputElement.prototype;
+const setter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
+if (!setter) throw new Error('Missing native value setter for: ' + arguments[0]);
+setter.call(field, arguments[1]);
+field.dispatchEvent(new Event('input', { bubbles: true }));
+field.dispatchEvent(new Event('change', { bubbles: true }));
+return field.value === arguments[1];
+`,
+    id,
+    value,
+  );
+  assert.equal(applied, true, `Failed to enter ${id}`);
+}
+
+async function findClipboardRowByContent(driver, fullContent) {
+  const rows = await driver.findElements(By.css('[data-testid="clipboard-item"]'));
+  for (const row of rows) {
+    try {
+      const titledElements = await row.findElements(By.css('[title]'));
+      for (const element of titledElements) {
+        if ((await element.getAttribute('title')) === fullContent) return row;
+      }
+    } catch {
+      // Search refreshes may replace a row while its descendants are inspected.
+    }
+  }
+  return null;
+}
+
+async function clickItemActionButton(driver, fullContent, labels) {
+  await driver.wait(
+    async () => {
+      const row = await findClipboardRowByContent(driver, fullContent);
+      if (!row) return false;
+
+      for (const label of labels) {
+        try {
+          const matches = await row.findElements(By.css(`button[aria-label="${label}"]`));
+          if (matches.length === 0) continue;
+          await driver.executeScript('arguments[0].click()', matches[0]);
+          return true;
+        } catch {
+          // Retry when active-search rendering replaces the row during lookup.
+        }
+      }
+      return false;
+    },
+    15000,
+    `Timed out clicking item action: ${labels.join(' / ')}`,
   );
 }
 
@@ -207,15 +287,12 @@ async function filterForItem(driver, query, fullContent) {
   const search = await driver.wait(until.elementLocated(By.css('input[type="text"]')), 15000);
   await search.clear();
   await search.sendKeys(query);
-  const content = fullContent.replace(/"/g, '\\"');
-  const marker = await driver.wait(
-    until.elementLocated(
-      By.xpath(`//*[@data-testid="clipboard-item"]//*[@title="${content}"]`),
-    ),
+  await driver.sleep(500);
+  return driver.wait(
+    () => findClipboardRowByContent(driver, fullContent),
     15000,
     `Timed out waiting for filtered item: ${fullContent}`,
   );
-  return marker.findElement(By.xpath('ancestor::*[@data-testid="clipboard-item"]'));
 }
 
 async function waitForText(driver, text, label = 'text') {
@@ -313,7 +390,8 @@ describe('clipboard capture, search, and paste flow', function () {
 
     const search = await driver.findElement(By.css('input[type="text"]'));
     await search.clear();
-    await search.sendKeys(uniqueText.slice(-6));
+    await search.sendKeys(uniqueText);
+    await driver.sleep(500);
     await waitForText(driver, uniqueText, 'filtered clipboard text');
 
     setClipboardText(overwrittenText);
@@ -330,7 +408,8 @@ describe('clipboard capture, search, and paste flow', function () {
       'Timed out waiting for the search input after showing Klip',
     );
     await refreshedSearch.clear();
-    await refreshedSearch.sendKeys(uniqueText.slice(-6));
+    await refreshedSearch.sendKeys(uniqueText);
+    await driver.sleep(500);
     const itemText = await waitForText(driver, uniqueText, 'clipboard text after refreshing Klip');
     await itemText.click();
 
@@ -358,11 +437,13 @@ describe('clipboard capture, search, and paste flow', function () {
 
     await search.clear();
     await search.sendKeys(capturedText);
+    await driver.sleep(500);
     await waitForText(driver, capturedText, 'filtered quick-paste item');
 
     setClipboardText(sentinelText);
     await waitForClipboardItem(driver, sentinelText, 'newest sentinel item');
     await showKlipWindow();
+    await filterForItem(driver, capturedText, capturedText);
     await driver.sleep(300);
 
     sendWindowsQuickPaste(1);
@@ -381,27 +462,17 @@ describe('clipboard capture, search, and paste flow', function () {
 
     await showKlipWindow();
     await driver.navigate().refresh();
-    const row = await filterForItem(driver, capturedText.slice(-6), capturedText);
-    await driver.actions().move({ origin: row }).perform();
-    const previewButton = await waitForActionButton(driver, ['预览详情', 'Preview details']);
-    await previewButton.click();
-    const editButton = await waitForActionButton(driver, [
+    await filterForItem(driver, capturedText, capturedText);
+    await clickItemActionButton(driver, capturedText, ['预览详情', 'Preview details']);
+    await clickActionButton(driver, [
       '编辑标题和备注',
       'Edit title and note',
     ]);
-    await editButton.click();
 
-    const titleInput = await driver.wait(
-      until.elementLocated(By.id('clipboard-custom-title')),
-      10000,
-    );
-    const noteInput = await driver.findElement(By.id('clipboard-note'));
-    await titleInput.clear();
-    await titleInput.sendKeys(title);
-    await noteInput.clear();
-    await noteInput.sendKeys(noteToken);
-    const saveButton = await waitForActionButton(driver, ['保存', 'Save']);
-    await saveButton.click();
+    await driver.wait(until.elementLocated(By.id('clipboard-custom-title')), 10000);
+    await replaceFieldText(driver, 'clipboard-custom-title', title);
+    await replaceFieldText(driver, 'clipboard-note', noteToken);
+    await clickActionButton(driver, ['保存', 'Save']);
 
     await driver.wait(
       async () => {
@@ -417,8 +488,7 @@ describe('clipboard capture, search, and paste flow', function () {
       'Timed out waiting for annotations to persist',
     );
 
-    const closeButton = await waitForActionButton(driver, ['关闭', 'Close']);
-    await closeButton.click();
+    await clickActionButton(driver, ['关闭', 'Close']);
     const search = await driver.wait(until.elementLocated(By.css('input[type="text"]')), 10000);
     await search.clear();
     await search.sendKeys(noteToken);
@@ -426,6 +496,70 @@ describe('clipboard capture, search, and paste flow', function () {
       until.elementLocated(By.css(`[data-testid="clipboard-custom-title"][title="${title}"]`)),
       15000,
       'Timed out waiting for the note-only search result',
+    );
+  });
+
+  it('keeps copy separate and supports search keyboard paste modes', async function () {
+    if (process.platform !== 'win32') this.skip();
+
+    const keyboardText = `keyboard-flow-${Date.now()}`;
+    setClipboardText(keyboardText);
+    await waitForClipboardItem(driver, keyboardText, 'keyboard workflow item');
+
+    await showKlipWindow();
+    await driver.navigate().refresh();
+    let search = await driver.wait(until.elementLocated(By.css('input[type="text"]')), 15000);
+    await search.clear();
+    await search.sendKeys(keyboardText);
+    await driver.sleep(500);
+    await driver.wait(
+      () => findClipboardRowByContent(driver, keyboardText),
+      15000,
+      'Timed out waiting for the keyboard search result',
+    );
+
+    await search.sendKeys(Key.ENTER);
+    await driver.wait(
+      () => getClipboardText() === keyboardText,
+      10000,
+      'Search Enter did not paste the selected item',
+    );
+    await driver.wait(
+      async () => !(await isKlipWindowVisible(driver)),
+      10000,
+      'Search Enter did not hide the Klip window',
+    );
+
+    await showKlipWindow();
+    await driver.navigate().refresh();
+    await filterForItem(driver, keyboardText, keyboardText);
+    await clickItemActionButton(driver, keyboardText, ['复制', 'Copy']);
+    await driver.wait(
+      () => isKlipWindowVisible(driver),
+      10000,
+      'Copy unexpectedly hid the Klip window',
+    );
+    assert.equal(getClipboardText(), keyboardText);
+
+    await clickItemActionButton(driver, keyboardText, ['预览详情', 'Preview details']);
+    const dialog = await driver.wait(
+      until.elementLocated(By.css('[data-slot="dialog-content"]')),
+      10000,
+    );
+    assert.match(await dialog.getText(), new RegExp(keyboardText));
+    await clickActionButton(driver, ['关闭', 'Close']);
+
+    search = await driver.wait(until.elementLocated(By.css('input[type="text"]')), 10000);
+    await search.sendKeys(Key.chord(Key.CONTROL, Key.ENTER));
+    await driver.wait(
+      () => getClipboardText() === keyboardText,
+      10000,
+      'Search Ctrl+Enter did not plain-paste the selected text item',
+    );
+    await driver.wait(
+      async () => !(await isKlipWindowVisible(driver)),
+      10000,
+      'Search Ctrl+Enter did not hide the Klip window',
     );
   });
 
@@ -442,10 +576,8 @@ describe('clipboard capture, search, and paste flow', function () {
     await waitForClipboardItem(driver, actionFolder, 'action folder path');
     await showKlipWindow();
     await driver.navigate().refresh();
-    let row = await filterForItem(driver, 'folder with spaces', actionFolder);
-    await driver.actions().move({ origin: row }).perform();
-    const openButton = await waitForActionButton(driver, ['打开', 'Open']);
-    await openButton.click();
+    await filterForItem(driver, 'folder with spaces', actionFolder);
+    await clickItemActionButton(driver, actionFolder, ['打开', 'Open']);
     await waitForExplorerWindow(driver, actionFolder, undefined, 'to open the folder');
     closeExplorerWindows(actionFolder);
 
@@ -453,15 +585,12 @@ describe('clipboard capture, search, and paste flow', function () {
     await waitForClipboardItem(driver, filePath, 'action file path');
     await showKlipWindow();
     await driver.navigate().refresh();
-    row = await filterForItem(driver, '验收 report.txt', filePath);
-    await driver.actions().move({ origin: row }).perform();
-    const previewButton = await waitForActionButton(driver, ['预览详情', 'Preview details']);
-    await previewButton.click();
-    const revealButton = await waitForActionButton(driver, [
+    await filterForItem(driver, '验收 report.txt', filePath);
+    await clickItemActionButton(driver, filePath, ['预览详情', 'Preview details']);
+    await clickActionButton(driver, [
       '在文件夹中显示',
       'Show in folder',
     ]);
-    await revealButton.click();
     await waitForExplorerWindow(driver, actionFolder, filePath, 'to select the file');
     closeExplorerWindows(actionFolder);
   });

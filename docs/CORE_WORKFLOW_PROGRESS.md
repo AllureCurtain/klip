@@ -1,7 +1,7 @@
 # Core Clipboard Workflows Progress
 
 - 最后更新时间：2026-08-07（Asia/Shanghai）
-- 当前状态：`IN_PROGRESS`，Task 1-6 已完成，下一步执行 Task 7
+- 当前状态：`COMPLETED`，Task 1-7 已完成，等待 PR checks
 - 分支：`feat/core-workflows`
 - worktree：`D:\Study\cc\klip\.worktrees\core-workflows`
 - 基线：`8018aced3cd6b1437a4f8bb681206389d66c68f8`
@@ -39,7 +39,7 @@
 | 4 | 统一详情与完整预览 | `COMPLETED` | `feat: add unified clipboard detail preview` |
 | 5 | URL/邮箱/文件快捷动作 | `COMPLETED` | `feat: add clipboard content actions` |
 | 6 | 可搜索自定义标题与备注、DB v7 | `COMPLETED` | `feat: add searchable clipboard annotations` |
-| 7 | 全量验证、Windows 验收、推送和 PR | `PENDING` | `docs: finalize core workflow delivery` |
+| 7 | 全量验证、Windows 验收、推送和 PR | `COMPLETED` | `docs: finalize core workflow delivery` |
 
 状态只允许使用：`PENDING`、`IN_PROGRESS`、`COMPLETED`、`SKIPPED`、`BLOCKED`。
 只有代码、测试和针对性验证都完成后才可标记 `COMPLETED`。
@@ -205,11 +205,43 @@
   ESLint、`pnpm build`、`cargo fmt -- --check`、`cargo clippy -- -D warnings` 与 `git diff --check`
   均通过。
 
+### Task 7：集成审查、Windows 验收与 PR
+
+- Task 1-6 各自保持独立 commit 边界；实现路径无 TODO/FIXME/HACK/XXX。内容
+  动作新增的 `url 2.5.8` 直接依赖为 `MIT OR Apache-2.0`。EcoPaste 只参考
+  Apache-2.0 行为/架构，muutot-Clipboard 只参考 AGPL-3.0 产品思路，本轮没有
+  复制两者实现。
+- `pnpm verify`：通过。ESLint 全库通过；Vitest 22 个文件、189 项通过；
+  TypeScript/Vite 生产构建通过；Rust fmt/clippy 通过；Rust lib 169 项通过、1 项
+  显式忽略的 100k 性能测试，main 2 项和 Windows clipboard integration 6 项通过。
+- 最终 `pnpm e2e`：Windows 真实 Tauri/WebView2 桌面 5/5 通过。隔离的 data/log/
+  HTTP port 下验证真实剪贴板捕获、经后端搜索后点击粘贴、当前可见
+  项 `Ctrl+Alt+1`、搜索框 Enter 原格式粘贴、独立复制不隐藏 Tauri 主窗、详情
+  仍可打开、Ctrl+Enter 纯文本粘贴、annotation 持久化与 note-only 搜索，以及
+  带空格和中文的 Explorer 打开/定位。Task 3 的 Windows 集成测试同时确认
+  plain 模式不写 HTML/RTF；IME 与详情敏感/内容类型边界由定向组件测试覆盖。
+- E2E 首次是 3/4：annotation 用例在 150ms 防抖搜索前误命中旧列表，随后 loading
+  卸载详情，且动作帮助器只识别 `aria-label` 而不识别文字按钮。已改为等待
+  真正后端搜索结果、重新定位可能被 React 替换的节点，并同时按 aria/text
+  可访问名称定位按钮；修正后 4/4 通过，再扩展键盘/copy/plain 桌面验收
+  并统一稳定策略后 `-SkipBuild` 与正式全新构建均以 5/5 为最终门禁。
+- 验收结束后确认无 Klip、tauri-driver、msedgedriver、Cargo、Vite 或 Explorer
+  测试进程残留。
+
 ## 阻塞与跳过
 
-- 当前无实现阻塞。
-- 预期平台限制：没有 macOS/Linux 真实桌面。只有在对应 Task 到达验收阶段后才记录
-  `SKIPPED`，并写清已经完成的编译或单元测试，不能提前标记通过。
+- 当前无实现或 Windows 验收阻塞。
+- `SKIPPED` macOS 静态/桌面验收：已安装 `aarch64-apple-darwin` target 并执行
+  `cargo check --target aarch64-apple-darwin --locked`；`objc2-exception-helper` 在 Windows
+  主机找不到 target `cc`/Apple SDK。已确认 target 存在并让 Cargo 下载所需
+  crate，没有重复原样命令。解除条件是 macOS + Xcode SDK，或可用的 Apple 交叉 C
+  工具链/SDK。当前没有 macOS 真实桌面。
+- `SKIPPED` Linux 静态/桌面验收：已安装 `x86_64-unknown-linux-gnu` target 并执行
+  `cargo check --target x86_64-unknown-linux-gnu --locked`；缺少
+  `x86_64-linux-gnu-gcc`，`pkg-config` 也没有 Linux sysroot/DBus 开发库。已让 Cargo
+  进入 `zstd-sys`/`libdbus-sys` 构建脚本，没有重复原样命令。解除条件是 GNU
+  交叉工具链、配套 sysroot/pkg-config 和 `libdbus-1-dev` 等系统依赖，或直接在
+  Linux 主机检查。当前没有 Linux 真实桌面。
 
 ## 中断恢复步骤
 
@@ -217,13 +249,12 @@
 2. 完整读取实施计划和本进度文件。
 3. 运行 `git status --short --branch`、`git log --oneline -12` 和相关进程检查。
 4. 若工作树有改动，先理解并验证现有 WIP，禁止丢弃不明改动。
-5. 从表格中第一个非 `COMPLETED` Task 继续；当前应从 Task 7 开始。
+5. 七个 Task 均已 `COMPLETED`；后续只跟踪 PR checks 或根据 review 处理新反馈。
 6. Task 完成前更新本文件的状态、测试证据、限制和下一步，并随代码一起提交。
 7. 提交后确认工作树干净，再进入下一个 Task。
 
 ## 下一步准确操作
 
-- 从 Task 7 开始，先审查 Task 1-6 提交边界、错误处理、TODO/FIXME 和许可证边界，
-  再运行全量 `pnpm verify` 与 Windows 真实桌面验收。
-- 更新计划勾选、PRD 和最终进度记录，完成 `docs: finalize core workflow delivery` 提交后
-  推送 `feat/core-workflows` 并创建面向 `main` 的 PR，不直接合并。
+- 完成 `docs: finalize core workflow delivery` 提交并确认工作树干净后，推送
+  `feat/core-workflows` 并创建面向 `main` 的 PR，不直接合并。
+- 向用户交付 PR URL、checks 状态、Windows 证据和 macOS/Linux `SKIPPED` 边界。
