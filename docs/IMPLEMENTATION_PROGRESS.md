@@ -1,6 +1,6 @@
 # Foundation Implementation Progress
 
-- 最后更新时间：2026-08-07 07:57（Asia/Shanghai）
+- 最后更新时间：2026-08-07 08:42（Asia/Shanghai）
 - 当前分支：`feat/foundation`
 - 基准提交：`423ab24`（与 `main` / `origin/main` 一致）
 
@@ -30,7 +30,7 @@
 
 ## 当前任务
 
-- 当前任务：最终状态复核与交付同步；确认工作树、main、PR #4、进程/端口和文档阻塞项，随后推送现有分支。
+- 当前任务：最终状态同步；提交已验证的依赖安全修正，更新 PR #4 证据和阻塞项，完成最后推送/审计。
 - README 已补齐 `pnpm install --frozen-lockfile` worktree 初始化、`KLIP_DATA_DIR` / `KLIP_LOG_DIR` / `KLIP_HTTP_PORT`、单活动 worktree 串行执行和可选 sccache。CHANGELOG 已在 rich-text 提交中说明 DB v4 备份不能回退到只支持 v3 的旧版；各功能行为与限制已分布记录在 README、CHANGELOG、API、DATABASE 与 ARCHITECTURE。
 - `platform-source` 已在 `1e5b63e` 提交，§8.5 与串行功能队列均已据实勾选；macOS/Linux 真实桌面验收仍保持 SKIPPED，不影响已完成的代码、目标编译和 Windows 验收结论。
 - Windows 保留现有进程文件名和窗口标题行为；macOS 使用 `NSWorkspace.frontmostApplication`，Accessibility 未授权时保留应用名且窗口标题为空；X11 使用 EWMH 活动窗口/PID/标题并从 `/proc` 解析应用名；Wayland和其他不支持平台一次性提示后返回空来源。
@@ -47,10 +47,11 @@
 - 最终收尾文档专项（2026-08-07）：通过；`WORKTREE_STRATEGY.md` 已改为当前 schema v6，并明确 v3 → v4 → v5 → v6 迁移链及 v6 备份向旧版拒绝的兼容边界；旧的 `CURRENT_DB_VERSION = 3` 描述已确认不存在。
 - 发布 preflight：`pnpm release:readiness` 通过，但报告未配置 Windows 签名证书、时间戳 URL 和更新源，相关发布项需按无签名/手工分发边界记录。
 - 发布 preflight：`pnpm test:coverage` 通过，20 个文件/149 项测试；V8 总覆盖率为 statements 72.39%、branches 71.56%、functions 71.63%、lines 74.30%。
-- 发布 preflight 阻塞：`pnpm audit --registry=https://registry.npmjs.org --audit-level high` 失败，报告 31 项（3 low、9 moderate、19 high），包括 Vite 6.4.2 Windows `server.fs.deny` 绕过、Selenium 传递依赖 `tmp`/`ws`，以及 Vitest/jsdom/ESLint/Mocha 工具链的 `undici`、`brace-expansion`、`js-yaml`。已用 `pnpm why` 确认来源；未运行会大幅重写 lockfile 的自动修复，发布安全审计保持 BLOCKED，受影响下游为 release checklist 的审计门项。
+- 发布 preflight 历史结果：初次 `pnpm audit --registry=https://registry.npmjs.org --audit-level high` 报告 31 项（3 low、9 moderate、19 high），包括 Vite 6.4.2 Windows `server.fs.deny` 绕过、Selenium 传递依赖 `tmp`/`ws`，以及 Vitest/jsdom/ESLint/Mocha 工具链的 `undici`、`brace-expansion`、`js-yaml`；该问题已由后续同主版本更新和精确 overrides 解决，最终完整 audit 通过。
 - 发布 preflight：`pnpm audit --prod --registry=https://registry.npmjs.org --audit-level high` 通过，生产依赖未发现已知漏洞。
 - 发布 preflight：本地 `cargo audit` 扫描完成并 exit 0，但报告 22 个允许的 RustSec warnings（gtk3/`paste`/`ttf-parser`/unic 维护状态，以及 `anyhow`、`glib`、`lru`、`memmap2` unsound advisory）；不能据此声称 GitHub Actions 的“无未审查 advisory”门项通过。
 - 发布 verify 阻塞：`pnpm release:verify -SkipBundle` 在构建前失败，三处构建元数据为 `1.0.0`，但 `CHANGELOG.md` 当前公开记录为 `v0.1.2`，脚本报 `CHANGELOG.md does not mention version 1.0.0`。未擅自改版本号或添加误导性 changelog 条目；受影响下游为 release verify 和依赖它的 installer smoke。
+- 发布依赖安全修正（2026-08-07）：把 Vite 升至 6.4.3、Vitest/coverage 升至 4.1.10、Selenium 升至 4.46.0、Mocha 升至 11.8.0、typescript-eslint 升至 8.66.0；将 `@babel/core`、`brace-expansion`、`js-yaml`、`postcss`、`tmp`、`undici`、`ws` 锁到修复版本。`pnpm install --frozen-lockfile`、完整 `pnpm audit`、coverage、Windows E2E 和最终 `pnpm verify` 全部通过，npm audit 安全阻塞已解除。
 - Windows installer build：直接运行 `pnpm tauri:build` 通过，用时 549.6 秒；生成 `Klip_1.0.0_x64_en-US.msi`（32,542,720 B，SHA-256 `2FF01714E3334780F85D4FB71453EF8A310456D001449C0B2190CE5F54CDE434`）和 `Klip_1.0.0_x64-setup.exe`（29,027,941 B，SHA-256 `0FA03449A06AAE6CE247AD24956B08A20022F104F0894C803B844BB5B470E06F`）；两项 Authenticode 状态均为 `NotSigned`。
 - Installer smoke：完整 `pnpm release:smoke` 因 GitHub 不存在 `v1.0.0` release/资产而失败；随后按脚本支持的 `-SkipGitHub` 不同路径执行本地-only smoke，通过版本一致性、两项产物存在性/大小/哈希检查，并确认当前 `klip.exe` 进程数和已安装 Klip 注册表项均为 0。
 - 当前 HEAD Windows `pnpm e2e` 首次运行：前端和 Tauri debug build 通过，业务测试未开始；PATH 中 EdgeDriver 148 与 WebView2 `151.0.4129.59` 不匹配，Selenium `before all` 返回 `SessionNotCreatedError`，runner 正确以 exit 1 失败。已定位 ignored 缓存 `e2e/.tmp/edgedriver-151.0.4129.59/msedgedriver.exe`，下一步临时前置该目录后重跑同一 E2E。
@@ -155,7 +156,7 @@
 - OCR 静态链接 BLOCKED 已解除：14.43 与官方静态包 ABI 不兼容，已改用官方 1.24.2 动态 DLL；DLL 入包后的 Windows 真实推理已通过，macOS/Linux 真实环境验收仍未执行且不得声称通过。
 - SKIPPED：用户未提供独立 rich-text 测试文件；已用内建恶意 HTML、DB migration/restore 和 Windows clipboard-rs 集成测试覆盖，若后续提供文件可在最终验收补跑。
 - BLOCKED：发布元数据 `1.0.0` 与公开文档/CHANGELOG `v0.1.2` 冲突；解除条件是发布负责人确定下一版本并同步三处构建元数据、README、CHANGELOG 和发布说明。
-- BLOCKED：完整 npm audit 有 19 项开发/测试工具链 high advisory，本地 RustSec 扫描另有 22 个允许 warning；生产 npm audit通过，但不能替代完整发布安全门。解除条件是评审并升级/覆盖对应依赖后重跑完整 npm/RustSec 审计。
+- RESOLVED：npm 开发/测试工具链 high advisory 已通过同主版本升级和精确 overrides 清零；完整 npm audit 通过。RustSec 仍报告 22 个允许 warnings，保留为独立的 Rust 依赖审查项。
 - BLOCKED：GitHub 尚无 `v1.0.0` release/安装器资产，完整 installer smoke 不能通过；创建 tag/release 超出本 PR 收尾范围，解除条件是版本决策完成后由发布流程生成并上传对应资产。
 - SKIPPED/BLOCKED：当前没有清洁 Windows 测试用户或 VM，不在真实用户配置上安装未签名 NSIS；安装后托盘/快捷键/About 和重启 autostart 验收依赖该隔离环境。
 

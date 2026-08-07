@@ -11,7 +11,7 @@ Foundation closeout status below reflects the Windows `feat/foundation` worktree
 - [ ] BLOCKED: `CHANGELOG.md` still identifies `v0.1.2` as the public release and does not contain the build metadata version `1.0.0`; release version ownership must resolve this before shipping.
 - [x] `pnpm release:readiness` reports unsigned installers, no timestamp URL, and manual/GitHub Release distribution because no update feed is configured.
 - [x] `pnpm test:coverage` succeeds: 20 files / 149 tests; statements 72.39%, branches 71.56%, functions 71.63%, lines 74.30%.
-- [ ] BLOCKED: full `pnpm audit --registry=https://registry.npmjs.org --audit-level high` reports 19 high advisories in development/test tooling; the production-only audit reports no known vulnerabilities.
+- [x] Full `pnpm audit --registry=https://registry.npmjs.org --audit-level high` passes after same-major toolchain updates and precise transitive overrides; no known vulnerabilities remain.
 - [ ] BLOCKED: local `cargo audit` reports 22 allowed warnings, and PR #4 currently has no GitHub Actions check result to establish the stricter release gate.
 - [ ] BLOCKED: `pnpm release:verify -SkipBundle` stops before build because `CHANGELOG.md` does not mention metadata version `1.0.0`.
 - [x] `pnpm e2e` succeeds on the current Windows desktop with `tauri-driver` and the matching EdgeDriver/WebView2 `151.0.4129.59`; 1 Selenium flow passed.
