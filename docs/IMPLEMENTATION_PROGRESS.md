@@ -1,6 +1,6 @@
 # Foundation Implementation Progress
 
-- 最后更新时间：2026-08-07 08:52（Asia/Shanghai）
+- 最后更新时间：2026-08-07 09:15（Asia/Shanghai）
 - 当前分支：`feat/foundation`
 - 基准提交：`423ab24`（与 `main` / `origin/main` 一致）
 
@@ -31,7 +31,7 @@
 
 ## 当前任务
 
-- 当前任务：最终状态同步；提交已验证的依赖安全修正，更新 PR #4 证据和阻塞项，完成最后推送/审计。
+- 当前任务：修复 CI OCR 字典字节稳定性；记录 GitHub Actions run `31136758905` 的 Windows checkout 换行失败，添加最窄范围的 Git 属性修复并重跑专项测试、`pnpm verify` 与 CI。
 - README 已补齐 `pnpm install --frozen-lockfile` worktree 初始化、`KLIP_DATA_DIR` / `KLIP_LOG_DIR` / `KLIP_HTTP_PORT`、单活动 worktree 串行执行和可选 sccache。CHANGELOG 已在 rich-text 提交中说明 DB v4 备份不能回退到只支持 v3 的旧版；各功能行为与限制已分布记录在 README、CHANGELOG、API、DATABASE 与 ARCHITECTURE。
 - `platform-source` 已在 `1e5b63e` 提交，§8.5 与串行功能队列均已据实勾选；macOS/Linux 真实桌面验收仍保持 SKIPPED，不影响已完成的代码、目标编译和 Windows 验收结论。
 - Windows 保留现有进程文件名和窗口标题行为；macOS 使用 `NSWorkspace.frontmostApplication`，Accessibility 未授权时保留应用名且窗口标题为空；X11 使用 EWMH 活动窗口/PID/标题并从 `/proc` 解析应用名；Wayland和其他不支持平台一次性提示后返回空来源。
@@ -59,6 +59,7 @@
 - 当前 HEAD Windows Selenium E2E 重跑：通过。临时前置 `e2e/.tmp/edgedriver-151.0.4129.59/msedgedriver.exe`，EdgeDriver/WebView2 均为 `151.0.4129.59`；1 项业务测试通过，覆盖文本捕获、关键词搜索、窗口显示/刷新、历史条目点击和剪贴板恢复，runner 退出清理正常。
 - 最终 `pnpm verify`（2026-08-07 07:53）：通过，用时 202.5 秒；ESLint、Vitest 20/149、生产构建、cargo fmt、Clippy、Rust library 143（1 ignored）、main 2 和 clipboard integration 5 全部通过。
 - 依赖修正后的当前 HEAD Windows Selenium E2E（2026-08-07）：通过；Vite 6.4.3、匹配 EdgeDriver/WebView2 151，1 项业务流程通过，runner 清理正常。
+- CI OCR 字典失败（GitHub Actions run `31136758905`）：backend `cargo test` 仅失败于 `ocr::tests::bundled_models_recognize_chinese_fixture`。CI 计算字典 SHA-256 为 `1ea29636956177e400af712d9782e7693f3fb25f98617bed10479d2965a836fd`，仓库期望/Windows 工作树 LF 字节为 `d1979e9f794c464c0d2e0b70a7fe14dd978e9dc644c0e71f14158cdf8342af1b`；本地将每个 LF 精确转换为 CRLF 后得到 CI 哈希和 92,395 字节，已确认是 checkout 换行转换而非模型内容漂移。Ubuntu/macOS/Windows frontend、backend fmt/Clippy 均通过；RustSec 步骤因 cargo test 先失败而未执行。
 - Windows runtime smoke：`pnpm tauri:dev` 已启动 `klip.exe`；`KLIP_DATA_DIR=C:\tmp\klip-foundation\data` 下生成 `klip.db`/WAL，`KLIP_LOG_DIR=C:\tmp\klip-foundation\logs` 下生成日志文件；进程已停止。完整 UI 闭环尚未执行。
 - search 依赖核验：`tantivy 0.24.2` 使用 `tantivy-tokenizer-api 0.5`；选择同样依赖 tokenizer API 0.5 的 `tantivy-jieba 0.16.0`，避免同时链接不兼容的 tokenizer trait 版本。
 - search 首轮专项测试：未进入测试执行，测试编译因两个既有 `ClipboardQuerySpec` 字面量缺少新增的 `text_match_ids` 字段而失败（`clipboard_query.rs:380`、`:460`）；业务代码 `cargo check` 已通过。处理：补齐测试字段后原命令重跑，不跳过测试。
@@ -144,6 +145,7 @@
 - 前端 HTML 预览使用 DOMPurify 明确允许的安全标签与 `href`/`title` 属性；禁止图片、脚本、事件属性、样式和危险 URI，清洗为空时回退纯文本。
 - OCR 固定 `oar-ocr = "=0.6.2"`，使用 PP-OCRv5 mobile 检测/识别模型与中文通用字典；模型打包随应用分发，运行时不联网下载。
 - `oar-ocr` 的 0.6.x 依赖范围不能任由 Cargo 升到不兼容的 core/ort 组合；必须把验证通过的传递版本一并锁定，并在升级时重新做编译与推理验收。
+- OCR 字典是逐行文本但内容字节属于模型完整性契约；仓库 checkout 必须关闭该文件的文本换行转换（`-text`），模型二进制与其他资源不改变属性。
 - OCR 的 ONNX Runtime 分发必须同时满足本机 MSVC ABI、离线运行和安装包携带；若官方静态库与现有 toolset 不兼容，优先切换 `ORT_PREFER_DYNAMIC_LINK=1` + 显式打包 `onnxruntime.dll`，而不是伪造缺失 STL 符号或升级整机工具链后声称项目本身可复现。
 - 焦点恢复以平台进程/窗口标识为短期进程内状态：Windows 保存 HWND，macOS 保存前台应用 PID，Linux X11 保存 EWMH 活动窗口；捕获到 Klip 自身时保留上一外部目标，失效目标清空。Wayland 没有通用激活协议，明确静默跳过。
 - 来源持久化使用 DB v6 的 `clipboard_items.source_application` / `source_window_title` 可空列。monitor 走专用带来源插入接口；普通插入或导入缺少来源时不清空哈希冲突记录的旧来源，已知新来源则更新应用和与其配套的可空窗口标题。
@@ -161,8 +163,10 @@
 - RESOLVED：npm 开发/测试工具链 high advisory 已通过同主版本升级和精确 overrides 清零；完整 npm audit 通过。RustSec 仍报告 22 个允许 warnings，保留为独立的 Rust 依赖审查项。
 - BLOCKED：GitHub 尚无 `v1.0.0` release/安装器资产，完整 installer smoke 不能通过；创建 tag/release 超出本 PR 收尾范围，解除条件是版本决策完成后由发布流程生成并上传对应资产。
 - SKIPPED/BLOCKED：当前没有清洁 Windows 测试用户或 VM，不在真实用户配置上安装未签名 NSIS；安装后托盘/快捷键/About 和重启 autostart 验收依赖该隔离环境。
+- BLOCKED（处理中）：GitHub Actions run `31136758905` 的 OCR 字典测试因 Windows checkout 将 LF 转成 CRLF 失败；已用精确字节哈希复现，受影响下游为 backend cargo test 后的 RustSec 步骤和 PR CI 绿灯。解除条件是提交 `src-tauri/resources/ocr/ppocrv5_dict.txt -text` 属性规则后推送并确认新 CI run。
 
 ## 下一步准确操作
 
-- 下一步运行 `pnpm release:smoke` 和 `pnpm e2e`；记录可安全完成的 Windows 验收证据后运行最终 `pnpm verify`，更新并推送 PR #4，不 merge main。
+- 在 `.gitattributes` 添加 `src-tauri/resources/ocr/ppocrv5_dict.txt -text`；验证 Git 属性、blob/工作树/CRLF 哈希和 OCR 专项测试，运行 `git diff --check`，仅提交属性与本进度记录。
+- 推送该 CI 修复，监控新 GitHub Actions run；若 cargo test 通过，再记录 RustSec 结果并更新 PR #4；随后重跑最终 `pnpm verify`，确认远端一致、工作树干净、PR 仍为 OPEN，不 merge main。
 - 解除默认目录回退阻塞需隔离 Windows 测试用户/VM；真实 macOS/Linux 与浏览器/Word 富文本验收需对应桌面/应用环境和测试材料。
