@@ -228,6 +228,24 @@
 - 验收结束后确认无 Klip、tauri-driver、msedgedriver、Cargo、Vite 或 Explorer
   测试进程残留。
 
+### PR review follow-up
+
+- `e32e8b3` 剥离富文本预览中的 `href`，保留安全排版但禁止剪贴板 HTML 直接
+  导航 Klip 主 WebView；普通 HTTPS 与危险协议链接都由组件测试确认不可导航。
+- `58103cc` 在搜索和筛选刷新期间保留旧列表 DOM，加载/失败状态改为列表上方的
+  紧凑状态条；选中 ID 和详情状态不再因 `loading` 被卸载。数字快捷键继续同步
+  屏幕上实际显示的前九项，进入设置页时同步明确空快照。
+- `6612da9` 让普通复制和纯文本复制返回明确成功结果；列表仅在 IPC 成功后显示
+  “已复制”，失败继续写入统一错误状态且不再误报成功。
+- review 定向验证分别为富文本/详情 41 项、App/列表 29 项、store/条目 56 项通过；
+  ESLint、TypeScript 与 `git diff --check` 通过。
+- review 后完整 `pnpm verify` 通过：Vitest 22 个文件、193 项通过，生产构建、Rust
+  fmt/clippy、Rust lib 169 项（另 1 项显式忽略）、main 2 项和 Windows clipboard
+  integration 6 项通过。
+- review 后重新执行正式 `pnpm e2e`，Windows Tauri/WebView2 桌面 5/5 通过；结束后
+  确认没有当前 worktree 的 Node、Cargo、Rust、Klip、tauri-driver 或 EdgeDriver
+  进程残留。
+
 ## 阻塞与跳过
 
 - 当前无实现或 Windows 验收阻塞。
@@ -255,6 +273,9 @@
 
 ## 下一步准确操作
 
-- 完成 `docs: finalize core workflow delivery` 提交并确认工作树干净后，推送
-  `feat/core-workflows` 并创建面向 `main` 的 PR，不直接合并。
-- 向用户交付 PR URL、checks 状态、Windows 证据和 macOS/Linux `SKIPPED` 边界。
+- 提交本次 review follow-up 文档并确认工作树干净，推送 `feat/core-workflows` 更新
+  现有 PR #5。
+- 等待 PR checks 全部成功后，按用户明确授权把 PR #5 合并到 `main`；不得绕过失败
+  或未完成的 checks。
+- 合并后确认远端 PR 状态、`origin/main` 提交和本地 worktree 状态，并向用户交付
+  合并提交、Windows 证据和 macOS/Linux `SKIPPED` 边界。
