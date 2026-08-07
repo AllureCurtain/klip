@@ -1,6 +1,6 @@
 # Foundation Implementation Progress
 
-- 最后更新时间：2026-08-07 16:37（Asia/Shanghai）
+- 最后更新时间：2026-08-07 17:06（Asia/Shanghai）
 - 当前分支：`feat/foundation`
 - 基准提交：`423ab24`（与 `main` / `origin/main` 一致）
 
@@ -34,10 +34,11 @@
 - `2a3272e`：记录最终 foundation CI 全绿并同步交付文档。
 - `122c357`：活动搜索的新捕获/OCR 事件改为重新请求后端，删除前端文本子串近似匹配并补非连续中文分词回归。
 - `c0f9e49`：Tantivy 增加逐文档 ID/可搜索内容指纹校验，覆盖同数量不同 ID 与同 ID 内容漂移的自动重建。
+- `3df07a9`：同步搜索一致性修复的 README、CHANGELOG、策略、架构、数据库说明和完整验证记录。
 
 ## 当前任务
 
-- 当前任务：PR 审查发现的两项搜索一致性问题、专项验证和完整 `pnpm verify` 已完成；待提交本记录、push、最终 CI 与 PR #4 更新。
+- 当前任务：PR 审查发现的两项搜索一致性问题已经完成实现、专项验证、完整 `pnpm verify`、push、PR #4 更新和代码交付 head CI；本轮没有剩余代码实施，PR 保持 OPEN 等待审查。
 - README 已补齐 `pnpm install --frozen-lockfile` worktree 初始化、`KLIP_DATA_DIR` / `KLIP_LOG_DIR` / `KLIP_HTTP_PORT`、单活动 worktree 串行执行和可选 sccache。CHANGELOG 已在 rich-text 提交中说明 DB v4 备份不能回退到只支持 v3 的旧版；各功能行为与限制已分布记录在 README、CHANGELOG、API、DATABASE 与 ARCHITECTURE。
 - `platform-source` 已在 `1e5b63e` 提交，§8.5 与串行功能队列均已据实勾选；macOS/Linux 真实桌面验收仍保持 SKIPPED，不影响已完成的代码、目标编译和 Windows 验收结论。
 - Windows 保留现有进程文件名和窗口标题行为；macOS 使用 `NSWorkspace.frontmostApplication`，Accessibility 未授权时保留应用名且窗口标题为空；X11 使用 EWMH 活动窗口/PID/标题并从 `/proc` 解析应用名；Wayland和其他不支持平台一次性提示后返回空来源。
@@ -73,6 +74,8 @@
 - 审查修复 search 专项：9 项常规搜索测试通过、1 项 10 万条显式性能验收单独通过；新增同数量不同 ID、同 ID 不同可搜索内容两类启动恢复测试。10 万条热查询为 `722.2us`，完整启动指纹校验为 `1.8249654s`，低于 10 秒门槛；`cargo fmt --check` 与 `cargo clippy -- -D warnings` 通过。
 - 审查修复最终 `pnpm verify` 首次尝试：lint 通过，Vitest 已执行的 10 个文件/53 项均通过，但另 10 个文件的 fork worker 在同机外部 `cargo test --workspace` 运行期间启动超时，Vitest 以 unhandled worker errors 退出；没有把部分通过误记为完整通过。外部进程结束后原样重跑前端全量测试，20 个文件/147 项通过。
 - 审查修复最终 `pnpm verify` 重跑：通过，用时 233.3 秒。ESLint 通过；Vitest 20 个文件/147 项通过；生产构建通过；`cargo fmt -- --check` 与 `cargo clippy -- -D warnings` 通过；Rust library 145 项通过、1 项显式 10 万条性能测试 ignored，另有 main 2 项和 clipboard integration 5 项通过。
+- 审查修复 push：首次因 GitHub TLS `SSL_ERROR_SYSCALL` 未连接远端；连通性恢复后原命令重试成功。pre-push 再次执行完整 `pnpm verify` 并全绿，远端代码和主文档交付 head 为 `3df07a9`。
+- 审查修复最终 GitHub Actions：run `31162979297` 在 `3df07a9` 上通过；Ubuntu 24.04、macOS 15、Windows Server 2022 frontend 的 install/lint/test/build/生产 audit 全部成功，backend 的 build、rustfmt、Clippy、完整 cargo test 和 RustSec 全部成功。PR #4 已追加 Review Follow-up，保留所有既有 release/SKIPPED 边界且未合并。
 - Windows runtime smoke：`pnpm tauri:dev` 已启动 `klip.exe`；`KLIP_DATA_DIR=C:\tmp\klip-foundation\data` 下生成 `klip.db`/WAL，`KLIP_LOG_DIR=C:\tmp\klip-foundation\logs` 下生成日志文件；进程已停止。完整 UI 闭环尚未执行。
 - search 依赖核验：`tantivy 0.24.2` 使用 `tantivy-tokenizer-api 0.5`；选择同样依赖 tokenizer API 0.5 的 `tantivy-jieba 0.16.0`，避免同时链接不兼容的 tokenizer trait 版本。
 - search 首轮专项测试：未进入测试执行，测试编译因两个既有 `ClipboardQuerySpec` 字面量缺少新增的 `text_match_ids` 字段而失败（`clipboard_query.rs:380`、`:460`）；业务代码 `cargo check` 已通过。处理：补齐测试字段后原命令重跑，不跳过测试。
@@ -181,5 +184,5 @@
 
 ## 下一步准确操作
 
-- 提交本次文档记录，push `feat/foundation`，更新 PR #4 描述并等待新 HEAD CI 全绿。最终确认本地与远端一致、工作树干净、主工作区仍为 `main@423ab24`、无 Klip 验收残留进程，PR 保持 OPEN，不 merge main。
+- 本轮无剩余实现操作。审查 PR #4 时以其最新 head 和 checks 为准；保持 PR OPEN，不自动 merge main。若后续只有持续记录类提交，不把前一代码交付 head 的成功 CI 误写成新 head 的结果。
 - 解除默认目录回退阻塞需隔离 Windows 测试用户/VM；真实 macOS/Linux 与浏览器/Word 富文本验收需对应桌面/应用环境和测试材料。
