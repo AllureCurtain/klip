@@ -494,7 +494,7 @@ pub struct RestoreSummary {
 - 普通关键词搜索由 `search-index` 中的 Tantivy + jieba 生成匹配 ID，SQLite 继续负责类型、标签、收藏、敏感状态、日期、排序和分页
 - 精确匹配继续使用 SQLite 等值查询；Tantivy 初始化、校验、写入或查询失败时自动回退 `LIKE '%keyword%'`
 - 索引每 50 条或 5 秒批量提交，查询前刷新待提交内容；删除、清空、导入和恢复同步更新索引
-- 启动时校验 Tantivy checksum 和 SQLite 记录数，损坏或失配时保留旧索引并从 SQLite 全量重建
+- 启动时校验 Tantivy checksum，并逐项比较 Tantivy 与 SQLite 的 `(item_id, SHA-256(可搜索内容))`；物理损坏、同数量不同 ID 或同 ID 内容漂移时保留旧索引并从 SQLite 全量重建
 - 批量操作使用事务
 
 ### 7.3 连接管理

@@ -38,6 +38,8 @@
 
 ### Changed
 
+- Active searches now refresh through the backend when clipboard capture or OCR completion events arrive, keeping live results consistent with Tantivy/jieba tokenization instead of approximating matches in the frontend.
+- Search-index startup validation now compares every live Tantivy document's item ID and SHA-256 searchable-content fingerprint with SQLite, rebuilding on logical drift as well as physical corruption or count mismatches.
 - Database schema version 6 adds nullable `source_application` and `source_window_title` columns. Version 5 databases and backups migrate with empty attribution, while schema-v6 backups require both columns and cannot be restored by Klip versions that only support v5.
 - Database schema version 5 adds `clipboard_ocr`. Version 4 databases and backups migrate automatically, while schema-v5 backups require `clipboard_ocr` and cannot be restored by Klip versions that only support v4.
 - Windows packages add about 21.5 MB of PP-OCRv5 model assets plus a 14.1 MB ONNX Runtime DLL; the verified models are copied to an app-data cache on first OCR use.

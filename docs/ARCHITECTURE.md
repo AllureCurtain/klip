@@ -446,7 +446,7 @@ interface AppConfig {
 | 数据库索引 | `created_at`、`last_used_at + created_at`、`content_type`、`hash` |
 | 数据库访问模型 | 单个 SQLite 连接 + `Mutex<Connection>` 串行化访问 |
 | 异步处理 | 剪贴板监听独立线程 |
-| 全文搜索 | Tantivy + jieba；50 条/5 秒批量提交，损坏时从 SQLite 重建，失败时回退 `LIKE` |
+| 全文搜索 | Tantivy + jieba；50 条/5 秒批量提交，启动时比对 checksum 及逐文档 ID/内容指纹，物理损坏或逻辑漂移时从 SQLite 重建，失败时回退 `LIKE` |
 | 批量操作 | 批量删除优化 |
 
 ---

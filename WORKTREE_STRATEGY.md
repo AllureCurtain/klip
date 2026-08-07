@@ -250,15 +250,16 @@ rich-text、search-tantivy、OCR 都要加新 IPC 命令和 HTTP 路由，因此
 - [x] 索引目录走 `database::connection::app_data_dir()`（§3.2）
 - [x] 写入策略：批量 + 定时 commit（如每 5s 或积攒 50 条）
 - [x] 删除同步：剪贴板记录删除时同步删除索引项
-- [x] segment 合并压缩；启动健康检测 + 索引损坏时从 SQLite 全量重建
+- [x] segment 合并压缩；启动校验 checksum 及逐文档 ID/可搜索内容指纹，物理损坏或逻辑漂移时从 SQLite 全量重建
 - [x] Tantivy 异常时降级回 SQLite `LIKE`（前端无感知）
 - [x] 切换 `clipboard_query.rs` 的 `text_query` 分支为 FTS 查询
+- [x] 活动搜索收到新捕获/OCR 事件时重新请求后端，避免前端子串匹配与 jieba 分词语义分叉
 
 完成标准：
 - **10 万条数据**搜索在毫秒级。（1k 条的基准无意义 —— `LIKE` 在 1k 条上也是毫秒级，区分不出改进。）
 - 中文分词生效：搜「剪贴板工具」能命中「剪贴板管理工具」。`LIKE '%剪贴板工具%'` 命中不了，这是能区分新旧实现的判据。
 - 删除条目后搜索不再返回该条
-- 索引损坏能自动重建且不崩溃（注意 §9.2 的 panic 约束）；Tantivy 故障时回退 `LIKE` 仍可用
+- 索引物理损坏、同数量不同 ID、同 ID 可搜索内容漂移均能自动重建且不崩溃（注意 §9.2 的 panic 约束）；Tantivy 故障时回退 `LIKE` 仍可用
 - 测试全绿
 
 ### 8.2 `rich-text` — 富文本 HTML 规范化

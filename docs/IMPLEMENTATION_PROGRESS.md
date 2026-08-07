@@ -1,6 +1,6 @@
 # Foundation Implementation Progress
 
-- 最后更新时间：2026-08-07 10:29（Asia/Shanghai）
+- 最后更新时间：2026-08-07 16:37（Asia/Shanghai）
 - 当前分支：`feat/foundation`
 - 基准提交：`423ab24`（与 `main` / `origin/main` 一致）
 
@@ -31,10 +31,13 @@
 - `eb28176`：记录 GitHub Actions Windows checkout 导致 OCR 字典哈希失败的证据。
 - `5f16795`：通过最窄 `.gitattributes -text` 规则保持 OCR 字典字节稳定，并完成本地专项验证。
 - `9c6d9d1`：记录修复后的最终本地 `pnpm verify` 证据。
+- `2a3272e`：记录最终 foundation CI 全绿并同步交付文档。
+- `122c357`：活动搜索的新捕获/OCR 事件改为重新请求后端，删除前端文本子串近似匹配并补非连续中文分词回归。
+- `c0f9e49`：Tantivy 增加逐文档 ID/可搜索内容指纹校验，覆盖同数量不同 ID 与同 ID 内容漂移的自动重建。
 
 ## 当前任务
 
-- 当前任务：最终同步；记录 GitHub Actions run `31140025857` 全绿，更新 PR #4 和最终 Git/进程/主工作区审计。
+- 当前任务：PR 审查发现的两项搜索一致性问题、专项验证和完整 `pnpm verify` 已完成；待提交本记录、push、最终 CI 与 PR #4 更新。
 - README 已补齐 `pnpm install --frozen-lockfile` worktree 初始化、`KLIP_DATA_DIR` / `KLIP_LOG_DIR` / `KLIP_HTTP_PORT`、单活动 worktree 串行执行和可选 sccache。CHANGELOG 已在 rich-text 提交中说明 DB v4 备份不能回退到只支持 v3 的旧版；各功能行为与限制已分布记录在 README、CHANGELOG、API、DATABASE 与 ARCHITECTURE。
 - `platform-source` 已在 `1e5b63e` 提交，§8.5 与串行功能队列均已据实勾选；macOS/Linux 真实桌面验收仍保持 SKIPPED，不影响已完成的代码、目标编译和 Windows 验收结论。
 - Windows 保留现有进程文件名和窗口标题行为；macOS 使用 `NSWorkspace.frontmostApplication`，Accessibility 未授权时保留应用名且窗口标题为空；X11 使用 EWMH 活动窗口/PID/标题并从 `/proc` 解析应用名；Wayland和其他不支持平台一次性提示后返回空来源。
@@ -66,6 +69,10 @@
 - OCR 字典 checkout 修复（本地 2026-08-07）：`.gitattributes` 对 `src-tauri/resources/ocr/ppocrv5_dict.txt` 设置 `-text`；`git check-attr` 返回 `text: unset`，`git ls-files --eol` 返回 `i/lf w/lf attr/-text`，工作树 SHA-256 保持 `d1979e...2af1b`；`cargo test ocr::tests::bundled_models_recognize_chinese_fixture -- --test-threads=1` 通过（1 项）。
 - 修复后的最终本地 `pnpm verify`（2026-08-07 09:52）：通过，用时 162.9 秒；ESLint、Vitest 20 个文件/149 项测试、Vite 生产构建、cargo fmt、Clippy、Rust library 143 项（1 个显式性能测试 ignored）、main 2 项和 clipboard integration 5 项全部通过。
 - 最终 GitHub Actions（run `31140025857`，head `9c6d9d1f31badff7e3dfa5dbaf6a773c20a9d3a4`）：通过。Ubuntu 24.04、macOS 15、Windows Server 2022 frontend job 的 install/lint/test/build/生产 audit 全部成功；backend 的 pnpm build、rustfmt、Clippy、完整 cargo test 和 `rustsec/audit-check@v2` 全部成功。OCR 字典在 Windows checkout 后保持预期字节，旧 run `31136758905` 的 CRLF 失败已解除。
+- 审查修复前端专项：`src/App.test.tsx` 与 `src/lib/clipboardFilters.test.ts` 共 16 项通过；TypeScript build 和目标 ESLint 通过。活动搜索事件现在触发后端防抖搜索，测试明确覆盖“剪贴板工具”对“剪贴板管理工具”的实时刷新以及 OCR 完成刷新。
+- 审查修复 search 专项：9 项常规搜索测试通过、1 项 10 万条显式性能验收单独通过；新增同数量不同 ID、同 ID 不同可搜索内容两类启动恢复测试。10 万条热查询为 `722.2us`，完整启动指纹校验为 `1.8249654s`，低于 10 秒门槛；`cargo fmt --check` 与 `cargo clippy -- -D warnings` 通过。
+- 审查修复最终 `pnpm verify` 首次尝试：lint 通过，Vitest 已执行的 10 个文件/53 项均通过，但另 10 个文件的 fork worker 在同机外部 `cargo test --workspace` 运行期间启动超时，Vitest 以 unhandled worker errors 退出；没有把部分通过误记为完整通过。外部进程结束后原样重跑前端全量测试，20 个文件/147 项通过。
+- 审查修复最终 `pnpm verify` 重跑：通过，用时 233.3 秒。ESLint 通过；Vitest 20 个文件/147 项通过；生产构建通过；`cargo fmt -- --check` 与 `cargo clippy -- -D warnings` 通过；Rust library 145 项通过、1 项显式 10 万条性能测试 ignored，另有 main 2 项和 clipboard integration 5 项通过。
 - Windows runtime smoke：`pnpm tauri:dev` 已启动 `klip.exe`；`KLIP_DATA_DIR=C:\tmp\klip-foundation\data` 下生成 `klip.db`/WAL，`KLIP_LOG_DIR=C:\tmp\klip-foundation\logs` 下生成日志文件；进程已停止。完整 UI 闭环尚未执行。
 - search 依赖核验：`tantivy 0.24.2` 使用 `tantivy-tokenizer-api 0.5`；选择同样依赖 tokenizer API 0.5 的 `tantivy-jieba 0.16.0`，避免同时链接不兼容的 tokenizer trait 版本。
 - search 首轮专项测试：未进入测试执行，测试编译因两个既有 `ClipboardQuerySpec` 字面量缺少新增的 `text_match_ids` 字段而失败（`clipboard_query.rs:380`、`:460`）；业务代码 `cargo check` 已通过。处理：补齐测试字段后原命令重跑，不跳过测试。
@@ -146,7 +153,8 @@
 - 新索引和模型目录必须复用 `database::connection::app_data_dir()`。
 - Tantivy 固定为 `0.24.2`，搭配使用同一 `tantivy-tokenizer-api 0.5` 的 `tantivy-jieba 0.16.0`；索引使用默认 LZ4 压缩与 `LogMergePolicy`。
 - 同一路径的 IPC/HTTP SQLite 连接共享一个 Tantivy writer；每 50 条或 5 秒提交，查询前刷新待提交内容。
-- SQLite 是事实源：索引 checksum/记录数异常时保留损坏目录并全量重建；任何索引错误都回退现有 `LIKE`，不让搜索故障阻断数据库写入。
+- SQLite 是事实源：索引 checksum 异常，或逐文档 `(item_id, SHA-256(可搜索内容))` 与 SQLite 不一致时，保留旧目录并全量重建；任何索引错误都回退现有 `LIKE`，不让搜索故障阻断数据库写入。
+- 活动搜索的新捕获和 OCR 完成事件只触发后端防抖搜索；前端仅在无查询词时本地判断内容类型、收藏、标签、敏感和日期条件，避免复制 Tantivy/jieba 语义。
 - rich-text 继续以 `clipboard_items.content` 的纯文本作为哈希、敏感检测和搜索事实源；`clipboard_formats` 原子保存 text/html/rtf，重复哈希使用最新捕获格式，旧 JSON 导入命中现有记录时不清空已有富格式。
 - 前端 HTML 预览使用 DOMPurify 明确允许的安全标签与 `href`/`title` 属性；禁止图片、脚本、事件属性、样式和危险 URI，清洗为空时回退纯文本。
 - OCR 固定 `oar-ocr = "=0.6.2"`，使用 PP-OCRv5 mobile 检测/识别模型与中文通用字典；模型打包随应用分发，运行时不联网下载。
@@ -173,5 +181,5 @@
 
 ## 下一步准确操作
 
-- 更新 PR #4 的 commit/CI 证据，推送本最终状态记录；确认本地与远端一致、工作树干净、主工作区仍为 `main@423ab24`、无 Klip 验收残留进程，PR 保持 OPEN，不 merge main。
+- 提交本次文档记录，push `feat/foundation`，更新 PR #4 描述并等待新 HEAD CI 全绿。最终确认本地与远端一致、工作树干净、主工作区仍为 `main@423ab24`、无 Klip 验收残留进程，PR 保持 OPEN，不 merge main。
 - 解除默认目录回退阻塞需隔离 Windows 测试用户/VM；真实 macOS/Linux 与浏览器/Word 富文本验收需对应桌面/应用环境和测试材料。
