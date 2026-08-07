@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ClipboardItem } from '@/types';
 import {
   DEFAULT_CLIPBOARD_FILTERS,
-  clipboardItemMatchesFilters,
+  clipboardItemMatchesNonSearchFilters,
   hasAdvancedFilters,
   normalizeClipboardFilters,
   toAdvancedSearchQuery,
@@ -81,7 +81,7 @@ describe('clipboardFilters', () => {
     });
 
     expect(
-      clipboardItemMatchesFilters(item, '', {
+      clipboardItemMatchesNonSearchFilters(item, {
         contentType: 'image',
         favoriteOnly: true,
         tagId: 9,
@@ -90,52 +90,9 @@ describe('clipboardFilters', () => {
         createdBefore: 2_000,
       })
     ).toBe(true);
-    expect(clipboardItemMatchesFilters(item, '', { contentType: 'text' })).toBe(false);
-    expect(clipboardItemMatchesFilters(item, '', { tagId: 10 })).toBe(false);
-    expect(clipboardItemMatchesFilters(item, '', { createdAfter: 2_000 })).toBe(false);
-    expect(clipboardItemMatchesFilters(item, '', { createdBefore: 1_000 })).toBe(false);
-  });
-
-  it('respects exact match and empty query semantics', () => {
-    const item = makeItem({ preview: 'hello', content: 'hello world' });
-
-    expect(clipboardItemMatchesFilters(item, '', { contentType: 'text' })).toBe(true);
-    expect(clipboardItemMatchesFilters(item, 'hello', { exactMatch: true })).toBe(true);
-    expect(clipboardItemMatchesFilters(item, 'hell', { exactMatch: true })).toBe(false);
-    expect(clipboardItemMatchesFilters(item, 'world', {})).toBe(true);
-  });
-
-  it('does not search image base64 content', () => {
-    const image = makeItem({
-      content_type: 'image',
-      preview: 'screenshot',
-      content: 'data:image/png;base64,token-inside-base64',
-    });
-
-    expect(clipboardItemMatchesFilters(image, 'token-inside-base64', {})).toBe(false);
-    expect(clipboardItemMatchesFilters(image, 'screenshot', {})).toBe(true);
-  });
-
-  it('matches only completed OCR text for image updates', () => {
-    const image = makeItem({
-      content_type: 'image',
-      preview: 'screenshot',
-      content: 'data:image/png;base64,AA==',
-      ocr: {
-        status: 'completed',
-        text: '离线发票号码',
-        error: null,
-        updated_at: 2_000,
-      },
-    });
-
-    expect(clipboardItemMatchesFilters(image, '发票号码', {})).toBe(true);
-    expect(
-      clipboardItemMatchesFilters(
-        { ...image, ocr: { ...image.ocr!, status: 'pending' } },
-        '发票号码',
-        {}
-      )
-    ).toBe(false);
+    expect(clipboardItemMatchesNonSearchFilters(item, { contentType: 'text' })).toBe(false);
+    expect(clipboardItemMatchesNonSearchFilters(item, { tagId: 10 })).toBe(false);
+    expect(clipboardItemMatchesNonSearchFilters(item, { createdAfter: 2_000 })).toBe(false);
+    expect(clipboardItemMatchesNonSearchFilters(item, { createdBefore: 1_000 })).toBe(false);
   });
 });

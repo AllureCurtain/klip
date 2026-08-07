@@ -69,9 +69,8 @@ export function toAdvancedSearchQuery(
   };
 }
 
-export function clipboardItemMatchesFilters(
+export function clipboardItemMatchesNonSearchFilters(
   item: ClipboardItem,
-  searchQuery: string,
   options: ClipboardQueryOptions = {}
 ): boolean {
   const filters = normalizeClipboardFilters(options);
@@ -104,24 +103,5 @@ export function clipboardItemMatchesFilters(
     return false;
   }
 
-  const query = searchQuery.trim().toLocaleLowerCase();
-  if (query === '') {
-    return true;
-  }
-
-  const preview = item.preview?.toLocaleLowerCase() ?? '';
-  const searchableContent =
-    item.content_type === 'image' ? '' : item.content.toLocaleLowerCase();
-  const searchableOcr =
-    item.ocr?.status === 'completed' ? item.ocr.text.toLocaleLowerCase() : '';
-
-  if (filters.exactMatch) {
-    return preview === query || searchableContent === query || searchableOcr === query;
-  }
-
-  return (
-    preview.includes(query) ||
-    searchableContent.includes(query) ||
-    searchableOcr.includes(query)
-  );
+  return true;
 }

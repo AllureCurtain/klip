@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, useEffect } from 'react';
+import { lazy, Suspense, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { listen } from '@tauri-apps/api/event';
 import { motion } from 'framer-motion';
@@ -18,10 +18,10 @@ import {
   configApi,
 } from '@/lib/tauri';
 import { springs, windowVariants } from '@/lib/motion';
-import { clipboardItemMatchesFilters } from '@/lib/clipboardFilters';
+import { clipboardItemMatchesNonSearchFilters } from '@/lib/clipboardFilters';
 import { setLanguage, type SupportedLanguage, SUPPORTED_LANGUAGES } from '@/i18n';
 import { CONFIG_KEYS } from '@/stores/configSchema';
-import type { ClipboardItem } from './types';
+import type { ClipboardItem, ClipboardQueryOptions } from './types';
 
 const DEFAULT_SEARCH_DEBOUNCE_MS = 150;
 
@@ -61,9 +61,30 @@ function App() {
   });
   const [selectionMode, setSelectionMode] = useState(false);
   const [searchDebounceMs, setSearchDebounceMs] = useState(DEFAULT_SEARCH_DEBOUNCE_MS);
+  const [searchResultsRevision, setSearchResultsRevision] = useState(0);
   const [view, setView] = useState<AppView>('clipboard');
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('general');
   const fetchProductivity = useProductivityStore((state) => state.fetchProductivity);
+  const queryOptions = useMemo<ClipboardQueryOptions>(
+    () => ({
+      contentType: contentType as 'text' | 'image' | 'file' | null,
+      favoriteOnly: showFavorites,
+      tagId: selectedTagId,
+      sensitiveOnly: advancedFilters.sensitiveOnly ?? null,
+      exactMatch: advancedFilters.exactMatch ?? false,
+      createdAfter: advancedFilters.createdAfter ?? null,
+      createdBefore: advancedFilters.createdBefore ?? null,
+    }),
+    [
+      advancedFilters.createdAfter,
+      advancedFilters.createdBefore,
+      advancedFilters.exactMatch,
+      advancedFilters.sensitiveOnly,
+      contentType,
+      selectedTagId,
+      showFavorites,
+    ]
+  );
 
   useEffect(() => {
     fetchItems();
@@ -124,23 +145,20 @@ function App() {
   }, [fetchItems, fetchProductivity, fetchTags, setItems]);
 
   useEffect(() => {
-    const matchesActiveFilters = (item: ClipboardItem) =>
-      clipboardItemMatchesFilters(item, searchQuery, {
-        contentType: contentType as 'text' | 'image' | 'file' | null,
-        favoriteOnly: showFavorites,
-        tagId: selectedTagId,
-        sensitiveOnly: advancedFilters.sensitiveOnly ?? null,
-        exactMatch: advancedFilters.exactMatch ?? false,
-        createdAfter: advancedFilters.createdAfter ?? null,
-        createdBefore: advancedFilters.createdBefore ?? null,
-      });
+    const hasActiveSearch = searchQuery.trim() !== '';
+    const refreshSearchResults = () =>
+      setSearchResultsRevision((revision) => revision + 1);
     const unlistenPromise = listen<ClipboardItem>('clipboard-updated', (event) => {
-      if (matchesActiveFilters(event.payload)) {
+      if (hasActiveSearch) {
+        refreshSearchResults();
+      } else if (clipboardItemMatchesNonSearchFilters(event.payload, queryOptions)) {
         addItems([event.payload]);
       }
     });
     const unlistenItemUpdatedPromise = onClipboardItemUpdated((item) => {
-      if (matchesActiveFilters(item)) {
+      if (hasActiveSearch) {
+        refreshSearchResults();
+      } else if (clipboardItemMatchesNonSearchFilters(item, queryOptions)) {
         upsertItem(item);
       }
     });
@@ -151,41 +169,27 @@ function App() {
     };
   }, [
     addItems,
-    advancedFilters,
-    contentType,
+    queryOptions,
     searchQuery,
-    selectedTagId,
-    showFavorites,
     upsertItem,
   ]);
 
   useEffect(() => {
     const trimmed = searchQuery.trim();
-    const options = {
-      contentType: contentType as 'text' | 'image' | 'file' | null,
-      favoriteOnly: showFavorites,
-      tagId: selectedTagId,
-      sensitiveOnly: advancedFilters.sensitiveOnly ?? null,
-      exactMatch: advancedFilters.exactMatch ?? false,
-      createdAfter: advancedFilters.createdAfter ?? null,
-      createdBefore: advancedFilters.createdBefore ?? null,
-    };
     const handle = window.setTimeout(() => {
       if (trimmed === '') {
-        fetchItems(options);
+        fetchItems(queryOptions);
       } else {
-        searchItems(trimmed, options);
+        searchItems(trimmed, queryOptions);
       }
     }, searchDebounceMs);
 
     return () => window.clearTimeout(handle);
   }, [
-    searchQuery,
-    contentType,
-    showFavorites,
-    selectedTagId,
-    advancedFilters,
     fetchItems,
+    queryOptions,
+    searchQuery,
+    searchResultsRevision,
     searchItems,
     searchDebounceMs,
   ]);

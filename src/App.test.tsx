@@ -3,6 +3,8 @@ import { act, cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 
+const TEST_SEARCH_DEBOUNCE_MS = 150;
+
 const storeState = vi.hoisted(() => ({
   items: [],
   tags: [],
@@ -129,6 +131,7 @@ vi.mock('./components/settings/SettingsView', () => ({
 
 describe('App status states', () => {
   afterEach(() => {
+    vi.useRealTimers();
     cleanup();
     vi.clearAllMocks();
     storeState.items = [];
@@ -249,46 +252,100 @@ describe('App status states', () => {
     expect(storeState.addItems).not.toHaveBeenCalled();
   });
 
-  it('upserts an OCR completion that newly matches the active search', async () => {
+  it('refreshes an active search for non-contiguous jieba matches', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+
+    act(() => {
+      headerMocks.props?.onSearchChange('剪贴板工具');
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(TEST_SEARCH_DEBOUNCE_MS);
+    });
+    storeState.searchItems.mockClear();
+
+    act(() => {
+      tauriMocks.clipboardUpdated?.({
+        payload: {
+          id: 3,
+          content_type: 'text',
+          content: 'Klip 是一款剪贴板管理工具',
+          preview: 'Klip 是一款剪贴板管理工具',
+          hash: 'hash-3',
+          size: 1,
+          metadata: null,
+          source_application: null,
+          source_window_title: null,
+          is_favorited: false,
+          is_sensitive: false,
+          sensitivity_reason: null,
+          formats: [],
+          ocr: null,
+          tags: [],
+          created_at: 1,
+          last_used_at: 1,
+        },
+      });
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(TEST_SEARCH_DEBOUNCE_MS);
+    });
+
+    expect(storeState.searchItems).toHaveBeenCalledWith(
+      '剪贴板工具',
+      expect.objectContaining({ contentType: null, exactMatch: false })
+    );
+    expect(storeState.addItems).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  it('refreshes the backend search when OCR completes', async () => {
+    vi.useFakeTimers();
     render(<App />);
 
     act(() => {
       headerMocks.props?.onSearchChange('发票号码');
     });
     await act(async () => {
-      await Promise.resolve();
+      await vi.advanceTimersByTimeAsync(TEST_SEARCH_DEBOUNCE_MS);
     });
-
-    const updated = {
-      id: 3,
-      content_type: 'image' as const,
-      content: 'data:image/png;base64,AA==',
-      preview: 'Screenshot',
-      hash: 'hash-3',
-      size: 1,
-      metadata: null,
-      source_application: null,
-      source_window_title: null,
-      is_favorited: false,
-      is_sensitive: false,
-      sensitivity_reason: null,
-      formats: [],
-      ocr: {
-        status: 'completed' as const,
-        text: '离线发票号码',
-        error: null,
-        updated_at: 2,
-      },
-      tags: [],
-      created_at: 1,
-      last_used_at: 1,
-    };
+    storeState.searchItems.mockClear();
 
     act(() => {
-      tauriMocks.clipboardItemUpdated?.(updated);
+      tauriMocks.clipboardItemUpdated?.({
+        id: 3,
+        content_type: 'image' as const,
+        content: 'data:image/png;base64,AA==',
+        preview: 'Screenshot',
+        hash: 'hash-3',
+        size: 1,
+        metadata: null,
+        source_application: null,
+        source_window_title: null,
+        is_favorited: false,
+        is_sensitive: false,
+        sensitivity_reason: null,
+        formats: [],
+        ocr: {
+          status: 'completed' as const,
+          text: '离线发票号码',
+          error: null,
+          updated_at: 2,
+        },
+        tags: [],
+        created_at: 1,
+        last_used_at: 1,
+      });
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(TEST_SEARCH_DEBOUNCE_MS);
     });
 
-    expect(storeState.upsertItem).toHaveBeenCalledWith(updated);
+    expect(storeState.searchItems).toHaveBeenCalledWith(
+      '发票号码',
+      expect.objectContaining({ contentType: null, exactMatch: false })
+    );
+    expect(storeState.upsertItem).not.toHaveBeenCalled();
   });
 
   it('opens the About tab from the tray about event', async () => {
