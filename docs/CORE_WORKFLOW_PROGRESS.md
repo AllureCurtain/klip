@@ -1,7 +1,7 @@
 # Core Clipboard Workflows Progress
 
 - 最后更新时间：2026-08-07（Asia/Shanghai）
-- 当前状态：`PREPARED`，尚未开始功能实现
+- 当前状态：`IN_PROGRESS`，Task 1 已完成，下一步执行 Task 2
 - 分支：`feat/core-workflows`
 - worktree：`D:\Study\cc\klip\.worktrees\core-workflows`
 - 基线：`8018aced3cd6b1437a4f8bb681206389d66c68f8`
@@ -33,7 +33,7 @@
 
 | Task | 内容 | 状态 | 目标提交 |
 | --- | --- | --- | --- |
-| 1 | 搜索键盘闭环、复制/粘贴分离 | `PENDING` | `fix: complete keyboard clipboard workflow` |
+| 1 | 搜索键盘闭环、复制/粘贴分离 | `COMPLETED` | `fix: complete keyboard clipboard workflow` |
 | 2 | 数字快捷键绑定当前可见记录 | `PENDING` | `fix: align quick paste with visible history` |
 | 3 | 纯文本复制与粘贴 | `PENDING` | `feat: add plain text clipboard actions` |
 | 4 | 统一详情与完整预览 | `PENDING` | `feat: add unified clipboard detail preview` |
@@ -72,8 +72,24 @@
 
 ## 测试与验收记录
 
-当前尚未修改功能代码，因此未新增功能测试结果。准备提交只运行文档/工作树检查；每个
-Task 的实际命令、结果和环境证据必须追加在本节，不能用计划中的“预期”代替“通过”。
+### Task 1：搜索键盘闭环、复制/粘贴分离
+
+- 搜索输入通过 `data-clipboard-search-input` 明确交接 ArrowUp、ArrowDown 和 Enter；
+  IME composition、key code 229、修饰键及其他可编辑控件保持原生行为。
+- 列表用条目 ID 保留键盘选中项，结果重排时保持同一条，条目消失时回到第一条，空列表
+  不生成负索引或调用剪贴板动作；批量选择模式的 Enter 只切换选择。
+- store 现在显式区分 `copyItem` 与 `pasteItem`：整行点击/Enter 调用 paste，独立复制图标
+  调用 copy，只有显式复制显示“已复制”反馈。
+- `pnpm test -- --run src/components/layout/Header.test.tsx
+  src/components/clipboard/clipboardListKeyboard.test.ts
+  src/components/clipboard/ClipboardList.test.tsx
+  src/components/clipboard/ClipboardItem.test.tsx src/stores/clipboardStore.test.ts
+  src/lib/tauri.test.ts`：6 个测试文件、82 项测试通过。
+- `pnpm exec tsc -b --pretty false`：通过。
+- 对 Task 1 变更文件运行 `pnpm exec eslint ...`：通过。
+- worktree 移动后原 `node_modules` 缺少根级依赖链接，首次测试报
+  `Cannot find module ...\node_modules\vitest\vitest.mjs`；已在不修改锁文件的前提下用
+  `pnpm install --offline --frozen-lockfile --force` 从本地 pnpm store 恢复，随后测试通过。
 
 ## 阻塞与跳过
 
@@ -87,11 +103,11 @@ Task 的实际命令、结果和环境证据必须追加在本节，不能用计
 2. 完整读取实施计划和本进度文件。
 3. 运行 `git status --short --branch`、`git log --oneline -12` 和相关进程检查。
 4. 若工作树有改动，先理解并验证现有 WIP，禁止丢弃不明改动。
-5. 从表格中第一个非 `COMPLETED` Task 继续；当前应从 Task 1 开始。
+5. 从表格中第一个非 `COMPLETED` Task 继续；当前应从 Task 2 开始。
 6. Task 完成前更新本文件的状态、测试证据、限制和下一步，并随代码一起提交。
 7. 提交后确认工作树干净，再进入下一个 Task。
 
 ## 下一步准确操作
 
-- 从 Task 1 开始，先为搜索输入键盘交接、IME 和 copy/paste 分离补失败测试。
-- 不提前实现 Task 2-6，也不改发布、导入导出、隐私产品化或 P2 功能。
+- 从 Task 2 开始，为可见条目快照的未初始化、空结果、位置解析和已删除 ID 先补失败测试。
+- 不提前实现 Task 3-6，也不改发布、导入导出、隐私产品化或 P2 功能。

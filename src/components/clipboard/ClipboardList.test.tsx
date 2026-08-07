@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { ClipboardItem as ClipboardItemType } from '@/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ClipboardList } from './ClipboardList';
@@ -7,6 +7,7 @@ import { ClipboardList } from './ClipboardList';
 const storeMocks = vi.hoisted(() => ({
   deleteItem: vi.fn(),
   copyItem: vi.fn(),
+  pasteItem: vi.fn(),
   toggleFavorite: vi.fn(),
   tags: [] as { id: number; name: string; color: string | null; created_at: number }[],
   assignTagToItem: vi.fn(),
@@ -16,6 +17,10 @@ const storeMocks = vi.hoisted(() => ({
   hasMore: false,
   loadMore: vi.fn(),
   loadingMore: false,
+}));
+
+const virtualizerMocks = vi.hoisted(() => ({
+  scrollToIndex: vi.fn(),
 }));
 
 vi.mock('@tanstack/react-virtual', () => ({
@@ -37,7 +42,7 @@ vi.mock('@tanstack/react-virtual', () => ({
     return {
       getVirtualItems: () => virtualItems,
       getTotalSize: () => start,
-      scrollToIndex: () => undefined,
+      scrollToIndex: virtualizerMocks.scrollToIndex,
     };
   },
 }));
@@ -80,6 +85,7 @@ describe('ClipboardList', () => {
     vi.restoreAllMocks();
     storeMocks.deleteItem.mockReset();
     storeMocks.copyItem.mockReset();
+    storeMocks.pasteItem.mockReset();
     storeMocks.toggleFavorite.mockReset();
     storeMocks.assignTagToItem.mockReset();
     storeMocks.removeTagFromItem.mockReset();
@@ -89,6 +95,7 @@ describe('ClipboardList', () => {
     storeMocks.loadMore.mockReset();
     storeMocks.hasMore = false;
     storeMocks.loadingMore = false;
+    virtualizerMocks.scrollToIndex.mockReset();
   });
 
   it('uses compact virtual rows with breathing room between clipboard entries', () => {
@@ -124,5 +131,123 @@ describe('ClipboardList', () => {
     );
 
     expect(screen.getByText('昨天')).toBeTruthy();
+  });
+
+  it('navigates and pastes from the marked search input', () => {
+    render(
+      <>
+        <input data-clipboard-search-input="true" aria-label="search" />
+        <ClipboardList
+          items={[
+            makeTextItem({ id: 1, content: 'first' }),
+            makeTextItem({ id: 2, content: 'second' }),
+          ]}
+        />
+      </>
+    );
+
+    const search = screen.getByRole('textbox', { name: 'search' });
+    fireEvent.keyDown(search, { key: 'ArrowDown' });
+    fireEvent.keyDown(search, { key: 'Enter' });
+
+    expect(storeMocks.pasteItem).toHaveBeenCalledWith(2);
+    expect(storeMocks.copyItem).not.toHaveBeenCalled();
+    expect(virtualizerMocks.scrollToIndex).toHaveBeenCalled();
+  });
+
+  it('keeps the selected item by id when results reorder', () => {
+    const search = document.createElement('input');
+    search.dataset.clipboardSearchInput = 'true';
+    document.body.append(search);
+    const second = makeTextItem({ id: 2, content: 'second' });
+    const third = makeTextItem({ id: 3, content: 'third' });
+    const { rerender } = render(
+      <ClipboardList items={[makeTextItem({ id: 1 }), second, third]} />
+    );
+
+    fireEvent.keyDown(search, { key: 'ArrowDown' });
+    rerender(<ClipboardList items={[third, second]} />);
+    fireEvent.keyDown(search, { key: 'Enter' });
+
+    expect(storeMocks.pasteItem).toHaveBeenCalledWith(2);
+    search.remove();
+  });
+
+  it('falls back to the first result when the selected item disappears', () => {
+    const search = document.createElement('input');
+    search.dataset.clipboardSearchInput = 'true';
+    document.body.append(search);
+    const { rerender } = render(
+      <ClipboardList
+        items={[
+          makeTextItem({ id: 1, content: 'first' }),
+          makeTextItem({ id: 2, content: 'second' }),
+        ]}
+      />
+    );
+
+    fireEvent.keyDown(search, { key: 'ArrowDown' });
+    rerender(<ClipboardList items={[makeTextItem({ id: 3, content: 'replacement' })]} />);
+    fireEvent.keyDown(search, { key: 'Enter' });
+
+    expect(storeMocks.pasteItem).toHaveBeenCalledWith(3);
+    search.remove();
+  });
+
+  it('does not run clipboard actions for empty results', () => {
+    const search = document.createElement('input');
+    search.dataset.clipboardSearchInput = 'true';
+    document.body.append(search);
+    render(<ClipboardList items={[]} />);
+
+    fireEvent.keyDown(search, { key: 'ArrowDown' });
+    fireEvent.keyDown(search, { key: 'ArrowUp' });
+    fireEvent.keyDown(search, { key: 'Enter' });
+
+    expect(storeMocks.pasteItem).not.toHaveBeenCalled();
+    expect(storeMocks.toggleSelected).not.toHaveBeenCalled();
+    search.remove();
+  });
+
+  it('does not handle composition confirmation or other editable controls', () => {
+    render(
+      <>
+        <input data-clipboard-search-input="true" aria-label="search" />
+        <textarea aria-label="notes" />
+        <div contentEditable aria-label="editor" />
+        <ClipboardList items={[makeTextItem({ id: 1 })]} />
+      </>
+    );
+
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'search' }), {
+      key: 'Enter',
+      isComposing: true,
+    });
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'search' }), {
+      key: 'Enter',
+      keyCode: 229,
+    });
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'notes' }), {
+      key: 'Enter',
+    });
+    fireEvent.keyDown(screen.getByLabelText('editor'), { key: 'Enter' });
+
+    expect(storeMocks.pasteItem).not.toHaveBeenCalled();
+  });
+
+  it('toggles the current item on Enter in selection mode', () => {
+    render(
+      <>
+        <input data-clipboard-search-input="true" aria-label="search" />
+        <ClipboardList items={[makeTextItem({ id: 7 })]} selectionMode />
+      </>
+    );
+
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'search' }), {
+      key: 'Enter',
+    });
+
+    expect(storeMocks.toggleSelected).toHaveBeenCalledWith(7);
+    expect(storeMocks.pasteItem).not.toHaveBeenCalled();
   });
 });

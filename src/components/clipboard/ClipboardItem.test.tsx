@@ -9,6 +9,7 @@ import { useConfigStore } from '@/stores/configStore';
 const storeMocks = vi.hoisted(() => ({
   deleteItem: vi.fn(),
   copyItem: vi.fn(),
+  pasteItem: vi.fn(),
   toggleFavorite: vi.fn(),
   tags: [] as { id: number; name: string; color: string | null; created_at: number }[],
   assignTagToItem: vi.fn(),
@@ -115,6 +116,7 @@ describe('ClipboardItem', () => {
     vi.restoreAllMocks();
     storeMocks.deleteItem.mockReset();
     storeMocks.copyItem.mockReset();
+    storeMocks.pasteItem.mockReset();
     storeMocks.toggleFavorite.mockReset();
     storeMocks.assignTagToItem.mockReset();
     storeMocks.removeTagFromItem.mockReset();
@@ -408,13 +410,26 @@ describe('ClipboardItem', () => {
     expect(row.className).not.toContain('bg-indigo-500/8');
   });
 
-  it('uses a readable quiet row treatment after copy feedback', () => {
+  it('pastes on row click without showing copy feedback', () => {
     render(<ClipboardItem item={makeTextItem()} index={1} isSelected={false} />);
 
     fireEvent.click(screen.getByText('hello'));
 
+    expect(storeMocks.pasteItem).toHaveBeenCalledWith(42);
+    expect(storeMocks.copyItem).not.toHaveBeenCalled();
+    expect(screen.queryByText('已复制')).toBeNull();
+  });
+
+  it('uses a readable quiet row treatment after explicit copy feedback', () => {
+    render(<ClipboardItem item={makeTextItem()} index={1} isSelected={false} />);
+
+    fireEvent.click(screen.getByRole('button', { name: '复制' }));
+
     const row = screen.getByText('hello').closest('[data-testid="clipboard-item"]');
 
+    expect(storeMocks.copyItem).toHaveBeenCalledWith(42);
+    expect(storeMocks.pasteItem).not.toHaveBeenCalled();
+    expect(screen.getByText('已复制')).toBeTruthy();
     expect(row?.className).toContain('border-primary/35');
     expect(row?.className).toContain('bg-primary/8');
     expect(row?.className).toContain('text-foreground');
@@ -521,7 +536,7 @@ describe('ClipboardItem', () => {
     fireEvent.click(checkbox);
 
     expect(storeMocks.toggleSelected).toHaveBeenCalledWith(42);
-    expect(storeMocks.copyItem).not.toHaveBeenCalled();
+    expect(storeMocks.pasteItem).not.toHaveBeenCalled();
   });
 
   it('uses item clicks for selection instead of copying in selection mode', () => {
@@ -537,7 +552,7 @@ describe('ClipboardItem', () => {
     fireEvent.click(screen.getByText('hello'));
 
     expect(storeMocks.toggleSelected).toHaveBeenCalledWith(42);
-    expect(storeMocks.copyItem).not.toHaveBeenCalled();
+    expect(storeMocks.pasteItem).not.toHaveBeenCalled();
   });
 
   it('renders distinct type treatments for text, image, file, and folder entries', () => {

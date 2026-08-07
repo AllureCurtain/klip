@@ -2,6 +2,7 @@ import {
   AppWindow,
   Check,
   CircleAlert,
+  Copy,
   LoaderCircle,
   ScanText,
   ShieldAlert,
@@ -59,6 +60,7 @@ export function ClipboardItem({
     tags,
     isBatchSelected,
     handleClick,
+    handleCopy,
     handleDelete,
     handleToggleFavorite,
     handleToggleTagMenu,
@@ -162,6 +164,7 @@ export function ClipboardItem({
           confirmDelete={confirmDelete}
           tagMenuOpen={tagMenuOpen}
           tags={tags}
+          onCopy={handleCopy}
           onDelete={handleDelete}
           onTagAction={handleTagAction}
           onToggleFavorite={handleToggleFavorite}
@@ -320,6 +323,7 @@ function RowActions({
   tagMenuOpen,
   tags,
   onDelete,
+  onCopy,
   onTagAction,
   onToggleFavorite,
   onToggleTagMenu,
@@ -329,6 +333,7 @@ function RowActions({
   tagMenuOpen: boolean;
   tags: Array<{ id: number; name: string; color: string | null }>;
   onDelete: (event: React.MouseEvent) => void;
+  onCopy: (event: React.MouseEvent) => void;
   onTagAction: (event: React.MouseEvent, tagId: number, assigned: boolean) => void;
   onToggleFavorite: (event: React.MouseEvent) => void;
   onToggleTagMenu: (event: React.MouseEvent) => void;
@@ -342,6 +347,16 @@ function RowActions({
         (item.is_favorited || confirmDelete) && 'opacity-100'
       )}
     >
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label={t('clipboard.copy')}
+        title={t('clipboard.copy')}
+        className="size-6"
+        onClick={onCopy}
+      >
+        <Copy className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+      </Button>
       <Button
         variant="ghost"
         size="icon"

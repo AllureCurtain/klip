@@ -13,6 +13,7 @@ vi.mock('@/lib/tauri', () => ({
     searchAdvanced: vi.fn(),
     delete: vi.fn(),
     deleteMany: vi.fn(),
+    copy: vi.fn(),
     paste: vi.fn(),
     clear: vi.fn(),
     toggleFavorite: vi.fn(),
@@ -198,6 +199,26 @@ describe('clipboardStore', () => {
 
       expect(clipboardApi.clear).toHaveBeenCalled();
       expect(useClipboardStore.getState().items).toEqual([]);
+    });
+  });
+
+  describe('clipboard actions', () => {
+    it('copies without invoking paste', async () => {
+      vi.mocked(clipboardApi.copy).mockResolvedValue(undefined);
+
+      await useClipboardStore.getState().copyItem(7);
+
+      expect(clipboardApi.copy).toHaveBeenCalledWith(7);
+      expect(clipboardApi.paste).not.toHaveBeenCalled();
+    });
+
+    it('pastes without invoking copy', async () => {
+      vi.mocked(clipboardApi.paste).mockResolvedValue(undefined);
+
+      await useClipboardStore.getState().pasteItem(8);
+
+      expect(clipboardApi.paste).toHaveBeenCalledWith(8);
+      expect(clipboardApi.copy).not.toHaveBeenCalled();
     });
   });
 

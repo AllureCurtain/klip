@@ -91,6 +91,16 @@ describe('tauri API wrappers', () => {
     });
   });
 
+  it('keeps copy and paste commands distinct', async () => {
+    vi.mocked(invoke).mockResolvedValue(undefined);
+
+    await clipboardApi.copy(4);
+    await clipboardApi.paste(5);
+
+    expect(invoke).toHaveBeenNthCalledWith(1, 'copy_to_clipboard', { id: 4 });
+    expect(invoke).toHaveBeenNthCalledWith(2, 'paste_from_clipboard', { id: 5 });
+  });
+
   it('subscribes to typed clipboard item updates', async () => {
     vi.mocked(listen).mockResolvedValue(vi.fn());
     const callback = vi.fn();

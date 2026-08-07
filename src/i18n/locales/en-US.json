@@ -63,6 +63,7 @@
     }
   },
   "clipboard": {
+    "copy": "Copy",
     "copied": "Copied",
     "favorite": "Favorite",
     "unfavorite": "Unfavorite",

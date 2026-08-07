@@ -5,6 +5,7 @@ import { ClipboardItem } from './ClipboardItem';
 import { useClipboardStore } from '@/stores';
 import type { ClipboardItem as ClipboardItemType } from '@/types';
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { resolveClipboardListKeyAction } from './clipboardListKeyboard';
 
 interface ClipboardListProps {
   items: ClipboardItemType[];
@@ -50,10 +51,11 @@ function getLocalCalendarDayNumber(date: Date): number {
 
 export function ClipboardList({ items, selectionMode = false }: ClipboardListProps) {
   const { t, i18n } = useTranslation();
-  const { copyItem, toggleSelected, hasMore, loadMore, loadingMore } =
+  const { pasteItem, toggleSelected, hasMore, loadMore, loadingMore } =
     useClipboardStore();
-  const [selectedIndex, setSelectedIndex] = useState(0);
-  const selectedIndexRef = useRef(0);
+  const [selectedItemId, setSelectedItemId] = useState<number | null>(
+    items[0]?.id ?? null
+  );
   const parentRef = useRef<HTMLDivElement>(null);
 
   // Build virtual rows with time group headers
@@ -80,13 +82,20 @@ export function ClipboardList({ items, selectionMode = false }: ClipboardListPro
     [rows]
   );
 
-  useEffect(() => {
-    if (items.length > 0 && selectedIndex >= items.length) {
-      setSelectedIndex(Math.max(0, items.length - 1));
-    }
-  }, [items.length, selectedIndex]);
-
+  const selectedIndex = useMemo(() => {
+    if (items.length === 0) return null;
+    const index = items.findIndex((item) => item.id === selectedItemId);
+    return index >= 0 ? index : 0;
+  }, [items, selectedItemId]);
+  const selectedIndexRef = useRef<number | null>(selectedIndex);
   selectedIndexRef.current = selectedIndex;
+
+  useEffect(() => {
+    const nextSelectedId = selectedIndex === null ? null : items[selectedIndex]?.id ?? null;
+    if (nextSelectedId !== selectedItemId) {
+      setSelectedItemId(nextSelectedId);
+    }
+  }, [items, selectedIndex, selectedItemId]);
 
   const HEADER_HEIGHT = 28;
   const ITEM_HEIGHT = 62;
@@ -109,33 +118,31 @@ export function ClipboardList({ items, selectionMode = false }: ClipboardListPro
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement).tagName === 'INPUT') return;
+      const action = resolveClipboardListKeyAction(e);
+      if (!action || items.length === 0) return;
 
-      switch (e.key) {
-        case 'ArrowDown':
-          e.preventDefault();
-          setSelectedIndex((i) => Math.min(i + 1, items.length - 1));
-          break;
-        case 'ArrowUp':
-          e.preventDefault();
-          setSelectedIndex((i) => Math.max(i - 1, 0));
-          break;
-        case 'Enter': {
-          e.preventDefault();
-          const idx = selectedIndexRef.current;
-          const item = items[idx];
-          if (item) {
-            if (selectionMode) {
-              toggleSelected(item.id);
-            } else {
-              copyItem(item.id);
-            }
-          }
-          break;
-        }
+      const currentIndex = selectedIndexRef.current ?? 0;
+      if (action === 'next' || action === 'previous') {
+        e.preventDefault();
+        const offset = action === 'next' ? 1 : -1;
+        const nextIndex = Math.max(
+          0,
+          Math.min(currentIndex + offset, items.length - 1)
+        );
+        setSelectedItemId(items[nextIndex]?.id ?? null);
+        return;
+      }
+
+      const item = items[currentIndex];
+      if (!item) return;
+      e.preventDefault();
+      if (selectionMode) {
+        toggleSelected(item.id);
+      } else {
+        void pasteItem(item.id);
       }
     },
-    [copyItem, items, selectionMode, toggleSelected]
+    [items, pasteItem, selectionMode, toggleSelected]
   );
 
   useEffect(() => {
@@ -145,7 +152,7 @@ export function ClipboardList({ items, selectionMode = false }: ClipboardListPro
 
   // Scroll selected item into view
   useEffect(() => {
-    if (itemIndices.length === 0) return;
+    if (selectedIndex === null || itemIndices.length === 0) return;
     const rowIndex = itemIndices[selectedIndex];
     if (rowIndex !== undefined) {
       virtualizer.scrollToIndex(rowIndex, { align: 'auto' });
@@ -209,7 +216,7 @@ export function ClipboardList({ items, selectionMode = false }: ClipboardListPro
                     ageIndex={row.index - 1}
                     isSelected={selectedIndex === row.index - 1}
                     selectionMode={selectionMode}
-                    onSelect={() => setSelectedIndex(row.index - 1)}
+                    onSelect={() => setSelectedItemId(row.item.id)}
                   />
                 </div>
               );

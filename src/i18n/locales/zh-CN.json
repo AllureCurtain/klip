@@ -61,6 +61,7 @@
     }
   },
   "clipboard": {
+    "copy": "复制",
     "copied": "已复制",
     "favorite": "收藏",
     "unfavorite": "取消收藏",

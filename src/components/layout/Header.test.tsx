@@ -114,9 +114,12 @@ describe('Header', () => {
       />
     );
 
-    expect(
-      screen.getByRole('textbox', { name: '搜索剪贴板历史...' })
-    ).toBeTruthy();
+    const searchInput = screen.getByRole('textbox', {
+      name: '搜索剪贴板历史...',
+    });
+
+    expect(searchInput).toBeTruthy();
+    expect(searchInput.getAttribute('data-clipboard-search-input')).toBe('true');
   });
 
   it('keeps batch and tag controls out of the lightweight header', () => {
