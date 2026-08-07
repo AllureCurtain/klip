@@ -1,0 +1,2 @@
+# OCR dictionary bytes are part of the bundled model integrity contract.
+src-tauri/resources/ocr/ppocrv5_dict.txt -text

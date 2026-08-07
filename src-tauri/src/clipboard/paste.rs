@@ -63,6 +63,7 @@ fn copy_loaded_item(db: &Database, item: &ClipboardItem) -> Result<(), AppError>
         &item.content,
         &item.content_type,
         item.metadata.as_deref(),
+        &item.formats,
     )?;
     let _ = database::clipboard::touch_last_used(db, item.id);
     Ok(())
@@ -85,7 +86,9 @@ fn simulate_platform_paste() -> Result<(), AppError> {
 
     #[cfg(target_os = "macos")]
     {
-        std::thread::sleep(std::time::Duration::from_millis(50));
+        std::thread::sleep(std::time::Duration::from_millis(30));
+        let _ = crate::restore_previous_foreground();
+        std::thread::sleep(std::time::Duration::from_millis(120));
         if let Ok(mut enigo) = enigo::Enigo::new(&enigo::Settings::default()) {
             use enigo::Keyboard;
             let _ = enigo.key(enigo::Key::Meta, enigo::Direction::Press);
@@ -97,6 +100,7 @@ fn simulate_platform_paste() -> Result<(), AppError> {
 
     #[cfg(target_os = "linux")]
     {
+        let _ = crate::restore_previous_foreground();
         crate::platform::linux::simulate_paste()
     }
 }
@@ -126,6 +130,7 @@ mod tests {
             hash,
             size: content.len() as i64,
             metadata: None,
+            formats: Vec::new(),
         };
         let saved = database::clipboard::insert(db, &item).unwrap();
         let conn = db.get_connection().unwrap();

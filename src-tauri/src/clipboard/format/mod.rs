@@ -2,7 +2,7 @@ pub mod file;
 pub mod image;
 pub mod text;
 
-use crate::database::types::ContentType;
+use crate::database::types::{ClipboardFormat, ContentType};
 
 pub trait ClipboardFormatStrategy: Send + Sync {
     fn content_type(&self) -> ContentType;
@@ -14,6 +14,8 @@ pub trait ClipboardFormatStrategy: Send + Sync {
 pub enum FormatError {
     #[error("clipboard access failed: {0}")]
     ClipboardAccess(String),
+    #[error(transparent)]
+    Backend(#[from] crate::clipboard::backend::ClipboardError),
     #[error("format detection failed: {0}")]
     DetectionFailed(String),
     #[error("content extraction failed: {0}")]
@@ -32,6 +34,7 @@ pub struct ExtractedContent {
     pub hash: String,
     pub size: i64,
     pub metadata: Option<String>,
+    pub formats: Vec<ClipboardFormat>,
 }
 
 pub struct FormatStrategyRegistry {

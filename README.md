@@ -75,22 +75,26 @@ Klip 是一个本地单机剪贴板管理器。系统剪贴板通常只能记住
 ### 剪贴板历史
 
 - 自动记录文本、图片和文件路径剪贴板内容。
+- 浏览器和 Word 等应用复制的文本会同时保留纯文本、HTML 和 RTF；目标应用粘贴时可选择自身支持的格式。
 - 相同内容去重，避免列表重复膨胀。
 - 默认保留 100 条历史记录，可在设置中调整。
 - 列表按本地自然日分组，便于从今天、昨天和更早记录中扫描。
 
 ### 搜索和筛选
 
-- 支持关键词搜索。
+- 支持基于 Tantivy + jieba 的全文关键词搜索，可按拆分后的中文词组命中结果。
+- 图片在后台使用本地 PP-OCRv5 模型识别文字，识别完成后可直接搜索截图中的中英文内容；推理不联网、不上传图片。
 - 支持文本、图片、文件类型筛选。
 - 支持收藏、标签、敏感内容、精确匹配和日期范围筛选。
 - 搜索框默认聚焦，适合用快捷键唤起后直接输入。
+- 搜索索引损坏，或索引 ID/可搜索内容与 SQLite 不一致时，会从 SQLite 自动重建；索引暂时不可用时自动回退到 SQLite 包含匹配。活动搜索期间的新捕获和 OCR 更新会重新经过同一后端搜索语义。
 
 ### 粘贴和窗口
 
 - `Ctrl+Alt+K` 显示或隐藏主窗口。
 - `Ctrl+Alt+1` 到 `Ctrl+Alt+9` 快速粘贴列表前 9 条可见记录。
 - 点击历史条目可恢复到系统剪贴板并粘贴。
+- Klip 显示前会记录外部前台应用，粘贴前恢复焦点；Windows 使用前台窗口句柄，macOS 使用前台应用，Linux X11 使用 EWMH 活动窗口。Wayland 无通用激活协议时会跳过恢复，不会让粘贴命令报错。
 - 应用常驻系统托盘，关闭窗口后仍可继续监听。
 
 ### 整理和复用
@@ -127,7 +131,7 @@ Klip 是一个本地单机剪贴板管理器。系统剪贴板通常只能记住
 
 ### macOS / Linux
 
-暂不作为当前 MVP 交付平台。仓库中有部分平台基础代码，但 README、发布包和验收口径都以 Windows-first 为准。
+暂不作为当前 MVP 交付平台。仓库已实现 macOS 和 Linux X11 的粘贴目标焦点恢复，并为 Wayland 提供无错误降级，但尚未在真实 macOS/Linux 桌面完成整体验收；README、发布包和验收口径仍以 Windows-first 为准。
 
 ## 使用方式
 
@@ -149,7 +153,9 @@ Klip 是一个本地单机剪贴板管理器。系统剪贴板通常只能记住
 
 ## 隐私和数据
 
-Klip 将历史记录、标签、片段、来源规则和设置保存在本地 SQLite 数据库 `klip.db` 中。
+Klip 将历史记录、图片 OCR 状态与文字、标签、片段、来源规则和设置保存在本地 SQLite 数据库 `klip.db` 中；全文索引保存在同一应用数据目录下的 `search-index`，可以随时从 SQLite 重建。OCR 模型随安装包提供，首次使用时会校验 SHA-256 后复制到同一数据目录下的 `ocr-models`，运行时不下载模型。
+
+Windows 安装资源中，PP-OCRv5 检测/识别模型和字典约 21.5 MB，ONNX Runtime DLL 约 14.1 MB，合计使安装资源增加约 36 MB；应用数据目录中的模型缓存还会占用约 21.5 MB。来源、许可证和精确哈希见 `src-tauri/resources/ocr/README.md` 与 `src-tauri/resources/onnxruntime/README.md`。
 
 | 平台 | 数据库位置 |
 |------|------------|
@@ -187,7 +193,7 @@ Klip 将历史记录、标签、片段、来源规则和设置保存在本地 SQ
 常用命令：
 
 ```powershell
-pnpm install
+pnpm install --frozen-lockfile
 pnpm tauri:dev
 pnpm test -- --run
 pnpm lint
@@ -195,6 +201,35 @@ pnpm build
 cd src-tauri
 cargo test
 ```
+
+首次初始化 worktree，以及 `pnpm-lock.yaml` 变化后，都应运行 `pnpm install --frozen-lockfile`。安装过程会通过 `prepare` 安装 pre-push hook；该 hook 在推送前执行 `pnpm verify`。
+
+桌面开发实例应使用独立的数据、日志和 HTTP 端口，避免污染日常使用的数据或与默认端口冲突：
+
+```powershell
+$env:KLIP_DATA_DIR = 'C:\tmp\klip-dev\data'
+$env:KLIP_LOG_DIR = 'C:\tmp\klip-dev\logs'
+$env:KLIP_HTTP_PORT = '27718'
+pnpm tauri:dev
+```
+
+| 变量 | 用途 | 未设置时 |
+|------|------|----------|
+| `KLIP_DATA_DIR` | SQLite、全文索引和 OCR 模型缓存目录 | 平台应用数据目录 |
+| `KLIP_LOG_DIR` | 运行日志目录 | 平台应用日志目录 |
+| `KLIP_HTTP_PORT` | 本地 HTTP API 端口 | `27717` |
+
+同一个开发任务保持一个活动 worktree，并串行完成实现、测试和提交。复用该 worktree 的 `target/` 与 `node_modules/`，不要同时运行多个 Klip 桌面实例；全局热键、开机自启和进程内剪贴板抑制无法靠上述目录与端口变量完全隔离。
+
+Windows 上可选用 `sccache` 加速重建依赖。它不是项目依赖，不需要修改仓库内 Cargo 配置：
+
+```powershell
+scoop install sccache
+$env:RUSTC_WRAPPER = 'sccache'
+sccache --show-stats
+```
+
+`sccache` 主要帮助 target 缓存未命中或 worktree 重建后的依赖编译；日常修改项目代码仍主要依靠 Cargo incremental。
 
 完整本地验证：
 
@@ -238,7 +273,9 @@ pnpm release:smoke
 | 状态管理 | Zustand |
 | 后端 | Rust |
 | 数据库 | SQLite, rusqlite |
-| 剪贴板 | arboard, clipboard-master, clipboard-win |
+| 全文搜索 | Tantivy, tantivy-jieba |
+| 剪贴板 | clipboard-rs |
+| 图片 OCR | oar-ocr, PP-OCRv5, ONNX Runtime |
 | 测试 | Vitest, Testing Library, Selenium WebDriver |
 
 ## 文档地图
@@ -270,5 +307,5 @@ pnpm release:smoke
 - [Tauri](https://tauri.app/)：桌面应用框架
 - [React](https://react.dev/)：前端 UI
 - [Rust](https://www.rust-lang.org/)：本地后端
-- [arboard](https://github.com/1Password/arboard)：跨平台剪贴板基础能力
-- [clipboard-master](https://crates.io/crates/clipboard-master)：Windows 剪贴板事件监听
+- [clipboard-rs](https://crates.io/crates/clipboard-rs)：跨平台剪贴板读取、写入与变更监听
+- [Tantivy](https://github.com/quickwit-oss/tantivy)：本地全文搜索索引

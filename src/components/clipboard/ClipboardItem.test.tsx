@@ -36,9 +36,13 @@ function makeTextItem(overrides: Partial<ClipboardItemType> = {}): ClipboardItem
     hash: 'hash-42',
     size: 5,
     metadata: null,
+    source_application: null,
+    source_window_title: null,
     is_favorited: false,
     is_sensitive: false,
     sensitivity_reason: null,
+    formats: [],
+    ocr: null,
     tags: [],
     created_at: 1_714_000_000_000,
     last_used_at: 1_714_000_000_000,
@@ -242,6 +246,51 @@ describe('ClipboardItem', () => {
     expect(screen.getByText('已隐藏敏感内容').getAttribute('title')).toBeNull();
   });
 
+  it('renders allowed rich text while stripping executable HTML', () => {
+    render(
+      <ClipboardItem
+        item={makeTextItem({
+          content: 'Safe rich text',
+          preview: 'Safe rich text',
+          formats: [
+            {
+              format: 'html',
+              content:
+                '<b>Safe</b><script>window.__xss = true</script><img src=x onerror="window.__xss = true"><a href="javascript:window.__xss = true" onclick="window.__xss = true">link</a>',
+            },
+          ],
+        })}
+        index={1}
+        isSelected={false}
+      />
+    );
+
+    const preview = screen.getByTestId('rich-text-preview');
+    expect(preview.querySelector('b')?.textContent).toBe('Safe');
+    expect(preview.querySelector('script')).toBeNull();
+    expect(preview.querySelector('img')).toBeNull();
+    expect(preview.querySelector('[onclick]')).toBeNull();
+    expect(preview.querySelector('[onerror]')).toBeNull();
+    expect(preview.querySelector('a')?.getAttribute('href')).toBeNull();
+  });
+
+  it('falls back to plain text when sanitization removes all HTML', () => {
+    render(
+      <ClipboardItem
+        item={makeTextItem({
+          content: 'Plain fallback',
+          preview: 'Plain fallback',
+          formats: [{ format: 'html', content: '<script>window.__xss = true</script>' }],
+        })}
+        index={1}
+        isSelected={false}
+      />
+    );
+
+    expect(screen.queryByTestId('rich-text-preview')).toBeNull();
+    expect(screen.getByText('Plain fallback')).toBeTruthy();
+  });
+
   it('shows sensitive text previews when masking is disabled', () => {
     useConfigStore.setState((state) => ({
       config: { ...state.config, mask_sensitive_previews: false },
@@ -271,6 +320,53 @@ describe('ClipboardItem', () => {
     fireEvent.click(previewButton);
 
     expect(screen.getByText('图片预览')).toBeTruthy();
+  });
+
+  it('shows pending, completed, empty, and failed OCR states on image rows', () => {
+    const { rerender } = render(
+      <ClipboardItem
+        item={makeImageItem({
+          ocr: { status: 'pending', text: '', error: null, updated_at: 1 },
+        })}
+        index={1}
+        isSelected={false}
+      />
+    );
+    expect(screen.getByText('正在识别')).toBeTruthy();
+
+    rerender(
+      <ClipboardItem
+        item={makeImageItem({
+          ocr: { status: 'completed', text: '发票号码 2026', error: null, updated_at: 2 },
+        })}
+        index={1}
+        isSelected={false}
+      />
+    );
+    expect(screen.getByText('文字已识别')).toBeTruthy();
+    expect(screen.getByText('发票号码 2026')).toBeTruthy();
+
+    rerender(
+      <ClipboardItem
+        item={makeImageItem({
+          ocr: { status: 'completed', text: '', error: null, updated_at: 3 },
+        })}
+        index={1}
+        isSelected={false}
+      />
+    );
+    expect(screen.getByText('未检测到文字')).toBeTruthy();
+
+    rerender(
+      <ClipboardItem
+        item={makeImageItem({
+          ocr: { status: 'failed', text: '', error: 'model error', updated_at: 4 },
+        })}
+        index={1}
+        isSelected={false}
+      />
+    );
+    expect(screen.getByText('识别失败').getAttribute('title')).toBe('model error');
   });
 
   it('keeps batch selection out of the default item surface', () => {
@@ -380,6 +476,31 @@ describe('ClipboardItem', () => {
     expect(sensitiveMeta.className).toContain('text-muted-foreground');
     expect(sensitiveMeta.className).not.toContain('text-destructive');
     expect(tagMeta.className).not.toContain('bg-muted');
+  });
+
+  it('shows a compact source application with the window title as a tooltip', () => {
+    render(
+      <ClipboardItem
+        item={makeTextItem({
+          source_application: 'browser.exe',
+          source_window_title: 'Foundation implementation plan',
+        })}
+        index={1}
+        isSelected={false}
+      />
+    );
+
+    const source = screen.getByTestId('clipboard-source');
+    expect(screen.getByText('browser.exe')).toBeTruthy();
+    expect(source.getAttribute('title')).toBe(
+      'browser.exe - Foundation implementation plan'
+    );
+  });
+
+  it('omits source metadata when attribution is unavailable', () => {
+    render(<ClipboardItem item={makeTextItem()} index={1} isSelected={false} />);
+
+    expect(screen.queryByTestId('clipboard-source')).toBeNull();
   });
 
   it('enables checkbox selection only inside selection mode', () => {

@@ -178,6 +178,20 @@ pub fn build_openapi() -> serde_json::Value {
     schemas.insert("ContentType".into(), content_type_enum());
 
     schemas.insert(
+        "ClipboardFormat".into(),
+        obj(
+            &[
+                (
+                    "format",
+                    serde_json::json!({ "type": "string", "enum": ["text", "html", "rtf"] }),
+                ),
+                ("content", s_str()),
+            ],
+            &["format", "content"],
+        ),
+    );
+
+    schemas.insert(
         "ClipboardItem".into(),
         obj(
             &[
@@ -196,6 +210,16 @@ pub fn build_openapi() -> serde_json::Value {
                     v["nullable"] = true.into();
                     v
                 }),
+                ("source_application", {
+                    let mut v = s_str();
+                    v["nullable"] = true.into();
+                    v
+                }),
+                ("source_window_title", {
+                    let mut v = s_str();
+                    v["nullable"] = true.into();
+                    v
+                }),
                 ("is_favorited", s_bool()),
                 ("is_sensitive", s_bool()),
                 ("sensitivity_reason", {
@@ -203,6 +227,7 @@ pub fn build_openapi() -> serde_json::Value {
                     v["nullable"] = true.into();
                     v
                 }),
+                ("formats", arr("ClipboardFormat")),
                 ("tags", arr("Tag")),
                 ("created_at", s_i64()),
                 ("last_used_at", s_i64()),
@@ -213,8 +238,11 @@ pub fn build_openapi() -> serde_json::Value {
                 "content",
                 "hash",
                 "size",
+                "source_application",
+                "source_window_title",
                 "is_favorited",
                 "is_sensitive",
+                "formats",
                 "tags",
                 "created_at",
                 "last_used_at",
@@ -806,6 +834,22 @@ mod tests {
         assert!(s["components"]["schemas"].is_object());
         assert!(s["paths"].as_object().unwrap().len() >= 25);
         assert!(s["components"]["schemas"].as_object().unwrap().len() >= 15);
+    }
+
+    #[test]
+    fn clipboard_item_schema_exposes_nullable_source_attribution() {
+        let spec = build_openapi();
+        let schema = &spec["components"]["schemas"]["ClipboardItem"];
+
+        assert_eq!(schema["properties"]["source_application"]["type"], "string");
+        assert_eq!(schema["properties"]["source_application"]["nullable"], true);
+        assert_eq!(
+            schema["properties"]["source_window_title"]["nullable"],
+            true
+        );
+        let required = schema["required"].as_array().unwrap();
+        assert!(required.iter().any(|value| value == "source_application"));
+        assert!(required.iter().any(|value| value == "source_window_title"));
     }
 
     #[test]

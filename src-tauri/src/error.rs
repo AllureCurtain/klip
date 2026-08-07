@@ -66,3 +66,9 @@ impl From<String> for AppError {
         Self::System(s)
     }
 }
+
+impl From<crate::clipboard::backend::ClipboardError> for AppError {
+    fn from(e: crate::clipboard::backend::ClipboardError) -> Self {
+        Self::Clipboard(e.to_string())
+    }
+}

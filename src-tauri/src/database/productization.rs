@@ -13,6 +13,10 @@ pub fn batch_delete(db: &Database, ids: &[i64]) -> Result<usize, AppError> {
         count += tx.execute("DELETE FROM clipboard_items WHERE id = ?1", [id])?;
     }
     tx.commit()?;
+    drop(conn);
+    if let Err(error) = crate::search::delete_items(db, ids) {
+        tracing::warn!("Failed to batch-delete items from full-text search: {error}");
+    }
     Ok(count)
 }
 
@@ -406,6 +410,7 @@ mod tests {
             hash,
             size: content.len() as i64,
             metadata: None,
+            formats: Vec::new(),
         };
         let saved = crate::database::clipboard::insert(db, &item).unwrap();
         let conn = db.get_connection().unwrap();

@@ -2,12 +2,13 @@ use crate::AppError;
 use rusqlite::Connection;
 use std::{
     path::{Path, PathBuf},
-    sync::Mutex,
+    sync::{Arc, Mutex},
 };
 use tauri::Manager;
 
 pub struct Database {
     conn: Mutex<Connection>,
+    search_index: Option<Arc<crate::search::SearchIndex>>,
 }
 
 impl Database {
@@ -39,10 +40,24 @@ impl Database {
 
         conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")?;
 
-        let db = Self {
+        let mut db = Self {
             conn: Mutex::new(conn),
+            search_index: None,
         };
         db.init_schema()?;
+
+        let index_dir = path
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .join(crate::search::INDEX_DIRECTORY_NAME);
+        match crate::search::open_shared(&index_dir, &db) {
+            Ok(index) => db.search_index = Some(index),
+            Err(error) => tracing::warn!(
+                "Full-text search unavailable at {}: {}; SQLite LIKE fallback remains active",
+                index_dir.display(),
+                error
+            ),
+        }
         Ok(db)
     }
 
@@ -50,6 +65,7 @@ impl Database {
     pub fn from_conn(conn: Connection) -> Self {
         Self {
             conn: Mutex::new(conn),
+            search_index: None,
         }
     }
 
@@ -73,6 +89,10 @@ impl Database {
         self.conn
             .lock()
             .map_err(|e| AppError::Database(format!("mutex poisoned: {}", e)))
+    }
+
+    pub(crate) fn search_index(&self) -> Option<&Arc<crate::search::SearchIndex>> {
+        self.search_index.as_ref()
     }
 }
 
@@ -295,7 +315,7 @@ mod tests {
             .unwrap()
             .unwrap();
 
-        assert_eq!(version, "3");
+        assert_eq!(version, "6");
     }
 
     #[test]
@@ -328,6 +348,166 @@ mod tests {
 
         assert_eq!(width, "560");
         assert_eq!(height, "760");
+    }
+
+    #[test]
+    fn v3_database_is_migrated_with_plain_text_formats() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "PRAGMA foreign_keys=ON;
+             CREATE TABLE app_config (
+                 key TEXT PRIMARY KEY,
+                 value TEXT NOT NULL,
+                 updated_at INTEGER NOT NULL
+             );
+             CREATE TABLE clipboard_items (
+                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                 content_type TEXT NOT NULL,
+                 content TEXT NOT NULL,
+                 preview TEXT,
+                 hash TEXT NOT NULL UNIQUE,
+                 size INTEGER NOT NULL DEFAULT 0,
+                 metadata TEXT,
+                 is_favorited INTEGER NOT NULL DEFAULT 0,
+                 is_sensitive INTEGER NOT NULL DEFAULT 0,
+                 sensitivity_reason TEXT,
+                 created_at INTEGER NOT NULL,
+                 last_used_at INTEGER NOT NULL
+             );
+             INSERT INTO app_config (key, value, updated_at)
+             VALUES ('db_version', '3', 1);
+             INSERT INTO clipboard_items
+               (content_type, content, preview, hash, size, created_at, last_used_at)
+             VALUES
+               ('text', 'legacy text', 'legacy text', 'legacy-hash', 11, 1, 1),
+               ('image', 'data:image/png;base64,AA==', 'legacy image', 'legacy-image-hash', 1, 2, 2);",
+        )
+        .unwrap();
+
+        let db = Database::from_conn(conn);
+        db.init_schema().unwrap();
+
+        let conn = db.get_connection().unwrap();
+        let version: String = conn
+            .query_row(
+                "SELECT value FROM app_config WHERE key = 'db_version'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let format: (String, String) = conn
+            .query_row(
+                "SELECT format, content FROM clipboard_formats WHERE item_id = 1",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        let image_ocr_status: String = conn
+            .query_row(
+                "SELECT status FROM clipboard_ocr WHERE item_id = 2",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+
+        assert_eq!(version, "6");
+        assert_eq!(format, ("text".into(), "legacy text".into()));
+        assert_eq!(image_ocr_status, "pending");
+    }
+
+    #[test]
+    fn v4_database_is_migrated_with_pending_image_ocr() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch("PRAGMA foreign_keys=ON;").unwrap();
+        let db = Database::from_conn(conn);
+        db.init_schema().unwrap();
+        {
+            let conn = db.get_connection().unwrap();
+            conn.execute_batch(
+                "DROP TABLE clipboard_ocr;
+                 UPDATE app_config SET value = '4' WHERE key = 'db_version';
+                 INSERT INTO clipboard_items
+                   (content_type, content, preview, hash, size, created_at, last_used_at)
+                 VALUES
+                   ('image', 'data:image/png;base64,AA==', 'v4 image', 'v4-image-hash', 1, 2, 2);",
+            )
+            .unwrap();
+        }
+
+        db.init_schema().unwrap();
+
+        let conn = db.get_connection().unwrap();
+        let version: String = conn
+            .query_row(
+                "SELECT value FROM app_config WHERE key = 'db_version'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let status: String = conn
+            .query_row(
+                "SELECT status FROM clipboard_ocr WHERE item_id = 1",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+
+        assert_eq!(version, "6");
+        assert_eq!(status, "pending");
+    }
+
+    #[test]
+    fn v5_database_is_migrated_with_empty_source_attribution() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "PRAGMA foreign_keys=ON;
+             CREATE TABLE app_config (
+                 key TEXT PRIMARY KEY,
+                 value TEXT NOT NULL,
+                 updated_at INTEGER NOT NULL
+             );
+             CREATE TABLE clipboard_items (
+                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                 content_type TEXT NOT NULL,
+                 content TEXT NOT NULL,
+                 preview TEXT,
+                 hash TEXT NOT NULL UNIQUE,
+                 size INTEGER NOT NULL DEFAULT 0,
+                 metadata TEXT,
+                 is_favorited INTEGER NOT NULL DEFAULT 0,
+                 is_sensitive INTEGER NOT NULL DEFAULT 0,
+                 sensitivity_reason TEXT,
+                 created_at INTEGER NOT NULL,
+                 last_used_at INTEGER NOT NULL
+             );
+             INSERT INTO app_config (key, value, updated_at) VALUES ('db_version', '5', 1);
+             INSERT INTO clipboard_items
+               (content_type, content, preview, hash, size, created_at, last_used_at)
+             VALUES ('text', 'v5 text', 'v5 text', 'v5-hash', 7, 1, 1);",
+        )
+        .unwrap();
+
+        let db = Database::from_conn(conn);
+        db.init_schema().unwrap();
+
+        let conn = db.get_connection().unwrap();
+        let version: String = conn
+            .query_row(
+                "SELECT value FROM app_config WHERE key = 'db_version'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let source: (Option<String>, Option<String>) = conn
+            .query_row(
+                "SELECT source_application, source_window_title FROM clipboard_items WHERE id = 1",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+
+        assert_eq!(version, "6");
+        assert_eq!(source, (None, None));
     }
 
     #[test]
@@ -366,7 +546,7 @@ mod tests {
         let version = crate::database::config::get(&db, "db_version")
             .unwrap()
             .unwrap();
-        assert_eq!(version, "3");
+        assert_eq!(version, "6");
         drop(db);
 
         let backups = std::fs::read_dir(&dir)

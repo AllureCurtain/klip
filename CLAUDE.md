@@ -54,7 +54,7 @@ The two communicate via **Tauri IPC** (`invoke`) for request/response and **Taur
 
 ### Data flow: clipboard capture
 
-1. `clipboard::monitor` runs a background thread (using `clipboard-master` + `arboard`) that polls/watches the OS clipboard.
+1. `clipboard::monitor` runs a background watcher through the shared `clipboard-rs` backend.
 2. On change, content is hashed (SHA-256), classified (text/image/file — see `clipboard/format/`), and inserted into SQLite with dedup on the unique `hash` column.
 3. The backend emits a `clipboard-updated` event with the new `ClipboardItem` payload.
 4. `App.tsx` listens for `clipboard-updated` and prepends to the Zustand `clipboardStore`. The store also calls `clipboardApi.getList()` on mount (`fetchItems`).
@@ -63,12 +63,15 @@ When a user picks an item, `commands::paste_from_clipboard` delegates to `clipbo
 
 ### Backend module layout (`src-tauri/src/`)
 
-- `commands/` — All `#[tauri::command]` handlers. `commands/mod.rs` owns core clipboard/config/window/system commands; `commands/productization.rs` owns filtered search, tags, snippets, source rules, import/export/backup/restore, and sensitive-content rescans. The full registered list lives in `main.rs`.
+- `commands/` — All `#[tauri::command]` handlers. `commands/mod.rs` owns core clipboard/config/window/system commands, `commands/search.rs` owns clipboard search commands, and `commands/productization.rs` owns tags, snippets, source rules, import/export/backup/restore, and sensitive-content rescans. The full registered list lives in `main.rs`.
+- `clipboard/backend.rs` — the single `clipboard-rs` adapter for text, image, file, and watcher operations.
 - `clipboard/monitor.rs` — clipboard watcher, capture gating, dedupe, and event emission.
+- `clipboard/suppress.rs` — one-shot, TTL-bound hash suppression for writes made by Klip itself.
 - `clipboard/paste.rs` — loads saved items and coordinates copy + hide + platform paste simulation.
-- `clipboard/writer.rs` — the single backend path for writing saved text/image/file payloads back to the OS clipboard, including Windows ignore markers.
+- `clipboard/writer.rs` — the single backend path for writing saved text/image/file payloads back to the OS clipboard and arming hash suppression before writes.
 - `clipboard/format/{text,image,file}.rs` — per-format detection and extraction. `mod.rs` is the format dispatch table.
 - `database/` — `connection.rs` owns the singleton `Database` (a `Mutex<Connection>`) registered as Tauri state. CRUD/query modules are split by domain: `clipboard.rs`, `clipboard_query.rs`, `config.rs`, `productization.rs`, `snippets.rs`, and `data_portability.rs`. Schema is created in `connection.rs::init_schema` with idempotent `CREATE TABLE IF NOT EXISTS` plus migrations gated on `db_version` in `app_config`.
+- `search/` — owns the Tantivy 0.24 index, jieba tokenizer, batched/timed commits, checksum health checks, SQLite rebuilds, and transparent query fallback.
 - `hotkey/manager.rs` — registers `Ctrl+Alt+K` (toggle window) and `Ctrl+1..9` (quick paste) via `tauri-plugin-global-shortcut`. Quick-paste handlers fetch by index from the DB and call into `commands::paste_from_clipboard`.
 - `tray/setup.rs` — system tray icon + menu. Tray clicks toggle the main window.
 - `lib.rs` — exports modules and owns a small piece of cross-cutting state: a **tray-click guard** (`LAST_TRAY_CLICK_MS`, `TRAY_CLICK_GUARD_MS = 300ms`). The window's focus-lost handler in `main.rs` consults this to suppress auto-hide right after a tray click, preventing a race where the click both shows and immediately hides the window. **If you add another mechanism that toggles the window, route it through `notify_tray_click()` or the auto-hide will fight it.**
@@ -93,6 +96,7 @@ When a user picks an item, `commands::paste_from_clipboard` delegates to `clipbo
 - `clipboard_source_rules(id, match_type, pattern, enabled, created_at, updated_at)` — process/window title capture-ignore rules.
 - `app_config(key PK, value, updated_at)` — defaults seeded from `config/registry.rs` (`db_version=3`, hotkeys, window size, privacy/readiness settings, etc.).
 - DB file location: Tauri's `app_data_dir()` + `klip.db` (e.g. `%APPDATA%\klip\klip.db` on Windows).
+- Full-text index location: the same app data directory + `search-index`; SQLite remains the source of truth and can rebuild it.
 
 ### IPC command surface
 
@@ -108,7 +112,7 @@ When adding a new command: define it in `commands/mod.rs`, register it in the `i
 
 ## Conventions specific to this repo
 
-- **All saved-item clipboard mutation must go through `clipboard::copy_to_clipboard`** (re-exported from `clipboard/writer.rs`), which understands `content_type` + `metadata`. Don't call `arboard` directly from commands.
+- **All saved-item clipboard mutation must go through `clipboard::copy_to_clipboard`** (re-exported from `clipboard/writer.rs`), which understands `content_type` + `metadata`. Don't instantiate `clipboard-rs` contexts directly from commands.
 - **Image content** is stored base64-encoded in `content`, with structural info in `metadata` (JSON). The `preview` column is what the UI displays; it's a thumbnail/excerpt, not the full payload.
 - **Hotkey changes** go through `hotkey/manager.rs`. `tauri-plugin-global-shortcut` is finicky on Windows about modifier combos — `Ctrl+Alt+<key>` is the tested-good pattern.
 - **Window auto-hide on focus loss** is enabled. When you add code that programmatically focuses or shows the main window from the backend, be aware of the 300ms tray-click guard described above.

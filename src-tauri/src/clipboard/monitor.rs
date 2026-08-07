@@ -1,26 +1,70 @@
+//! Watches the OS clipboard and turns changes into stored history items.
+//!
+//! # One trigger path for every platform
+//!
+//! This used to be two implementations: an event-driven watcher on Windows and
+//! a 500ms polling loop everywhere else that could only ever see text.
+//! `clipboard-rs` ships a watcher for Windows, macOS, X11 and
+//! Wayland, so there is now a single event-driven path, and every platform gets
+//! image and file capture rather than text only.
+//!
+//! Polling survives only as a fallback for when the watcher cannot start at
+//! all -- some Linux compositors, or a missing X11 connection. It reads through
+//! the same [`backend`], so this is one clipboard abstraction with a degraded
+//! trigger, not a second implementation.
+//!
+//! # Event handling
+//!
+//! Clipboard changes arrive in bursts: an application writing several formats
+//! can produce one notification per format. Handling each would extract the
+//! same content repeatedly. So notifications go through a
+//! [`ClipboardEventQueue`] with a single slot -- extra notifications collapse
+//! into the pending one -- and the worker waits for a quiet period before
+//! reading.
+//!
+//! The worker owns all extraction and database work. The watcher callback only
+//! enqueues, because it runs on a thread the OS controls and must return fast.
+
 use std::sync::atomic::{AtomicBool, Ordering};
-#[cfg(target_os = "windows")]
 use std::sync::mpsc::{self, Receiver, SyncSender, TryRecvError, TrySendError};
 use std::sync::Arc;
 use std::thread;
 use tauri::{AppHandle, Emitter, Manager};
 
-#[cfg(target_os = "windows")]
+use clipboard_rs::{ClipboardHandler, ClipboardWatcher, ClipboardWatcherContext};
+
+use crate::clipboard::backend;
 use crate::clipboard::format::{ExtractedContent, FormatStrategyRegistry};
+use crate::clipboard::suppress;
 use crate::config::registry;
 use crate::database::{self, ClipboardItem, NewClipboardItem};
 use crate::{AppError, Database};
 
-#[cfg(target_os = "windows")]
-use clipboard_master::{CallbackResult, ClipboardHandler, Master};
-
-#[cfg(all(not(target_os = "windows"), not(target_os = "linux")))]
-use arboard::Clipboard;
-
+/// Hash of the most recently captured content, so a clipboard that reports a
+/// change without its content actually differing does not create a duplicate.
+///
+/// This is distinct from [`suppress`], which handles Klip's *own* writes.
+/// `LAST_HASH` cannot do that job: it holds the last thing captured, so
+/// pasting an older item produces a hash that does not match it and would be
+/// captured again.
 static LAST_HASH: std::sync::OnceLock<std::sync::Mutex<String>> = std::sync::OnceLock::new();
 
-#[cfg(target_os = "windows")]
+/// How long to wait for a burst of change notifications to go quiet before
+/// reading the clipboard.
 const CLIPBOARD_SETTLE_DELAY: std::time::Duration = std::time::Duration::from_millis(150);
+
+/// Interval for the fallback polling loop, used only when no watcher could be
+/// started.
+const POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(500);
+
+/// Attempts made to detect and extract a format before giving up on a change.
+const MAX_EXTRACT_ATTEMPTS: u32 = 3;
+
+/// Delay between extraction attempts, for content that is still being written.
+const EXTRACT_RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(100);
+
+/// Above this, processing a single change is logged as slow.
+const SLOW_PROCESSING_MS: u128 = 100;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CaptureGateDecision {
@@ -30,7 +74,6 @@ pub enum CaptureGateDecision {
     SkipSourceRule,
 }
 
-#[cfg(target_os = "windows")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum EnqueueResult {
     Enqueued,
@@ -38,13 +81,13 @@ enum EnqueueResult {
     Disconnected,
 }
 
-#[cfg(target_os = "windows")]
+/// A one-slot channel. A change that arrives while one is already pending is
+/// dropped, because the worker will read the latest clipboard state anyway.
 #[derive(Clone)]
 struct ClipboardEventQueue {
     tx: SyncSender<()>,
 }
 
-#[cfg(target_os = "windows")]
 impl ClipboardEventQueue {
     fn new() -> (Self, Receiver<()>) {
         let (tx, rx) = mpsc::sync_channel(1);
@@ -60,7 +103,6 @@ impl ClipboardEventQueue {
     }
 }
 
-#[cfg(target_os = "windows")]
 fn drain_pending_events(rx: &Receiver<()>) -> usize {
     let mut drained = 0;
     loop {
@@ -71,16 +113,7 @@ fn drain_pending_events(rx: &Receiver<()>) -> usize {
     }
 }
 
-#[cfg(target_os = "windows")]
-fn is_self_copy_marker_present() -> bool {
-    let format_id = clipboard_win::raw::register_format("Clipboard Viewer Ignore");
-    match format_id {
-        Some(id) => clipboard_win::raw::is_format_avail(id.get()),
-        None => false,
-    }
-}
-
-// --- ClipboardMonitor ---
+// --- Monitor ------------------------------------------------------------
 
 pub struct ClipboardMonitor {
     app_handle: AppHandle,
@@ -98,14 +131,22 @@ impl ClipboardMonitor {
     pub fn start(self) -> Result<(), String> {
         LAST_HASH.get_or_init(|| std::sync::Mutex::new(String::new()));
 
-        #[cfg(target_os = "windows")]
-        {
-            self.start_event_based()
-        }
-
-        #[cfg(not(target_os = "windows"))]
-        {
-            self.start_polling()
+        // Build the watcher before spawning anything, so a platform that
+        // cannot support one falls back without leaving a worker behind.
+        match ClipboardWatcherContext::new() {
+            Ok(watcher) => {
+                self.start_event_based(watcher);
+                Ok(())
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "Clipboard watcher unavailable ({}); falling back to {}ms polling",
+                    e,
+                    POLL_INTERVAL.as_millis()
+                );
+                self.start_polling();
+                Ok(())
+            }
         }
     }
 
@@ -113,171 +154,96 @@ impl ClipboardMonitor {
         self.running.store(false, Ordering::Relaxed);
     }
 
-    #[cfg(target_os = "windows")]
-    fn start_event_based(self) -> Result<(), String> {
-        let running = self.running.clone();
-        let app_handle = self.app_handle.clone();
+    fn start_event_based(self, mut watcher: ClipboardWatcherContext<WatcherHandler>) {
         let (event_queue, rx) = ClipboardEventQueue::new();
+        self.spawn_worker(rx);
 
-        {
-            let running = running.clone();
-            let app_handle = app_handle.clone();
-            thread::spawn(move || {
-                while running.load(Ordering::Relaxed) {
-                    if rx.recv().is_err() {
-                        break;
-                    }
+        let running = self.running.clone();
+        watcher.add_handler(WatcherHandler {
+            running: running.clone(),
+            event_queue,
+        });
+        let shutdown = watcher.get_shutdown_channel();
 
-                    // Wait for a short quiet period so a burst of clipboard
-                    // change events settles before we try to read it.
-                    loop {
-                        thread::sleep(CLIPBOARD_SETTLE_DELAY);
-                        if drain_pending_events(&rx) == 0 {
-                            break;
-                        }
-                    }
-
-                    if is_self_copy_marker_present() {
-                        tracing::info!("Self-copy marker detected, skipping");
-                        continue;
-                    }
-
-                    let source = current_clipboard_source();
-                    if let Some(reason) = should_skip_capture(
-                        &app_handle,
-                        source.process_name(),
-                        source.window_title(),
-                    ) {
-                        tracing::info!("Clipboard capture skipped: {:?}", reason);
-                        continue;
-                    }
-
-                    tracing::info!("Clipboard change detected, extracting content...");
-
-                    let start = std::time::Instant::now();
-                    let extracted = extract_clipboard_content_with_retry();
-                    if let Some(extracted) = extracted {
-                        if let Some(item) = process_extracted_content(extracted) {
-                            save_clipboard_item(
-                                &app_handle,
-                                &item,
-                                source.process_name(),
-                                source.window_title(),
-                            );
-                        }
-                    }
-                    let elapsed = start.elapsed();
-                    if elapsed.as_millis() > 100 {
-                        tracing::warn!("Slow clipboard processing: {}ms", elapsed.as_millis());
-                    }
-                }
-            });
-        }
-
+        // `start_watch` blocks, so it needs its own thread.
         thread::spawn(move || {
-            let handler = WindowsClipboardHandler {
-                running,
-                event_queue,
-            };
-
-            let mut master = match Master::new(handler) {
-                Ok(m) => m,
-                Err(e) => {
-                    tracing::error!("Failed to create clipboard master: {}", e);
-                    return;
-                }
-            };
-
             tracing::info!("Starting clipboard monitor (event-based)");
-            if let Err(e) = master.run() {
-                tracing::error!("Clipboard monitor error: {}", e);
-            }
+            let mut watcher = watcher;
+            watcher.start_watch();
+            tracing::info!("Clipboard watcher stopped");
         });
 
-        Ok(())
+        // The watcher has no way to notice `running` going false on its own --
+        // its callback only fires on clipboard activity, which may never come.
+        // This thread turns `stop()` into an actual shutdown.
+        thread::spawn(move || {
+            while running.load(Ordering::Relaxed) {
+                thread::sleep(POLL_INTERVAL);
+            }
+            shutdown.stop();
+        });
     }
 
-    #[cfg(not(target_os = "windows"))]
-    fn start_polling(self) -> Result<(), String> {
+    /// Worker thread: waits for a coalesced change, lets the burst settle, then
+    /// extracts and stores.
+    fn spawn_worker(&self, rx: Receiver<()>) {
         let running = self.running.clone();
         let app_handle = self.app_handle.clone();
 
         thread::spawn(move || {
-            tracing::info!("Starting clipboard monitor (polling-based)");
-
             while running.load(Ordering::Relaxed) {
-                if let Some(reason) = should_skip_capture(&app_handle, None, None) {
-                    tracing::debug!("Clipboard capture skipped: {:?}", reason);
-                    thread::sleep(std::time::Duration::from_millis(500));
-                    continue;
+                if rx.recv().is_err() {
+                    break;
                 }
 
-                if let Ok(text) = read_platform_text() {
-                    if let Some(item) = process_extracted_text(&text) {
-                        save_clipboard_item(&app_handle, &item, None, None);
+                // Wait for a quiet period so a burst of notifications settles
+                // before reading.
+                loop {
+                    thread::sleep(CLIPBOARD_SETTLE_DELAY);
+                    if drain_pending_events(&rx) == 0 {
+                        break;
                     }
                 }
 
-                thread::sleep(std::time::Duration::from_millis(500));
+                let start = std::time::Instant::now();
+                handle_clipboard_change(&app_handle);
+                let elapsed = start.elapsed();
+                if elapsed.as_millis() > SLOW_PROCESSING_MS {
+                    tracing::warn!("Slow clipboard processing: {}ms", elapsed.as_millis());
+                }
             }
+            tracing::info!("Clipboard worker stopped");
         });
+    }
 
-        Ok(())
+    /// Fallback for platforms where no watcher could be created. Reads through
+    /// the same backend as the event path, just on a timer.
+    fn start_polling(self) {
+        let running = self.running.clone();
+        let app_handle = self.app_handle.clone();
+
+        thread::spawn(move || {
+            tracing::info!("Starting clipboard monitor (polling)");
+            while running.load(Ordering::Relaxed) {
+                handle_clipboard_change(&app_handle);
+                thread::sleep(POLL_INTERVAL);
+            }
+            tracing::info!("Clipboard polling stopped");
+        });
     }
 }
 
-// --- Windows clipboard handler ---
+// --- Watcher handler ----------------------------------------------------
 
-#[cfg(target_os = "windows")]
-struct WindowsClipboardHandler {
+struct WatcherHandler {
     running: Arc<AtomicBool>,
     event_queue: ClipboardEventQueue,
 }
 
-#[cfg(target_os = "windows")]
-fn extract_clipboard_content_with_retry() -> Option<ExtractedContent> {
-    let registry = FormatStrategyRegistry::new();
-    const MAX_OUTER_ATTEMPTS: u32 = 3;
-
-    let mut outer_attempts = 0;
-    loop {
-        // Re-detect format on each outer attempt to handle clipboard content
-        // changing between detection and extraction.
-        let (strategy, _content_type) = match registry.detect_format() {
-            Some(s) => s,
-            None => {
-                outer_attempts += 1;
-                if outer_attempts >= MAX_OUTER_ATTEMPTS {
-                    tracing::warn!("extract_clipboard_content_with_retry: no format detected after {} attempts", outer_attempts);
-                    return None;
-                }
-                std::thread::sleep(std::time::Duration::from_millis(100));
-                continue;
-            }
-        };
-
-        match strategy.extract() {
-            Ok(extracted) => return Some(extracted),
-            Err(e) => {
-                outer_attempts += 1;
-                if outer_attempts >= MAX_OUTER_ATTEMPTS {
-                    tracing::warn!(
-                        "extract_clipboard_content_with_retry: all attempts failed: {}",
-                        e
-                    );
-                    return None;
-                }
-                std::thread::sleep(std::time::Duration::from_millis(100));
-            }
-        }
-    }
-}
-
-#[cfg(target_os = "windows")]
-impl ClipboardHandler for WindowsClipboardHandler {
-    fn on_clipboard_change(&mut self) -> CallbackResult {
+impl ClipboardHandler for WatcherHandler {
+    fn on_clipboard_change(&mut self) {
         if !self.running.load(Ordering::Relaxed) {
-            return CallbackResult::Stop;
+            return;
         }
 
         match self.event_queue.enqueue() {
@@ -287,22 +253,80 @@ impl ClipboardHandler for WindowsClipboardHandler {
             }
             EnqueueResult::Disconnected => {
                 tracing::warn!("Clipboard worker channel disconnected; stopping monitor");
-                return CallbackResult::Stop;
+                self.running.store(false, Ordering::Relaxed);
             }
         }
-
-        CallbackResult::Next
-    }
-
-    fn on_clipboard_error(&mut self, error: std::io::Error) -> CallbackResult {
-        tracing::error!("Clipboard error: {}", error);
-        CallbackResult::Next
     }
 }
 
-// --- Content processing ---
+// --- Change handling ----------------------------------------------------
 
-#[cfg(target_os = "windows")]
+/// Read the clipboard and store what is there, subject to the capture gate,
+/// self-copy suppression and duplicate detection.
+///
+/// The order matters. The capture gate runs first because it is cheap and can
+/// reject without touching the clipboard. Suppression can only run after
+/// extraction, since the hash is what identifies Klip's own write -- which
+/// means Klip pays extraction cost on its own writes. That is the price of a
+/// platform-neutral mechanism, and it is bounded: it happens once per paste, on
+/// the worker thread.
+fn handle_clipboard_change(app_handle: &AppHandle) {
+    let source = crate::platform::source::current();
+    if let Some(reason) =
+        should_skip_capture(app_handle, source.application(), source.window_title())
+    {
+        tracing::debug!("Clipboard capture skipped: {:?}", reason);
+        return;
+    }
+
+    let extracted = match extract_clipboard_content_with_retry() {
+        Some(extracted) => extracted,
+        None => return,
+    };
+
+    if suppress::should_suppress(&extracted.hash) {
+        tracing::info!("Self-copy suppressed (hash matches Klip's own write)");
+        return;
+    }
+
+    if let Some(item) = process_extracted_content(extracted) {
+        save_clipboard_item(
+            app_handle,
+            &item,
+            source.application(),
+            source.window_title(),
+        );
+    }
+}
+
+fn extract_clipboard_content_with_retry() -> Option<ExtractedContent> {
+    let registry = FormatStrategyRegistry::new();
+
+    for attempt in 1..=MAX_EXTRACT_ATTEMPTS {
+        // Re-detect on each attempt: the clipboard can change between
+        // detection and extraction.
+        let outcome = match registry.detect_format() {
+            Some((strategy, _)) => strategy.extract().map_err(|e| e.to_string()),
+            None => Err("no format detected".to_string()),
+        };
+
+        match outcome {
+            Ok(extracted) => return Some(extracted),
+            Err(e) if attempt == MAX_EXTRACT_ATTEMPTS => {
+                tracing::warn!(
+                    "Clipboard extraction failed after {} attempts: {}",
+                    attempt,
+                    e
+                );
+                return None;
+            }
+            Err(_) => thread::sleep(EXTRACT_RETRY_DELAY),
+        }
+    }
+
+    None
+}
+
 fn process_extracted_content(extracted: ExtractedContent) -> Option<NewClipboardItem> {
     if let Some(last_hash) = LAST_HASH.get() {
         let mut last = last_hash.lock().ok()?;
@@ -319,48 +343,7 @@ fn process_extracted_content(extracted: ExtractedContent) -> Option<NewClipboard
         hash: extracted.hash,
         size: extracted.size,
         metadata: extracted.metadata,
-    })
-}
-
-#[cfg(target_os = "linux")]
-fn read_platform_text() -> Result<String, String> {
-    crate::platform::linux::get_text()
-}
-
-#[cfg(all(not(target_os = "windows"), not(target_os = "linux")))]
-fn read_platform_text() -> Result<String, String> {
-    let mut clipboard = Clipboard::new().map_err(|e| e.to_string())?;
-    clipboard.get_text().map_err(|e| e.to_string())
-}
-
-#[cfg(not(target_os = "windows"))]
-fn process_extracted_text(text: &str) -> Option<NewClipboardItem> {
-    if text.trim().is_empty() {
-        return None;
-    }
-
-    use sha2::{Digest, Sha256};
-    let mut hasher = Sha256::new();
-    hasher.update(text.as_bytes());
-    let hash = format!("{:x}", hasher.finalize());
-
-    if let Some(last_hash) = LAST_HASH.get() {
-        let mut last = last_hash.lock().ok()?;
-        if *last == hash {
-            return None;
-        }
-        *last = hash.clone();
-    }
-
-    let preview: String = text.chars().take(200).collect();
-
-    Some(NewClipboardItem {
-        content_type: crate::database::types::ContentType::Text,
-        data: text.as_bytes().to_vec(),
-        preview: Some(preview),
-        hash,
-        size: text.len() as i64,
-        metadata: None,
+        formats: extracted.formats,
     })
 }
 
@@ -380,6 +363,26 @@ fn save_clipboard_item(
                 tracing::warn!("Failed to emit clipboard-updated event: {}", e);
             } else {
                 tracing::info!("clipboard-updated event emitted");
+            }
+
+            if saved_item.content_type == database::ContentType::Image
+                && saved_item.ocr.as_ref().map(|ocr| ocr.status)
+                    == Some(database::OcrStatus::Pending)
+            {
+                if let Some(service) = app_handle.try_state::<crate::ocr::OcrService>() {
+                    if let Err(error) = service.enqueue(saved_item.id) {
+                        tracing::warn!(
+                            "Failed to enqueue OCR for clipboard item {}: {}",
+                            saved_item.id,
+                            error
+                        );
+                    }
+                } else {
+                    tracing::warn!(
+                        "OCR worker is unavailable; item {} remains pending",
+                        saved_item.id
+                    );
+                }
             }
 
             if let Ok(max_count_str) = database::config::get(&db, registry::KEY_MAX_HISTORY_COUNT) {
@@ -409,7 +412,7 @@ pub fn insert_from_monitor(
         return Ok(None);
     }
 
-    database::clipboard::insert(db, item).map(Some)
+    database::clipboard::insert_with_source(db, item, process_name, window_title).map(Some)
 }
 
 pub fn capture_gate_decision(
@@ -460,92 +463,9 @@ fn now_millis() -> i64 {
         .as_millis() as i64
 }
 
-#[derive(Default)]
-struct ClipboardSource {
-    process_name: Option<String>,
-    window_title: Option<String>,
-}
-
-impl ClipboardSource {
-    fn process_name(&self) -> Option<&str> {
-        self.process_name.as_deref()
-    }
-
-    fn window_title(&self) -> Option<&str> {
-        self.window_title.as_deref()
-    }
-}
-
-#[cfg(target_os = "windows")]
-fn current_clipboard_source() -> ClipboardSource {
-    use windows::core::PWSTR;
-    use windows::Win32::Foundation::CloseHandle;
-    use windows::Win32::System::Threading::{
-        OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32,
-        PROCESS_QUERY_LIMITED_INFORMATION,
-    };
-    use windows::Win32::UI::WindowsAndMessaging::{
-        GetForegroundWindow, GetWindowTextLengthW, GetWindowTextW, GetWindowThreadProcessId,
-    };
-
-    unsafe {
-        let hwnd = GetForegroundWindow();
-        if hwnd.0.is_null() {
-            return ClipboardSource::default();
-        }
-
-        let title = {
-            let len = GetWindowTextLengthW(hwnd);
-            if len > 0 {
-                let mut buffer = vec![0u16; len as usize + 1];
-                let copied = GetWindowTextW(hwnd, &mut buffer);
-                if copied > 0 {
-                    Some(String::from_utf16_lossy(&buffer[..copied as usize]))
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        };
-
-        let mut pid = 0u32;
-        let _ = GetWindowThreadProcessId(hwnd, Some(&mut pid));
-        let process_name = if pid > 0 {
-            OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid)
-                .ok()
-                .and_then(|handle| {
-                    let mut buffer = vec![0u16; 32768];
-                    let mut len = buffer.len() as u32;
-                    let result = QueryFullProcessImageNameW(
-                        handle,
-                        PROCESS_NAME_WIN32,
-                        PWSTR::from_raw(buffer.as_mut_ptr()),
-                        &mut len,
-                    );
-                    let _ = CloseHandle(handle);
-                    result.ok().and_then(|_| {
-                        let path = String::from_utf16_lossy(&buffer[..len as usize]);
-                        std::path::Path::new(&path)
-                            .file_name()
-                            .and_then(|name| name.to_str())
-                            .map(|name| name.to_string())
-                    })
-                })
-        } else {
-            None
-        };
-
-        ClipboardSource {
-            process_name,
-            window_title: title,
-        }
-    }
-}
-
-#[cfg(not(target_os = "windows"))]
-fn current_clipboard_source() -> ClipboardSource {
-    ClipboardSource::default()
+/// Diagnostics helper: what formats the clipboard is currently offering.
+pub fn current_clipboard_formats() -> Vec<String> {
+    backend::available_formats()
 }
 
 pub fn start_monitor(app_handle: AppHandle) -> Result<(), crate::AppError> {
@@ -560,7 +480,6 @@ mod tests {
     use rusqlite::Connection;
     use sha2::{Digest, Sha256};
 
-    #[cfg(target_os = "windows")]
     use super::{drain_pending_events, ClipboardEventQueue, EnqueueResult};
 
     fn test_db() -> Database {
@@ -580,6 +499,7 @@ mod tests {
             hash: format!("{:x}", Sha256::digest(content.as_bytes())),
             size: content.len() as i64,
             metadata: None,
+            formats: Vec::new(),
         }
     }
 
@@ -628,6 +548,26 @@ mod tests {
     }
 
     #[test]
+    fn capture_gate_allows_capture_when_the_source_is_unknown() {
+        let db = test_db();
+        database::productization::create_source_rule(
+            &db,
+            SourceRuleInput {
+                match_type: "process".into(),
+                pattern: "1password.exe".into(),
+                enabled: true,
+            },
+        )
+        .unwrap();
+
+        // Platforms without source attribution report no process or title.
+        // An ignore rule must not turn that into "ignore everything".
+        let decision = super::capture_gate_decision(&db, None, None).unwrap();
+
+        assert_eq!(decision, super::CaptureGateDecision::Capture);
+    }
+
+    #[test]
     fn insert_from_monitor_respects_capture_gate_without_touching_manual_insert() {
         let db = test_db();
         database::config::set(&db, registry::KEY_CLIPBOARD_MONITOR_ENABLED, "false").unwrap();
@@ -645,7 +585,20 @@ mod tests {
     }
 
     #[test]
-    #[cfg(target_os = "windows")]
+    fn insert_from_monitor_persists_source_attribution() {
+        let db = test_db();
+        let item = text_item("source-aware capture");
+
+        let saved =
+            super::insert_from_monitor(&db, &item, Some("editor.exe"), Some("Draft document"))
+                .unwrap()
+                .unwrap();
+
+        assert_eq!(saved.source_application.as_deref(), Some("editor.exe"));
+        assert_eq!(saved.source_window_title.as_deref(), Some("Draft document"));
+    }
+
+    #[test]
     fn clipboard_event_queue_coalesces_while_worker_is_busy() {
         let (queue, rx) = ClipboardEventQueue::new();
 
@@ -658,7 +611,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(target_os = "windows")]
     fn clipboard_event_queue_reports_disconnected_worker() {
         let (queue, rx) = ClipboardEventQueue::new();
         drop(rx);
@@ -667,7 +619,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(target_os = "windows")]
     fn drain_pending_events_detects_burst_after_worker_starts_processing() {
         let (queue, rx) = ClipboardEventQueue::new();
 

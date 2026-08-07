@@ -6,12 +6,28 @@ export interface ClipboardItem {
   hash: string;
   size: number;
   metadata: string | null;
+  source_application: string | null;
+  source_window_title: string | null;
   is_favorited: boolean;
   is_sensitive: boolean;
   sensitivity_reason: string | null;
+  formats: ClipboardFormat[];
+  ocr: ClipboardOcr | null;
   tags: Tag[];
   created_at: number;
   last_used_at: number;
+}
+
+export interface ClipboardFormat {
+  format: 'text' | 'html' | 'rtf';
+  content: string;
+}
+
+export interface ClipboardOcr {
+  status: 'pending' | 'completed' | 'failed';
+  text: string;
+  error: string | null;
+  updated_at: number;
 }
 
 export interface Tag {

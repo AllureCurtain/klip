@@ -8,6 +8,73 @@ pub enum ContentType {
     File,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ClipboardFormatType {
+    Text,
+    Html,
+    Rtf,
+}
+
+impl ClipboardFormatType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Text => "text",
+            Self::Html => "html",
+            Self::Rtf => "rtf",
+        }
+    }
+
+    pub fn from_db(value: &str) -> Option<Self> {
+        match value {
+            "text" => Some(Self::Text),
+            "html" => Some(Self::Html),
+            "rtf" => Some(Self::Rtf),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ClipboardFormat {
+    pub format: ClipboardFormatType,
+    pub content: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum OcrStatus {
+    Pending,
+    Completed,
+    Failed,
+}
+
+impl OcrStatus {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Pending => "pending",
+            Self::Completed => "completed",
+            Self::Failed => "failed",
+        }
+    }
+
+    pub fn from_db(value: &str) -> Self {
+        match value {
+            "completed" => Self::Completed,
+            "failed" => Self::Failed,
+            _ => Self::Pending,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ClipboardOcr {
+    pub status: OcrStatus,
+    pub text: String,
+    pub error: Option<String>,
+    pub updated_at: i64,
+}
+
 impl ContentType {
     pub fn as_str(&self) -> &'static str {
         match self {
@@ -41,9 +108,15 @@ pub struct ClipboardItem {
     pub hash: String,
     pub size: i64,
     pub metadata: Option<String>,
+    pub source_application: Option<String>,
+    pub source_window_title: Option<String>,
     pub is_favorited: bool,
     pub is_sensitive: bool,
     pub sensitivity_reason: Option<String>,
+    #[serde(default)]
+    pub formats: Vec<ClipboardFormat>,
+    #[serde(default)]
+    pub ocr: Option<ClipboardOcr>,
     pub tags: Vec<Tag>,
     pub created_at: i64,
     pub last_used_at: i64,
@@ -57,6 +130,7 @@ pub struct NewClipboardItem {
     pub hash: String,
     pub size: i64,
     pub metadata: Option<String>,
+    pub formats: Vec<ClipboardFormat>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

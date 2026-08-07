@@ -37,6 +37,21 @@ const MIGRATIONS: &[Migration] = &[
         _name: "raise packaged window size minimums",
         run: migrate_to_v3,
     },
+    Migration {
+        version: 4,
+        _name: "preserve rich clipboard formats",
+        run: migrate_to_v4,
+    },
+    Migration {
+        version: 5,
+        _name: "persist image OCR state",
+        run: migrate_to_v5,
+    },
+    Migration {
+        version: 6,
+        _name: "persist clipboard source attribution",
+        run: migrate_to_v6,
+    },
 ];
 
 fn read_schema_version(conn: &Connection) -> Result<i64, AppError> {
@@ -83,6 +98,34 @@ fn migrate_to_v3(conn: &Connection, now: i64) -> Result<(), AppError> {
         [&now.to_string()],
     )?;
     Ok(())
+}
+
+fn migrate_to_v4(conn: &Connection, _now: i64) -> Result<(), AppError> {
+    crate::database::schema::create_clipboard_format_table(conn)?;
+    conn.execute(
+        "INSERT OR IGNORE INTO clipboard_formats (item_id, format, content)
+         SELECT id, 'text', content
+         FROM clipboard_items
+         WHERE content_type = 'text'",
+        [],
+    )?;
+    Ok(())
+}
+
+fn migrate_to_v5(conn: &Connection, now: i64) -> Result<(), AppError> {
+    crate::database::schema::create_clipboard_ocr_table(conn)?;
+    conn.execute(
+        "INSERT OR IGNORE INTO clipboard_ocr (item_id, status, text, error, updated_at)
+         SELECT id, 'pending', '', NULL, ?1
+         FROM clipboard_items
+         WHERE content_type = 'image'",
+        [now],
+    )?;
+    Ok(())
+}
+
+fn migrate_to_v6(conn: &Connection, _now: i64) -> Result<(), AppError> {
+    crate::database::schema::add_clipboard_source_columns(conn)
 }
 
 fn migrate_window_size_defaults(conn: &Connection, now: i64) -> Result<(), AppError> {

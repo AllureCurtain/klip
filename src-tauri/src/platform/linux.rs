@@ -1,7 +1,15 @@
+//! Linux-specific behaviour that is not clipboard I/O.
+//!
+//! Reading and writing the clipboard used to live here, shelling out to
+//! `wl-copy`/`xclip`/`xsel` with an `arboard` fallback. `clipboard/backend.rs`
+//! now owns that for every platform, so what remains is the genuinely
+//! Linux-shaped work: XDG directories, `.desktop` autostart entries, and
+//! synthetic paste, which still has no portable implementation.
+
 use crate::AppError;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
 
 const AUTOSTART_FILE: &str = "klip.desktop";
 
@@ -15,60 +23,6 @@ pub fn data_dir() -> PathBuf {
 
 pub fn log_dir() -> PathBuf {
     data_dir().join("logs")
-}
-
-pub fn set_text(text: &str) -> Result<(), String> {
-    if is_wayland_session() && command_exists("wl-copy") {
-        return write_stdin("wl-copy", &[], text.as_bytes());
-    }
-    if command_exists("xclip") {
-        return write_stdin("xclip", &["-selection", "clipboard"], text.as_bytes());
-    }
-    if command_exists("xsel") {
-        return write_stdin("xsel", &["--clipboard", "--input"], text.as_bytes());
-    }
-
-    let mut cb = arboard::Clipboard::new().map_err(|e| e.to_string())?;
-    cb.set_text(text).map_err(|e| e.to_string())
-}
-
-pub fn get_text() -> Result<String, String> {
-    if is_wayland_session() && command_exists("wl-paste") {
-        return read_stdout("wl-paste", &["--no-newline"]);
-    }
-    if command_exists("xclip") {
-        return read_stdout("xclip", &["-selection", "clipboard", "-o"]);
-    }
-    if command_exists("xsel") {
-        return read_stdout("xsel", &["--clipboard", "--output"]);
-    }
-
-    let mut cb = arboard::Clipboard::new().map_err(|e| e.to_string())?;
-    cb.get_text().map_err(|e| e.to_string())
-}
-
-pub fn set_file_list(paths: &[&str]) -> Result<(), String> {
-    let uri_list = paths
-        .iter()
-        .map(|path| file_uri_from_path(Path::new(path)))
-        .collect::<Vec<_>>()
-        .join("\n");
-
-    if is_wayland_session() && command_exists("wl-copy") {
-        return write_stdin("wl-copy", &["--type", "text/uri-list"], uri_list.as_bytes());
-    }
-    if command_exists("xclip") {
-        return write_stdin(
-            "xclip",
-            &["-selection", "clipboard", "-t", "text/uri-list"],
-            uri_list.as_bytes(),
-        );
-    }
-    if command_exists("xsel") {
-        return write_stdin("xsel", &["--clipboard", "--input"], uri_list.as_bytes());
-    }
-
-    Err("file copy back requires wl-copy, xclip, or xsel on Linux".to_string())
 }
 
 pub fn simulate_paste() -> Result<(), AppError> {
@@ -173,23 +127,6 @@ fn desktop_entry(app_exe: &Path) -> String {
     )
 }
 
-fn file_uri_from_path(path: &Path) -> String {
-    let path = path.to_string_lossy();
-    let mut uri = String::from("file://");
-    for byte in path.as_bytes() {
-        match *byte {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' | b'/' => {
-                uri.push(*byte as char)
-            }
-            _ => {
-                use std::fmt::Write;
-                let _ = write!(uri, "%{byte:02X}");
-            }
-        }
-    }
-    uri
-}
-
 fn shell_escape(path: &Path) -> String {
     let value = path.to_string_lossy();
     format!("'{}'", value.replace('\'', "'\\''"))
@@ -204,66 +141,18 @@ fn command_exists(command: &str) -> bool {
         .unwrap_or(false)
 }
 
-fn is_wayland_session() -> bool {
+pub(crate) fn is_wayland_session() -> bool {
     std::env::var("XDG_SESSION_TYPE")
         .map(|value| value.eq_ignore_ascii_case("wayland"))
         .unwrap_or(false)
         || std::env::var_os("WAYLAND_DISPLAY").is_some()
 }
 
-fn write_stdin(command: &str, args: &[&str], data: &[u8]) -> Result<(), String> {
-    let mut child = Command::new(command)
-        .args(args)
-        .stdin(Stdio::piped())
-        .spawn()
-        .map_err(|e| format!("failed to run {}: {}", command, e))?;
-    if let Some(stdin) = child.stdin.as_mut() {
-        use std::io::Write;
-        stdin.write_all(data).map_err(|e| e.to_string())?;
-    }
-    let status = child.wait().map_err(|e| e.to_string())?;
-    if status.success() {
-        Ok(())
-    } else {
-        Err(format!("{} exited with status {}", command, status))
-    }
-}
-
-fn read_stdout(command: &str, args: &[&str]) -> Result<String, String> {
-    let output = Command::new(command)
-        .args(args)
-        .output()
-        .map_err(|e| format!("failed to run {}: {}", command, e))?;
-    if !output.status.success() {
-        return Err(format!("{} exited with status {}", command, output.status));
-    }
-    String::from_utf8(output.stdout).map_err(|e| e.to_string())
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{
-        autostart_file_path_from_env, data_dir_from_env, desktop_entry, file_uri_from_path,
-        shell_escape,
-    };
+    use super::{autostart_file_path_from_env, data_dir_from_env, desktop_entry, shell_escape};
     use std::ffi::OsString;
     use std::path::{Path, PathBuf};
-
-    #[test]
-    fn file_uri_preserves_path_separators_and_escapes_special_bytes() {
-        assert_eq!(
-            file_uri_from_path(Path::new("/home/me/My File #1.txt")),
-            "file:///home/me/My%20File%20%231.txt"
-        );
-    }
-
-    #[test]
-    fn file_uri_escapes_non_ascii_as_utf8_bytes() {
-        assert_eq!(
-            file_uri_from_path(Path::new("/tmp/截图.png")),
-            "file:///tmp/%E6%88%AA%E5%9B%BE.png"
-        );
-    }
 
     #[test]
     fn shell_escape_wraps_and_escapes_single_quotes() {

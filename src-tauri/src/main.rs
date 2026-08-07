@@ -40,8 +40,17 @@ fn main() {
             klip::database::init(app.handle().clone())?;
             tracing::info!("Database initialized");
 
+            // OCR owns one background worker and restores pending image jobs.
+            match klip::ocr::init(app.handle().clone()) {
+                Ok(()) => tracing::info!("OCR worker started"),
+                Err(error) => tracing::warn!(
+                    "OCR worker unavailable; clipboard capture remains active: {}",
+                    error
+                ),
+            }
+
             // Start the loopback HTTP API after the database is ready. It opens
-            // its own SQLite connection to avoid changing the IPC database state.
+            // its own SQLite connection while reusing the process-wide search writer.
             klip::http::start_server(app.handle().clone())?;
             tracing::info!("HTTP API server started");
 
@@ -149,6 +158,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             commands::get_clipboard_list,
             commands::get_clipboard_list_filtered,
+            // --- search ---
             commands::search_clipboard,
             commands::search_clipboard_filtered,
             commands::search_clipboard_advanced,

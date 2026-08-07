@@ -1,4 +1,5 @@
 use super::{ClipboardFormatStrategy, ContentType, ExtractedContent, FormatError};
+use crate::clipboard::backend;
 
 pub struct FileStrategy;
 
@@ -22,20 +23,11 @@ impl ClipboardFormatStrategy for FileStrategy {
     }
 
     fn detect(&self) -> bool {
-        #[cfg(target_os = "windows")]
-        {
-            clipboard_win::raw::is_format_avail(15) // CF_HDROP
-        }
-        #[cfg(not(target_os = "windows"))]
-        {
-            arboard::Clipboard::new()
-                .and_then(|mut cb| cb.get_text().map(|t| t.contains("file://")))
-                .unwrap_or(false)
-        }
+        backend::has_files()
     }
 
     fn extract(&self) -> Result<ExtractedContent, FormatError> {
-        let paths = read_file_paths_with_retry()?;
+        let paths = backend::read_files()?;
 
         if paths.is_empty() {
             return Err(FormatError::ExtractionFailed("no file paths found".into()));
@@ -111,6 +103,7 @@ impl ClipboardFormatStrategy for FileStrategy {
             hash,
             size,
             metadata: Some(metadata),
+            formats: Vec::new(),
         })
     }
 }
@@ -133,56 +126,5 @@ fn format_counts(file_count: u64, dir_count: u64) -> String {
         (f, 0) => format!("{} 个文件", f),
         (0, d) => format!("{} 个文件夹", d),
         (f, d) => format!("{} 个文件，{} 个文件夹", f, d),
-    }
-}
-
-fn read_file_paths_with_retry() -> Result<Vec<String>, FormatError> {
-    #[cfg(target_os = "windows")]
-    {
-        let mut attempts = 0;
-        loop {
-            match clipboard_win::raw::open() {
-                Ok(()) => {
-                    let mut paths = Vec::new();
-                    let result = clipboard_win::raw::get_file_list_path(&mut paths);
-                    if let Err(e) = clipboard_win::raw::close() {
-                        tracing::warn!("Failed to close clipboard: {}", e);
-                    }
-                    match result {
-                        Ok(_) => {
-                            return Ok(paths
-                                .into_iter()
-                                .map(|p| p.to_string_lossy().to_string())
-                                .collect())
-                        }
-                        Err(e) => {
-                            attempts += 1;
-                            if attempts >= 10 {
-                                return Err(FormatError::ExtractionFailed(format!(
-                                    "failed to read file list after {} retries: {}",
-                                    attempts, e
-                                )));
-                            }
-                            std::thread::sleep(std::time::Duration::from_millis(50));
-                        }
-                    }
-                }
-                Err(e) => {
-                    attempts += 1;
-                    if attempts >= 10 {
-                        return Err(FormatError::ClipboardAccess(format!(
-                            "failed to open clipboard after {} retries: {}",
-                            attempts, e
-                        )));
-                    }
-                    std::thread::sleep(std::time::Duration::from_millis(50));
-                }
-            }
-        }
-    }
-
-    #[cfg(not(target_os = "windows"))]
-    {
-        Ok(Vec::new())
     }
 }

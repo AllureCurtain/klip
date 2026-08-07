@@ -77,6 +77,12 @@
     "tagAvailable": "添加",
     "file": "文件",
     "folder": "文件夹",
+    "ocr": {
+      "pending": "正在识别",
+      "completed": "文字已识别",
+      "empty": "未检测到文字",
+      "failed": "识别失败"
+    },
     "types": {
       "text": "文本",
       "image": "图片",

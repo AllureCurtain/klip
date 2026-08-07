@@ -4,6 +4,7 @@ import { Builder, By, until } from 'selenium-webdriver';
 
 const remoteUrl = process.env.SELENIUM_REMOTE_URL ?? 'http://127.0.0.1:4444';
 const appPath = process.env.KLIP_E2E_APP;
+const httpPort = process.env.KLIP_HTTP_PORT ?? '27717';
 
 function requireWindowsClipboard() {
   if (process.platform !== 'win32') {
@@ -116,16 +117,29 @@ function getClipboardText() {
   throw new Error(`Unsupported E2E clipboard platform: ${process.platform}`);
 }
 
-async function waitForText(driver, text) {
+async function waitForText(driver, text, label = 'text') {
   const escaped = text.replace(/"/g, '\\"');
-  await driver.wait(
+  return driver.wait(
     async () => {
       const matches = await driver.findElements(By.xpath(`//*[contains(text(), "${escaped}")]`));
-      return matches.length > 0;
+      return matches[0] ?? false;
     },
     15000,
-    `Timed out waiting for text: ${text}`,
+    `Timed out waiting for ${label}: ${text}`,
   );
+}
+
+async function showKlipWindow() {
+  const response = await fetch(`http://127.0.0.1:${httpPort}/api/window/show`, {
+    method: 'POST',
+  });
+  assert.equal(response.ok, true, `Klip window show failed with HTTP ${response.status}`);
+}
+
+async function listClipboardItems() {
+  const response = await fetch(`http://127.0.0.1:${httpPort}/api/clipboard?limit=100`);
+  assert.equal(response.ok, true, `Clipboard list failed with HTTP ${response.status}`);
+  return response.json();
 }
 
 describe('clipboard capture, search, and paste flow', function () {
@@ -170,17 +184,29 @@ describe('clipboard capture, search, and paste flow', function () {
     await driver.wait(until.elementLocated(By.css('input[type="text"]')), 15000);
 
     setClipboardText(uniqueText);
-    await waitForText(driver, uniqueText);
+    await waitForText(driver, uniqueText, 'captured clipboard text');
 
     const search = await driver.findElement(By.css('input[type="text"]'));
     await search.clear();
     await search.sendKeys(uniqueText.slice(-6));
-    await waitForText(driver, uniqueText);
+    await waitForText(driver, uniqueText, 'filtered clipboard text');
 
     setClipboardText(overwrittenText);
     assert.equal(getClipboardText(), overwrittenText);
 
-    const itemText = await driver.findElement(By.xpath(`//*[contains(text(), "${uniqueText}")]`));
+    await showKlipWindow();
+    const apiItems = await listClipboardItems();
+    const apiMatch = apiItems.find((item) => item.content === uniqueText);
+    assert.ok(apiMatch, 'Clipboard API should retain the original item after external overwrite');
+    await driver.navigate().refresh();
+    const refreshedSearch = await driver.wait(
+      until.elementLocated(By.css('input[type="text"]')),
+      15000,
+      'Timed out waiting for the search input after showing Klip',
+    );
+    await refreshedSearch.clear();
+    await refreshedSearch.sendKeys(uniqueText.slice(-6));
+    const itemText = await waitForText(driver, uniqueText, 'clipboard text after refreshing Klip');
     await itemText.click();
 
     await driver.wait(

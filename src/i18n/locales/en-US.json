@@ -79,6 +79,12 @@
     "tagAvailable": "Add",
     "file": "File",
     "folder": "Folder",
+    "ocr": {
+      "pending": "Recognizing text",
+      "completed": "Text recognized",
+      "empty": "No text found",
+      "failed": "Recognition failed"
+    },
     "types": {
       "text": "Text",
       "image": "Image",

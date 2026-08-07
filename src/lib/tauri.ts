@@ -204,6 +204,9 @@ export const systemApi = {
 export const onClipboardUpdated = (callback: (item: ClipboardItem) => void) =>
   listen('clipboard-updated', (event) => callback(event.payload as ClipboardItem));
 
+export const onClipboardItemUpdated = (callback: (item: ClipboardItem) => void) =>
+  listen('clipboard-item-updated', (event) => callback(event.payload as ClipboardItem));
+
 export const onClipboardCleared = (callback: () => void) =>
   listen('clipboard-cleared', () => callback());
 

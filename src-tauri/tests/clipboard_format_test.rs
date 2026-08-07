@@ -1,5 +1,5 @@
 use klip::clipboard::format::{ClipboardFormatStrategy, FormatStrategyRegistry};
-use klip::database::types::ContentType;
+use klip::database::types::{ClipboardFormat, ClipboardFormatType, ContentType};
 use std::sync::{Mutex, MutexGuard, OnceLock};
 
 static CLIPBOARD_TEST_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
@@ -51,7 +51,17 @@ fn writer_copies_text_back_to_clipboard() {
     let strategy = TextStrategy;
     let test_data = "Hello, Klip!";
 
-    let result = copy_to_clipboard(test_data, &ContentType::Text, None);
+    let formats = vec![
+        ClipboardFormat {
+            format: ClipboardFormatType::Html,
+            content: "<b>Hello, Klip!</b>".into(),
+        },
+        ClipboardFormat {
+            format: ClipboardFormatType::Rtf,
+            content: r"{\rtf1\b Hello, Klip!}".into(),
+        },
+    ];
+    let result = copy_to_clipboard(test_data, &ContentType::Text, None, &formats);
     // This test requires clipboard access; in CI it may fail
     if result.is_ok() {
         // Verify we can read it back
@@ -59,6 +69,14 @@ fn writer_copies_text_back_to_clipboard() {
         if let Ok(content) = extracted {
             let text = String::from_utf8_lossy(&content.data);
             assert_eq!(text, "Hello, Klip!");
+            assert!(content
+                .formats
+                .iter()
+                .any(|format| format.format == ClipboardFormatType::Html));
+            assert!(content
+                .formats
+                .iter()
+                .any(|format| format.format == ClipboardFormatType::Rtf));
         }
     }
 }

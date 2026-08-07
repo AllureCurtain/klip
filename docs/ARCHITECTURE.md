@@ -20,7 +20,9 @@
 | Tauri | 2.0 | 桌面应用框架 |
 | Rust | 1.95+ | 后端语言 |
 | rusqlite | 0.31 | SQLite 绑定 |
-| arboard | 3.x | 剪贴板操作 |
+| clipboard-rs | 0.3.5 | 跨平台剪贴板监听、读取和写回 |
+| Tantivy / tantivy-jieba | 0.24.2 / 0.16.0 | 全文索引和中文分词 |
+| oar-ocr / ONNX Runtime | 0.6.2 / 1.24.2 | 本地图片文字识别 |
 | serde | 1.x | 序列化 |
 
 ### 1.3 开发工具
@@ -53,8 +55,8 @@
 ┌─────────────────────────────────────────────────────────────┐
 │                      Backend (Rust)                          │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐          │
-│  │  Clipboard  │  │  Database   │  │   Config    │          │
-│  │  Monitor    │  │  (SQLite)   │  │  Commands   │          │
+│  │  Clipboard  │  │  Database   │  │ Search/OCR  │          │
+│  │  Monitor    │  │  (SQLite)   │  │  Workers    │          │
 │  └─────────────┘  └─────────────┘  └─────────────┘          │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐          │
 │  │   Hotkey    │  │   System    │  │   Commands  │          │
@@ -82,6 +84,8 @@
 ┌─────────────────┐
 │    Database     │  ← 存储 + 去重
 └────────┬────────┘
+         ├──── 图片 pending ────▶ OCR Worker ────▶ completed/failed
+         ├──── 可搜索文本 ──────▶ Tantivy Index
          │
          ▼
 ┌─────────────────┐
@@ -148,15 +152,16 @@ src/
 ```
 src-tauri/src/
 ├── main.rs              # 应用启动、tracing 初始化、窗口焦点处理
-├── lib.rs               # 模块导出、托盘点击守卫、前台窗口捕获/恢复
+├── lib.rs               # 模块导出、托盘点击守卫
 │
 ├── commands/            # IPC 命令
 │   ├── mod.rs           # 基础剪贴板、配置、窗口、系统命令
+│   ├── search.rs        # 搜索 IPC 命令
 │   └── productization.rs # 筛选、标签、导入导出、备份恢复、敏感内容
 │
 ├── clipboard/           # 剪贴板监听与格式处理
 │   ├── mod.rs
-│   ├── monitor.rs       # Windows 事件驱动 / 其他平台轮询
+│   ├── monitor.rs       # clipboard-rs 事件监听、捕获 gate 与带来源落库
 │   └── format/          # 格式策略
 │       ├── mod.rs       # 格式分发表
 │       ├── text.rs      # 文本格式
@@ -169,8 +174,20 @@ src-tauri/src/
 │   ├── clipboard.rs     # 剪贴板 CRUD
 │   ├── config.rs        # 配置 CRUD
 │   ├── data_portability.rs # JSON/CSV 导入导出、数据库备份恢复
+│   ├── ocr.rs          # OCR pending/completed/failed 持久化与 hydration
 │   ├── productization.rs   # 筛选、标签、敏感内容扫描
 │   └── types.rs         # 数据类型（ClipboardItem, SystemInfo 等）
+│
+├── search/              # Tantivy 全文索引、jieba 分词、健康检测和 SQLite 重建
+│   └── mod.rs
+│
+├── ocr/                 # 单 worker 队列、模型校验/缓存、图片解码和本地推理
+│   └── mod.rs
+│
+├── platform/            # 平台差异与优雅降级
+│   ├── focus/           # Windows HWND / macOS app PID / X11 window 焦点捕获恢复
+│   ├── source/          # Windows / macOS / X11 前台应用与窗口标题追踪
+│   └── linux.rs         # XDG 目录、autostart、Wayland 检测与 Linux 模拟粘贴
 │
 ├── hotkey/              # 快捷键管理
 │   ├── mod.rs
@@ -192,23 +209,30 @@ src-tauri/src/
 ### 4.1 剪贴板监听流程
 
 ```rust
-// 简化示意
-#[cfg(target_os = "windows")]
+// 简化示意：所有平台共享 clipboard-rs backend
 fn start_monitor(app_handle: AppHandle) {
-    clipboard_master::Master::new(WindowsClipboardHandler { app_handle }).run();
-}
-
-#[cfg(not(target_os = "windows"))]
-fn start_monitor(app_handle: AppHandle) {
-    loop {
-        let text = arboard::Clipboard::new()?.get_text()?;
-        save_if_changed(app_handle, text);
-        sleep(500ms);
-    }
+    let mut watcher = ClipboardWatcherContext::new()?;
+    watcher.add_handler(KlipClipboardHandler { app_handle });
+    watcher.start_watch();
 }
 ```
 
-### 4.2 快捷键处理流程
+图片写入 SQLite 后只向单 OCR worker 入队，不在 clipboard watcher 回调中加载模型或推理。worker 从 Tauri resources 校验并复制 PP-OCRv5 模型到 `{app_data_dir}/ocr-models`，Windows 从平台专用资源显式加载已校验的 ONNX Runtime DLL并关闭 telemetry；其他平台沿 `ort` 的静态 runtime 构建路径，但真实运行结果必须分别在对应系统验收。推理完成后事务更新 `clipboard_ocr`，调用 search 的 `index_text` 路径，并发送 `clipboard-item-updated`。
+
+### 4.2 剪贴板来源追踪
+
+monitor 在读取剪贴板前调用 `platform::source::current()`，同一份来源既用于 `clipboard_source_rules` 捕获 gate，也随成功保存的记录写入 DB v6 字段。来源获取失败始终返回空值，规则匹配把空值视为不匹配，因此不会误伤捕获。
+
+| 平台 | 应用身份 | 窗口标题 | 降级边界 |
+|------|----------|----------|----------|
+| Windows | 前台 HWND 对应进程的可执行文件名 | Win32 window text | 进程查询或标题读取失败时对应字段为空 |
+| macOS | `NSWorkspace.frontmostApplication` 的 localized name / bundle identifier | Accessibility focused-window title | 未授权时只记录应用名，并且只提示一次 |
+| Linux X11 | `_NET_WM_PID` 对应 `/proc/<pid>/comm` 或 `exe` | `_NET_WM_NAME`，回退 `WM_NAME` | EWMH/属性不可用时返回空值 |
+| Linux Wayland / 其他平台 | 无 | 无 | 一次性提示后自动关闭来源功能，捕获继续 |
+
+同一内容哈希再次出现时，已知新来源会替换应用与配套标题；手工插入、旧 JSON/CSV 或不支持平台产生的空来源不会清空既有来源。列表保持固定高度，只显示截断后的应用名，完整应用名和窗口标题通过 tooltip 提供。
+
+### 4.3 快捷键处理流程
 
 ```rust
 // 简化示意
@@ -221,7 +245,20 @@ fn register_hotkeys(app: &AppHandle) {
 }
 ```
 
-### 4.3 前端状态管理
+### 4.4 粘贴目标焦点恢复
+
+所有显示主窗口的既有入口都汇聚到 `window::controller`，并在 `show` / `set_focus` 之前调用 `platform::focus::capture_previous_foreground()`。用户选择历史后，粘贴流程先写入系统剪贴板并隐藏 Klip，再调用 `restore_previous_foreground()`，最后发送平台粘贴按键。
+
+| 平台 | 捕获标识 | 恢复方式 | 降级边界 |
+|------|----------|----------|----------|
+| Windows | 前台 HWND，跳过 Klip 自身 PID | 校验 `IsWindow` 后调用 `SetForegroundWindow` | 目标失效或系统拒绝激活时返回未恢复 |
+| macOS | `NSWorkspace.frontmostApplication` 的 PID | `NSRunningApplication.activateWithOptions` | 应用退出或系统拒绝激活时返回未恢复 |
+| Linux X11 | EWMH `_NET_ACTIVE_WINDOW` | 向根窗口发送 `_NET_ACTIVE_WINDOW` client message | 无 EWMH window manager 时返回未恢复 |
+| Linux Wayland / 其他平台 | 不保存 | 不请求 | 静默返回未尝试，不抛错 |
+
+Windows 已用真实外部文本框完成显示 Klip、选择历史、恢复焦点并粘贴的运行时闭环。macOS/Linux 后端已做对应目标的静态编译，真实桌面会话仍需分别验收，不能视为已经实机通过。
+
+### 4.5 前端状态管理
 
 ```typescript
 // clipboardStore.ts
@@ -263,6 +300,8 @@ interface ClipboardItem {
   is_favorited: boolean;
   is_sensitive: boolean;
   sensitivity_reason: string | null;
+  formats: ClipboardFormat[];
+  ocr: ClipboardOcr | null;
   tags: Tag[];
   created_at: number;
   last_used_at: number;
@@ -334,6 +373,7 @@ interface AppConfig {
 | 事件 | 数据 | 说明 |
 |------|------|------|
 | `clipboard-updated` | ClipboardItem | 剪贴板更新 |
+| `clipboard-item-updated` | ClipboardItem | OCR 等后台任务更新已有条目 |
 | `clipboard-cleared` | void | 剪贴板历史清空 |
 | `config-changed` | { key, value } | 配置变更 |
 
@@ -406,6 +446,7 @@ interface AppConfig {
 | 数据库索引 | `created_at`、`last_used_at + created_at`、`content_type`、`hash` |
 | 数据库访问模型 | 单个 SQLite 连接 + `Mutex<Connection>` 串行化访问 |
 | 异步处理 | 剪贴板监听独立线程 |
+| 全文搜索 | Tantivy + jieba；50 条/5 秒批量提交，启动时比对 checksum 及逐文档 ID/内容指纹，物理损坏或逻辑漂移时从 SQLite 重建，失败时回退 `LIKE` |
 | 批量操作 | 批量删除优化 |
 
 ---

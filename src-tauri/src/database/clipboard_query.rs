@@ -4,12 +4,13 @@ use rusqlite::types::Value;
 use rusqlite::{params_from_iter, OptionalExtension};
 
 const CLIPBOARD_ITEM_COLUMNS: &str =
-    "id, content_type, content, preview, hash, size, metadata, is_favorited, created_at, last_used_at, is_sensitive, sensitivity_reason";
+    "id, content_type, content, preview, hash, size, metadata, source_application, source_window_title, is_favorited, created_at, last_used_at, is_sensitive, sensitivity_reason";
 const CLIPBOARD_ITEM_ORDER_BY: &str = " ORDER BY last_used_at DESC, created_at DESC";
 
 #[derive(Debug, Clone)]
 pub struct ClipboardQuerySpec {
     pub text_query: Option<String>,
+    pub text_match_ids: Option<Vec<i64>>,
     pub content_type: Option<String>,
     pub favorite_only: bool,
     pub sensitive_only: Option<bool>,
@@ -25,6 +26,7 @@ impl ClipboardQuerySpec {
     pub fn new(limit: i64, offset: i64) -> Self {
         Self {
             text_query: None,
+            text_match_ids: None,
             content_type: None,
             favorite_only: false,
             sensitive_only: None,
@@ -52,8 +54,9 @@ pub(crate) fn fetch_items(
     db: &Database,
     spec: &ClipboardQuerySpec,
 ) -> Result<Vec<ClipboardItem>, AppError> {
+    let resolved = resolve_full_text_search(db, spec);
     let conn = db.get_connection()?;
-    fetch_items_locked(&conn, spec)
+    fetch_items_locked(&conn, &resolved)
 }
 
 pub(crate) fn fetch_items_locked(
@@ -62,11 +65,13 @@ pub(crate) fn fetch_items_locked(
 ) -> Result<Vec<ClipboardItem>, AppError> {
     let built = build_clipboard_query(spec);
     let mut stmt = conn.prepare(&built.sql)?;
-    let items = stmt
+    let mut items = stmt
         .query_map(params_from_iter(built.params), |row| {
             Ok(clipboard_item_from_row(row))
         })?
         .collect::<Result<Vec<_>, _>>()?;
+    crate::database::formats::hydrate(conn, &mut items)?;
+    crate::database::ocr::hydrate(conn, &mut items)?;
     Ok(items)
 }
 
@@ -74,8 +79,9 @@ pub(crate) fn fetch_items_with_tags(
     db: &Database,
     spec: &ClipboardQuerySpec,
 ) -> Result<Vec<ClipboardItem>, AppError> {
+    let resolved = resolve_full_text_search(db, spec);
     let conn = db.get_connection()?;
-    fetch_items_with_tags_locked(&conn, spec)
+    fetch_items_with_tags_locked(&conn, &resolved)
 }
 
 pub(crate) fn fetch_items_with_tags_locked(
@@ -97,9 +103,14 @@ pub(crate) fn fetch_item_by_id_locked(
     id: i64,
 ) -> Result<Option<ClipboardItem>, AppError> {
     let mut stmt = conn.prepare(&format!("{} WHERE id = ?1", clipboard_item_select_sql()))?;
-    stmt.query_row([id], |row| Ok(clipboard_item_from_row(row)))
-        .optional()
-        .map_err(Into::into)
+    let mut item = stmt
+        .query_row([id], |row| Ok(clipboard_item_from_row(row)))
+        .optional()?;
+    if let Some(item) = item.as_mut() {
+        crate::database::formats::hydrate(conn, std::slice::from_mut(item))?;
+        crate::database::ocr::hydrate(conn, std::slice::from_mut(item))?;
+    }
+    Ok(item)
 }
 
 pub(crate) fn fetch_item_by_id_required_locked(
@@ -107,7 +118,10 @@ pub(crate) fn fetch_item_by_id_required_locked(
     id: i64,
 ) -> Result<ClipboardItem, AppError> {
     let mut stmt = conn.prepare(&format!("{} WHERE id = ?1", clipboard_item_select_sql()))?;
-    Ok(stmt.query_row([id], |row| Ok(clipboard_item_from_row(row)))?)
+    let mut item = stmt.query_row([id], |row| Ok(clipboard_item_from_row(row)))?;
+    crate::database::formats::hydrate(conn, std::slice::from_mut(&mut item))?;
+    crate::database::ocr::hydrate(conn, std::slice::from_mut(&mut item))?;
+    Ok(item)
 }
 
 pub(crate) fn fetch_item_by_hash_locked(
@@ -115,7 +129,10 @@ pub(crate) fn fetch_item_by_hash_locked(
     hash: &str,
 ) -> Result<ClipboardItem, AppError> {
     let mut stmt = conn.prepare(&format!("{} WHERE hash = ?1", clipboard_item_select_sql()))?;
-    Ok(stmt.query_row([hash], |row| Ok(clipboard_item_from_row(row)))?)
+    let mut item = stmt.query_row([hash], |row| Ok(clipboard_item_from_row(row)))?;
+    crate::database::formats::hydrate(conn, std::slice::from_mut(&mut item))?;
+    crate::database::ocr::hydrate(conn, std::slice::from_mut(&mut item))?;
+    Ok(item)
 }
 
 pub(crate) fn hydrate_tags(
@@ -180,9 +197,23 @@ fn build_clipboard_query(spec: &ClipboardQuerySpec) -> BuiltClipboardQuery {
         let placeholder = push_param(&mut params, Value::Text(pattern));
         let content_clause = if spec.exact_match { "=" } else { "LIKE" };
         clauses.push(format!(
-            "(preview {op} {p} OR (content_type != 'image' AND content {op} {p}))",
+            "(preview {op} {p} OR (content_type != 'image' AND content {op} {p}) OR id IN (SELECT item_id FROM clipboard_ocr WHERE status = 'completed' AND text {op} {p}))",
             op = content_clause,
             p = placeholder
+        ));
+    }
+
+    if let Some(item_ids) = spec.text_match_ids.as_deref() {
+        let item_ids_json = match serde_json::to_string(item_ids) {
+            Ok(value) => value,
+            Err(error) => {
+                tracing::warn!("Failed to encode full-text search IDs: {error}");
+                "[]".to_string()
+            }
+        };
+        let placeholder = push_param(&mut params, Value::Text(item_ids_json));
+        clauses.push(format!(
+            "id IN (SELECT CAST(value AS INTEGER) FROM json_each({placeholder}))"
         ));
     }
 
@@ -230,6 +261,30 @@ fn build_clipboard_query(spec: &ClipboardQuerySpec) -> BuiltClipboardQuery {
     BuiltClipboardQuery { sql, params }
 }
 
+fn resolve_full_text_search(db: &Database, spec: &ClipboardQuerySpec) -> ClipboardQuerySpec {
+    let mut resolved = spec.clone();
+    let Some(query) = spec
+        .text_query
+        .as_deref()
+        .filter(|query| !query.trim().is_empty() && !spec.exact_match)
+    else {
+        return resolved;
+    };
+
+    match crate::search::search_ids(db, query) {
+        Ok(item_ids) => {
+            resolved.text_query = None;
+            resolved.text_match_ids = Some(item_ids);
+        }
+        Err(error) => tracing::warn!(
+            "Full-text search failed for query {:?}: {}; falling back to SQLite LIKE",
+            query,
+            error
+        ),
+    }
+    resolved
+}
+
 fn push_param(params: &mut Vec<Value>, value: Value) -> String {
     params.push(value);
     format!("?{}", params.len())
@@ -249,11 +304,15 @@ fn clipboard_item_from_row(row: &rusqlite::Row<'_>) -> ClipboardItem {
         hash: row.get(4).unwrap_or_default(),
         size: row.get(5).unwrap_or(0),
         metadata: row.get(6).unwrap_or(None),
-        is_favorited: row.get::<_, i64>(7).unwrap_or(0) != 0,
-        created_at: row.get(8).unwrap_or(0),
-        last_used_at: row.get(9).unwrap_or(0),
-        is_sensitive: row.get::<_, i64>(10).unwrap_or(0) != 0,
-        sensitivity_reason: row.get(11).unwrap_or(None),
+        source_application: row.get(7).unwrap_or(None),
+        source_window_title: row.get(8).unwrap_or(None),
+        is_favorited: row.get::<_, i64>(9).unwrap_or(0) != 0,
+        created_at: row.get(10).unwrap_or(0),
+        last_used_at: row.get(11).unwrap_or(0),
+        is_sensitive: row.get::<_, i64>(12).unwrap_or(0) != 0,
+        sensitivity_reason: row.get(13).unwrap_or(None),
+        formats: Vec::new(),
+        ocr: None,
         tags: Vec::new(),
     }
 }
@@ -337,6 +396,7 @@ mod tests {
     fn build_clipboard_query_preserves_parameter_order() {
         let spec = ClipboardQuerySpec {
             text_query: Some("hello".into()),
+            text_match_ids: None,
             content_type: Some("image".into()),
             favorite_only: true,
             sensitive_only: Some(false),
@@ -351,7 +411,7 @@ mod tests {
         let query = build_clipboard_query(&spec);
         assert_eq!(
             query.sql,
-            "SELECT id, content_type, content, preview, hash, size, metadata, is_favorited, created_at, last_used_at, is_sensitive, sensitivity_reason FROM clipboard_items WHERE (preview = ?1 OR (content_type != 'image' AND content = ?1)) AND content_type = ?2 AND is_favorited = 1 AND is_sensitive = ?3 AND id IN (SELECT item_id FROM clipboard_item_tags WHERE tag_id = ?4) AND created_at >= ?5 AND created_at <= ?6 ORDER BY last_used_at DESC, created_at DESC LIMIT ?7 OFFSET ?8"
+            "SELECT id, content_type, content, preview, hash, size, metadata, source_application, source_window_title, is_favorited, created_at, last_used_at, is_sensitive, sensitivity_reason FROM clipboard_items WHERE (preview = ?1 OR (content_type != 'image' AND content = ?1) OR id IN (SELECT item_id FROM clipboard_ocr WHERE status = 'completed' AND text = ?1)) AND content_type = ?2 AND is_favorited = 1 AND is_sensitive = ?3 AND id IN (SELECT item_id FROM clipboard_item_tags WHERE tag_id = ?4) AND created_at >= ?5 AND created_at <= ?6 ORDER BY last_used_at DESC, created_at DESC LIMIT ?7 OFFSET ?8"
         );
         assert_eq!(
             query.params,
@@ -417,6 +477,7 @@ mod tests {
 
         let spec = ClipboardQuerySpec {
             text_query: Some("exact target".into()),
+            text_match_ids: None,
             content_type: Some("text".into()),
             favorite_only: true,
             sensitive_only: Some(true),

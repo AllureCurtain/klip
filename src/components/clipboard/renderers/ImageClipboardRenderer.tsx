@@ -7,6 +7,8 @@ export function ImageClipboardRenderer({
   onImageClick,
 }: RendererProps) {
   const { t } = useTranslation();
+  const recognizedText = item.ocr?.status === 'completed' ? item.ocr.text.trim() : '';
+  const previewText = recognizedText || item.preview || t('clipboard.types.image');
 
   if (shouldMaskPreview) {
     return (
@@ -34,9 +36,9 @@ export function ImageClipboardRenderer({
       <div className="flex min-w-0 flex-col">
         <span
           className="truncate text-xs text-muted-foreground transition-colors duration-150 group-hover:text-foreground"
-          title={item.preview ?? undefined}
+          title={previewText}
         >
-          {item.preview}
+          {previewText}
         </span>
       </div>
     </div>

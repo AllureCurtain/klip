@@ -2,32 +2,36 @@
 
 Use this checklist for Windows-first release verification. The current public release is `v0.1.2`.
 
+Foundation closeout status below reflects the Windows `feat/foundation` worktree on 2026-08-07. Checked items have current evidence; `BLOCKED` and `SKIPPED` items must not be treated as release approval.
+
 ## 1. Preflight
 
-- [ ] `git status --short` is clean or only contains intentional release changes.
-- [ ] Versions match in `package.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json`.
-- [ ] `CHANGELOG.md` includes the version being released.
-- [ ] `pnpm release:readiness` reports the expected Windows signing and update feed readiness for this release.
-- [ ] `pnpm test:coverage` succeeds and records current frontend source coverage in release notes.
-- [ ] `pnpm audit --registry=https://registry.npmjs.org --audit-level high` reports no high or critical advisories.
-- [ ] RustSec audit in GitHub Actions reports no unreviewed Rust advisories for the release build.
-- [ ] `pnpm release:verify -SkipBundle` succeeds.
-- [ ] `pnpm e2e` succeeds on a Windows desktop session with `tauri-driver` and Edge WebDriver installed.
+- [x] `git status --short` is clean or only contains intentional release changes.
+- [x] Versions match in `package.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json` (`1.0.0`).
+- [ ] BLOCKED: `CHANGELOG.md` still identifies `v0.1.2` as the public release and does not contain the build metadata version `1.0.0`; release version ownership must resolve this before shipping.
+- [x] `pnpm release:readiness` reports unsigned installers, no timestamp URL, and manual/GitHub Release distribution because no update feed is configured.
+- [x] `pnpm test:coverage` succeeds: 20 files / 149 tests; statements 72.39%, branches 71.56%, functions 71.63%, lines 74.30%.
+- [x] Full `pnpm audit --registry=https://registry.npmjs.org --audit-level high` passes after same-major toolchain updates and precise transitive overrides; no known vulnerabilities remain.
+- [x] GitHub Actions run `31140025857` passes `rustsec/audit-check@v2`; local `cargo audit` still reports 22 allowed maintenance/unsound warnings for release-owner review.
+- [ ] BLOCKED: `pnpm release:verify -SkipBundle` stops before build because `CHANGELOG.md` does not mention metadata version `1.0.0`.
+- [x] `pnpm e2e` succeeds on the current Windows desktop with `tauri-driver` and the matching EdgeDriver/WebView2 `151.0.4129.59`; 1 Selenium flow passed.
+- [x] Final foundation `pnpm verify` passes: ESLint, 20 Vitest files / 149 tests, production build, rustfmt, Clippy, 143 Rust library tests (1 explicit performance test ignored), 2 main tests, and 5 clipboard integration tests.
+- [x] GitHub Actions run `31140025857` passes all frontend jobs plus backend fmt, Clippy, cargo test, and RustSec after `.gitattributes` preserves `ppocrv5_dict.txt` bytes on Windows checkout.
 
 ## 2. Installer Build
 
-- [ ] Run `pnpm release:verify` on Windows.
-- [ ] Confirm MSI exists at `src-tauri/target/release/bundle/msi/`.
-- [ ] Confirm NSIS installer exists at `src-tauri/target/release/bundle/nsis/`.
-- [ ] Run `pnpm release:smoke` and confirm local/GitHub installer assets are present.
-- [ ] Record installer filenames and file sizes in release notes.
+- [ ] BLOCKED: full `pnpm release:verify` inherits the unresolved changelog/build-version mismatch.
+- [x] MSI exists at `src-tauri/target/release/bundle/msi/Klip_1.0.0_x64_en-US.msi` (32,542,720 bytes; SHA-256 `2FF01714E3334780F85D4FB71453EF8A310456D001449C0B2190CE5F54CDE434`).
+- [x] NSIS installer exists at `src-tauri/target/release/bundle/nsis/Klip_1.0.0_x64-setup.exe` (29,027,941 bytes; SHA-256 `0FA03449A06AAE6CE247AD24956B08A20022F104F0894C803B844BB5B470E06F`).
+- [ ] BLOCKED: local-only installer smoke passed with `-SkipGitHub`, but full `pnpm release:smoke` reports that GitHub release `v1.0.0` and its assets do not exist.
+- [ ] BLOCKED: installer filenames, sizes, hashes, and unsigned status are recorded here, but final release notes depend on resolving whether the next release is `1.0.0` or follows `v0.1.2`.
 
 ## 3. Fresh Install Smoke Test
 
-- [ ] Install the NSIS `.exe` on a clean Windows user profile or VM.
-- [ ] Launch Klip and confirm it starts hidden in the tray.
-- [ ] Open from tray and from `Ctrl+Alt+K`.
-- [ ] Open Settings → About and confirm version, data directory, database path, and log directory render.
+- [ ] SKIPPED/BLOCKED: install the NSIS `.exe` on a clean Windows user profile or VM; no isolated Windows user/VM is available, so the current real user profile is not modified.
+- [ ] SKIPPED: installed-build hidden tray launch depends on the clean-profile installation above.
+- [ ] SKIPPED: installed-build tray and `Ctrl+Alt+K` checks depend on the clean-profile installation above.
+- [ ] SKIPPED: installed-build Settings → About verification depends on the clean-profile installation above; isolated `tauri:dev` diagnostics paths were verified separately.
 
 ## 4. Clipboard Workflow
 

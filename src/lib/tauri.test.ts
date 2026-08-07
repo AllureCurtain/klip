@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { clipboardApi, configApi, productApi } from './tauri';
+import { clipboardApi, configApi, onClipboardItemUpdated, productApi } from './tauri';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
@@ -88,5 +89,14 @@ describe('tauri API wrappers', () => {
         { key: 'window_height', value: '720' },
       ],
     });
+  });
+
+  it('subscribes to typed clipboard item updates', async () => {
+    vi.mocked(listen).mockResolvedValue(vi.fn());
+    const callback = vi.fn();
+
+    await onClipboardItemUpdated(callback);
+
+    expect(listen).toHaveBeenCalledWith('clipboard-item-updated', expect.any(Function));
   });
 });

@@ -703,6 +703,17 @@ const unlisten = await listen('clipboard-updated', (event) => {
 
 ---
 
+#### `clipboard-item-updated`
+
+已有条目的后台状态发生变化时触发。当前由图片 OCR 在 `pending` 转为 `completed` 或 `failed` 后发送完整 `ClipboardItem`；前端应按 `id` 替换已有条目，若 OCR 文本首次命中当前搜索则插入结果。
+
+**数据**:
+```typescript
+ClipboardItem
+```
+
+---
+
 #### `clipboard-cleared`
 
 剪贴板历史清空时触发。
@@ -742,14 +753,28 @@ interface ClipboardItem {
   hash: string;
   size: number;
   metadata: string | null;
+  source_application: string | null;
+  source_window_title: string | null;
   is_favorited: boolean;
   is_sensitive: boolean;
   sensitivity_reason: string | null;
+  formats: Array<{
+    format: 'text' | 'html' | 'rtf';
+    content: string;
+  }>;
+  ocr: {
+    status: 'pending' | 'completed' | 'failed';
+    text: string;
+    error: string | null;
+    updated_at: number;
+  } | null;
   tags: Tag[];
   created_at: number;   // 毫秒时间戳
   last_used_at: number; // 毫秒时间戳
 }
 ```
+
+`source_application` 是捕获时可用的应用名或进程文件名，`source_window_title` 是可选窗口标题。macOS 未授予 Accessibility 权限时仍返回应用名但标题为 `null`；Wayland 和不支持的平台两个字段均为 `null`，不会因此跳过捕获。JSON v1 导入导出保留这两个字段，CSV v1 为兼容既有固定表头不携带来源。
 
 ### 3.2 Tag
 
@@ -1037,6 +1062,9 @@ export const systemApi = {
 // 事件监听
 export const onClipboardUpdated = (callback: (item: ClipboardItem) => void) =>
   listen('clipboard-updated', (event) => callback(event.payload as ClipboardItem));
+
+export const onClipboardItemUpdated = (callback: (item: ClipboardItem) => void) =>
+  listen('clipboard-item-updated', (event) => callback(event.payload as ClipboardItem));
 
 export const onClipboardCleared = (callback: () => void) =>
   listen('clipboard-cleared', () => callback());

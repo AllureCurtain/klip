@@ -1,5 +1,9 @@
 import {
+  AppWindow,
   Check,
+  CircleAlert,
+  LoaderCircle,
+  ScanText,
   ShieldAlert,
   Star,
   Tags,
@@ -203,6 +207,20 @@ function MetaLine({
   const imageDetails = imageMeta
     ? `${imageMeta.width}x${imageMeta.height} ${imageMeta.format}`
     : null;
+  const ocr = item.content_type === 'image' ? item.ocr : null;
+  const ocrLabel = ocr
+    ? ocr.status === 'pending'
+      ? t('clipboard.ocr.pending')
+      : ocr.status === 'failed'
+        ? t('clipboard.ocr.failed')
+        : ocr.text.trim()
+          ? t('clipboard.ocr.completed')
+          : t('clipboard.ocr.empty')
+    : null;
+  const sourceLabel = item.source_application ?? item.source_window_title;
+  const sourceTitle = [item.source_application, item.source_window_title]
+    .filter((value): value is string => Boolean(value))
+    .join(' - ');
 
   return (
     <div className="mt-0.5 flex min-w-0 items-center gap-1.5 overflow-hidden text-[10px] text-muted-foreground/70">
@@ -214,12 +232,52 @@ function MetaLine({
         .
       </span>
       <span className="shrink-0">{formatTime(item.created_at)}</span>
+      {sourceLabel && (
+        <>
+          <span className="shrink-0 text-muted-foreground/40" aria-hidden="true">
+            .
+          </span>
+          <span
+            className="inline-flex min-w-0 max-w-24 items-center gap-0.5 text-muted-foreground"
+            title={sourceTitle}
+            data-testid="clipboard-source"
+          >
+            <AppWindow className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />
+            <span className="truncate">{sourceLabel}</span>
+          </span>
+        </>
+      )}
       {imageDetails && (
         <>
           <span className="shrink-0 text-muted-foreground/40" aria-hidden="true">
             .
           </span>
           <span className="shrink-0">{imageDetails}</span>
+        </>
+      )}
+      {ocr && ocrLabel && (
+        <>
+          <span className="shrink-0 text-muted-foreground/40" aria-hidden="true">
+            .
+          </span>
+          <span
+            className={cn(
+              'inline-flex shrink-0 items-center gap-0.5',
+              ocr.status === 'failed' && 'text-destructive',
+              ocr.status === 'completed' && 'text-emerald-600 dark:text-emerald-400'
+            )}
+            title={ocr.error ?? (ocr.text.trim() || ocrLabel)}
+            data-testid="ocr-status"
+          >
+            {ocr.status === 'pending' ? (
+              <LoaderCircle className="h-2.5 w-2.5 animate-spin" aria-hidden="true" />
+            ) : ocr.status === 'failed' ? (
+              <CircleAlert className="h-2.5 w-2.5" aria-hidden="true" />
+            ) : (
+              <ScanText className="h-2.5 w-2.5" aria-hidden="true" />
+            )}
+            {ocrLabel}
+          </span>
         </>
       )}
       {copied && (
