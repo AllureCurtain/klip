@@ -83,7 +83,7 @@ describe('ClipboardDetailDialog', () => {
             {
               format: 'html',
               content:
-                '<p><strong>Safe rich text</strong></p><script>window.__detailXss = true</script><a href="javascript:alert(1)" onclick="alert(1)">unsafe link</a>',
+                '<p><strong>Safe rich text</strong></p><script>window.__detailXss = true</script><a href="javascript:alert(1)" onclick="alert(1)">unsafe link</a><a href="https://example.com/docs">safe link</a>',
             },
           ],
         })}
@@ -99,7 +99,11 @@ describe('ClipboardDetailDialog', () => {
     expect(rich.querySelector('strong')?.textContent).toBe('Safe rich text');
     expect(rich.querySelector('script')).toBeNull();
     expect(rich.querySelector('[onclick]')).toBeNull();
-    expect(rich.querySelector('a')?.getAttribute('href')).toBeNull();
+    expect(
+      Array.from(rich.querySelectorAll('a')).every(
+        (link) => link.getAttribute('href') === null
+      )
+    ).toBe(true);
   });
 
   it('edits and saves the custom title and note without closing the detail view', async () => {
