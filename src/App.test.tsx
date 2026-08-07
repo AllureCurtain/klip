@@ -2,11 +2,12 @@
 import { act, cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
+import type { ClipboardItem } from './types';
 
 const TEST_SEARCH_DEBOUNCE_MS = 150;
 
 const storeState = vi.hoisted(() => ({
-  items: [],
+  items: [] as ClipboardItem[],
   tags: [],
   loading: false,
   error: null as string | null,
@@ -55,12 +56,15 @@ const tauriMocks = vi.hoisted(() => ({
     return Promise.resolve(vi.fn());
   }),
   configGet: vi.fn(() => Promise.resolve(null)),
+  setVisibleItems: vi.fn(() => Promise.resolve()),
 }));
 
 const headerMocks = vi.hoisted(() => ({
   props: undefined as undefined | {
     onContentTypeChange: (type: string | null) => void;
     onSearchChange: (query: string) => void;
+    onShowFavoritesChange: (show: boolean) => void;
+    onSelectedTagChange: (tagId: number | null) => void;
     onAdvancedFiltersChange: (filters: {
       sensitiveOnly: boolean | null;
       exactMatch: boolean;
@@ -75,6 +79,30 @@ const settingsViewState = vi.hoisted(() => ({
   pending: new Promise<never>(() => {}),
 }));
 
+function makeItem(id: number): ClipboardItem {
+  return {
+    id,
+    content_type: 'text',
+    content: `item-${id}`,
+    preview: `item-${id}`,
+    hash: `hash-${id}`,
+    size: 6,
+    metadata: null,
+    source_application: null,
+    source_window_title: null,
+    custom_title: null,
+    note: null,
+    is_favorited: false,
+    is_sensitive: false,
+    sensitivity_reason: null,
+    formats: [],
+    ocr: null,
+    tags: [],
+    created_at: id,
+    last_used_at: id,
+  };
+}
+
 vi.mock('@tauri-apps/api/event', () => ({
   listen: tauriMocks.listen,
 }));
@@ -82,6 +110,9 @@ vi.mock('@tauri-apps/api/event', () => ({
 vi.mock('@/lib/tauri', () => ({
   configApi: {
     get: tauriMocks.configGet,
+  },
+  clipboardApi: {
+    setVisibleItems: tauriMocks.setVisibleItems,
   },
   onClipboardCleared: tauriMocks.onClipboardCleared,
   onClipboardItemUpdated: tauriMocks.onClipboardItemUpdated,
@@ -103,6 +134,8 @@ vi.mock('./components/layout/Header', () => ({
   Header: (props: {
     onContentTypeChange: (type: string | null) => void;
     onSearchChange: (query: string) => void;
+    onShowFavoritesChange: (show: boolean) => void;
+    onSelectedTagChange: (tagId: number | null) => void;
     onAdvancedFiltersChange: (filters: {
       sensitiveOnly: boolean | null;
       exactMatch: boolean;
@@ -173,6 +206,101 @@ describe('App status states', () => {
     expect(note.className).not.toContain('h-full');
   });
 
+  it('syncs only the first nine ordered visible item ids', async () => {
+    storeState.items = Array.from({ length: 11 }, (_value, index) =>
+      makeItem(index + 1)
+    );
+
+    render(<App />);
+    await act(async () => Promise.resolve());
+
+    expect(tauriMocks.setVisibleItems).toHaveBeenLastCalledWith([
+      1, 2, 3, 4, 5, 6, 7, 8, 9,
+    ]);
+  });
+
+  it('syncs an explicit empty snapshot', async () => {
+    storeState.items = [];
+
+    render(<App />);
+    await act(async () => Promise.resolve());
+
+    expect(tauriMocks.setVisibleItems).toHaveBeenLastCalledWith([]);
+  });
+
+  it('keeps stale results mounted and synchronized while a refresh loads or fails', async () => {
+    storeState.items = [makeItem(1), makeItem(2)];
+    const { rerender } = render(<App />);
+    await act(async () => Promise.resolve());
+    const list = screen.getByTestId('clipboard-list');
+
+    storeState.loading = true;
+    rerender(<App />);
+
+    expect(screen.getByTestId('clipboard-list')).toBe(list);
+    expect(screen.getByRole('status')).toBeTruthy();
+    expect(tauriMocks.setVisibleItems).toHaveBeenLastCalledWith([1, 2]);
+
+    storeState.loading = false;
+    storeState.error = '搜索失败';
+    rerender(<App />);
+
+    expect(screen.getByTestId('clipboard-list')).toBe(list);
+    expect(screen.getByRole('alert')).toBeTruthy();
+    expect(tauriMocks.setVisibleItems).toHaveBeenLastCalledWith([1, 2]);
+  });
+
+  it('syncs an empty snapshot when the clipboard list is hidden by settings', async () => {
+    storeState.items = [makeItem(1)];
+    render(<App />);
+    await act(async () => Promise.resolve());
+    expect(tauriMocks.setVisibleItems).toHaveBeenLastCalledWith([1]);
+
+    act(() => {
+      tauriMocks.openSettings?.();
+    });
+    await screen.findByTestId('settings-view');
+
+    expect(tauriMocks.setVisibleItems).toHaveBeenLastCalledWith([]);
+  });
+
+  it('resyncs results after search, type, favorite, tag, and date filters change', async () => {
+    storeState.items = [makeItem(1)];
+    const { rerender } = render(<App />);
+    await act(async () => Promise.resolve());
+
+    const applyResult = async (items: ClipboardItem[]) => {
+      storeState.items = items;
+      rerender(<App />);
+      await act(async () => Promise.resolve());
+      expect(tauriMocks.setVisibleItems).toHaveBeenLastCalledWith(
+        items.map((item) => item.id)
+      );
+    };
+
+    act(() => headerMocks.props?.onSearchChange('needle'));
+    await applyResult([makeItem(2)]);
+
+    act(() => headerMocks.props?.onContentTypeChange('image'));
+    await applyResult([makeItem(3)]);
+
+    act(() => headerMocks.props?.onShowFavoritesChange(true));
+    await applyResult([makeItem(4)]);
+
+    act(() => headerMocks.props?.onSelectedTagChange(7));
+    await applyResult([makeItem(5)]);
+
+    act(() =>
+      headerMocks.props?.onAdvancedFiltersChange({
+        sensitiveOnly: null,
+        exactMatch: false,
+        createdAfter: 100,
+        createdBefore: 200,
+      })
+    );
+    await applyResult([makeItem(6)]);
+  });
+
   it('does not inject clipboard updates that do not match the active content filter', async () => {
     render(<App />);
 
@@ -195,6 +323,8 @@ describe('App status states', () => {
           metadata: null,
           source_application: null,
           source_window_title: null,
+          custom_title: null,
+          note: null,
           is_favorited: false,
           is_sensitive: false,
           sensitivity_reason: null,
@@ -237,6 +367,8 @@ describe('App status states', () => {
           metadata: null,
           source_application: null,
           source_window_title: null,
+          custom_title: null,
+          note: null,
           is_favorited: false,
           is_sensitive: false,
           sensitivity_reason: null,
@@ -276,6 +408,8 @@ describe('App status states', () => {
           metadata: null,
           source_application: null,
           source_window_title: null,
+          custom_title: null,
+          note: null,
           is_favorited: false,
           is_sensitive: false,
           sensitivity_reason: null,
@@ -322,6 +456,8 @@ describe('App status states', () => {
         metadata: null,
         source_application: null,
         source_window_title: null,
+        custom_title: null,
+        note: null,
         is_favorited: false,
         is_sensitive: false,
         sensitivity_reason: null,

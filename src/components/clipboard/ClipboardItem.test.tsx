@@ -9,6 +9,9 @@ import { useConfigStore } from '@/stores/configStore';
 const storeMocks = vi.hoisted(() => ({
   deleteItem: vi.fn(),
   copyItem: vi.fn(),
+  pasteItem: vi.fn(),
+  copyItemPlainText: vi.fn(),
+  pasteItemPlainText: vi.fn(),
   toggleFavorite: vi.fn(),
   tags: [] as { id: number; name: string; color: string | null; created_at: number }[],
   assignTagToItem: vi.fn(),
@@ -17,8 +20,21 @@ const storeMocks = vi.hoisted(() => ({
   toggleSelected: vi.fn(),
 }));
 
+const contentActionMocks = vi.hoisted(() => ({
+  actions: [] as import('@/types').ClipboardContentAction[],
+  executeAction: vi.fn(),
+  refresh: vi.fn(),
+}));
+
 vi.mock('@/stores', () => ({
   useClipboardStore: () => storeMocks,
+}));
+
+vi.mock('./useClipboardContentActions', () => ({
+  useClipboardContentActions: (_itemId: number, enabled: boolean) =>
+    enabled
+      ? contentActionMocks
+      : { ...contentActionMocks, actions: [] },
 }));
 
 type ClipboardItemWithSelectionProps = ComponentProps<typeof ClipboardItem> & {
@@ -38,6 +54,8 @@ function makeTextItem(overrides: Partial<ClipboardItemType> = {}): ClipboardItem
     metadata: null,
     source_application: null,
     source_window_title: null,
+    custom_title: null,
+    note: null,
     is_favorited: false,
     is_sensitive: false,
     sensitivity_reason: null,
@@ -104,6 +122,8 @@ function makeFolderItem(overrides: Partial<ClipboardItemType> = {}): ClipboardIt
 describe('ClipboardItem', () => {
   beforeEach(() => {
     Element.prototype.scrollIntoView = vi.fn();
+    storeMocks.copyItem.mockResolvedValue(true);
+    storeMocks.copyItemPlainText.mockResolvedValue(true);
     useConfigStore.setState((state) => ({
       config: { ...state.config, mask_sensitive_previews: true },
     }));
@@ -115,12 +135,18 @@ describe('ClipboardItem', () => {
     vi.restoreAllMocks();
     storeMocks.deleteItem.mockReset();
     storeMocks.copyItem.mockReset();
+    storeMocks.pasteItem.mockReset();
+    storeMocks.copyItemPlainText.mockReset();
+    storeMocks.pasteItemPlainText.mockReset();
     storeMocks.toggleFavorite.mockReset();
     storeMocks.assignTagToItem.mockReset();
     storeMocks.removeTagFromItem.mockReset();
     storeMocks.toggleSelected.mockReset();
     storeMocks.tags = [];
     storeMocks.selectedIds = [];
+    contentActionMocks.actions = [];
+    contentActionMocks.executeAction.mockReset();
+    contentActionMocks.refresh.mockReset();
   });
 
   it('requires two clicks to delete (confirmation pattern)', () => {
@@ -246,6 +272,43 @@ describe('ClipboardItem', () => {
     expect(screen.getByText('已隐藏敏感内容').getAttribute('title')).toBeNull();
   });
 
+  it('prioritizes a custom title and shows a low-noise note indicator', () => {
+    render(
+      <ClipboardItem
+        item={makeTextItem({
+          custom_title: 'Release checklist',
+          note: 'Verify signatures',
+        })}
+        index={1}
+        isSelected={false}
+      />
+    );
+
+    expect(screen.getByTestId('clipboard-custom-title').textContent).toBe(
+      'Release checklist'
+    );
+    expect(screen.queryByText('hello')).toBeNull();
+    expect(screen.getByLabelText('含备注')).toBeTruthy();
+  });
+
+  it('does not expose annotations for a masked sensitive item', () => {
+    render(
+      <ClipboardItem
+        item={makeTextItem({
+          custom_title: 'Secret alias',
+          note: 'Secret note',
+          is_sensitive: true,
+        })}
+        index={1}
+        isSelected={false}
+      />
+    );
+
+    expect(screen.queryByText('Secret alias')).toBeNull();
+    expect(screen.queryByLabelText('含备注')).toBeNull();
+    expect(screen.getByText('已隐藏敏感内容')).toBeTruthy();
+  });
+
   it('renders allowed rich text while stripping executable HTML', () => {
     render(
       <ClipboardItem
@@ -314,12 +377,20 @@ describe('ClipboardItem', () => {
   });
 
   it('opens image preview from an accessible thumbnail action', () => {
-    render(<ClipboardItem item={makeImageItem()} index={1} isSelected={false} />);
+    const onPreview = vi.fn();
+    render(
+      <ClipboardItem
+        item={makeImageItem()}
+        index={1}
+        isSelected={false}
+        onPreview={onPreview}
+      />
+    );
 
     const previewButton = screen.getByRole('button', { name: '预览图片' });
     fireEvent.click(previewButton);
 
-    expect(screen.getByText('图片预览')).toBeTruthy();
+    expect(onPreview).toHaveBeenCalledOnce();
   });
 
   it('shows pending, completed, empty, and failed OCR states on image rows', () => {
@@ -408,17 +479,107 @@ describe('ClipboardItem', () => {
     expect(row.className).not.toContain('bg-indigo-500/8');
   });
 
-  it('uses a readable quiet row treatment after copy feedback', () => {
+  it('pastes on row click without showing copy feedback', () => {
     render(<ClipboardItem item={makeTextItem()} index={1} isSelected={false} />);
 
     fireEvent.click(screen.getByText('hello'));
 
+    expect(storeMocks.pasteItem).toHaveBeenCalledWith(42);
+    expect(storeMocks.copyItem).not.toHaveBeenCalled();
+    expect(screen.queryByText('已复制')).toBeNull();
+  });
+
+  it('uses a readable quiet row treatment after a successful explicit copy', async () => {
+    render(<ClipboardItem item={makeTextItem()} index={1} isSelected={false} />);
+
+    fireEvent.click(screen.getByRole('button', { name: '复制' }));
+
     const row = screen.getByText('hello').closest('[data-testid="clipboard-item"]');
 
+    expect(storeMocks.copyItem).toHaveBeenCalledWith(42);
+    expect(storeMocks.pasteItem).not.toHaveBeenCalled();
+    expect(await screen.findByText('已复制')).toBeTruthy();
     expect(row?.className).toContain('border-primary/35');
     expect(row?.className).toContain('bg-primary/8');
     expect(row?.className).toContain('text-foreground');
     expect(row?.className).not.toContain('bg-indigo-500/8');
+  });
+
+  it('does not show copy feedback when the copy action fails', async () => {
+    storeMocks.copyItem.mockResolvedValue(false);
+    render(<ClipboardItem item={makeTextItem()} index={1} isSelected={false} />);
+
+    fireEvent.click(screen.getByRole('button', { name: '复制' }));
+    await act(async () => Promise.resolve());
+
+    expect(storeMocks.copyItem).toHaveBeenCalledWith(42);
+    expect(screen.queryByText('已复制')).toBeNull();
+  });
+
+  it('offers plain-text copy and paste only for text items', async () => {
+    const { rerender } = render(
+      <ClipboardItem item={makeTextItem()} index={1} isSelected={false} />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '复制纯文本' }));
+    fireEvent.click(screen.getByRole('button', { name: '粘贴纯文本' }));
+
+    expect(storeMocks.copyItemPlainText).toHaveBeenCalledWith(42);
+    expect(storeMocks.pasteItemPlainText).toHaveBeenCalledWith(42);
+    expect(await screen.findByText('已复制')).toBeTruthy();
+
+    rerender(<ClipboardItem item={makeImageItem()} index={1} isSelected={false} />);
+    expect(screen.queryByRole('button', { name: '复制纯文本' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '粘贴纯文本' })).toBeNull();
+  });
+
+  it('offers the same detail preview entry for every content type', () => {
+    const onPreview = vi.fn();
+    const { rerender } = render(
+      <ClipboardItem
+        item={makeTextItem()}
+        index={1}
+        isSelected={false}
+        onPreview={onPreview}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '预览详情' }));
+    rerender(
+      <ClipboardItem
+        item={makeImageItem()}
+        index={1}
+        isSelected={false}
+        onPreview={onPreview}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: '预览详情' }));
+    rerender(
+      <ClipboardItem
+        item={makeFileItem()}
+        index={1}
+        isSelected={false}
+        onPreview={onPreview}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: '预览详情' }));
+
+    expect(onPreview).toHaveBeenCalledTimes(3);
+  });
+
+  it('shows only the primary validated content action on the compact row', () => {
+    const action = { kind: 'open_url', target: 'https://example.com' } as const;
+    contentActionMocks.actions = [
+      action,
+      { kind: 'copy_path', target: 'C:\\not-primary.txt' },
+    ];
+    contentActionMocks.executeAction.mockResolvedValue(undefined);
+    render(<ClipboardItem item={makeTextItem()} index={1} isSelected={false} />);
+
+    fireEvent.click(screen.getByRole('button', { name: '打开链接' }));
+
+    expect(contentActionMocks.executeAction).toHaveBeenCalledWith(action);
+    expect(screen.queryByRole('button', { name: '复制路径' })).toBeNull();
   });
 
   it('uses the same readable quiet row treatment for batch-selected rows', () => {
@@ -521,7 +682,7 @@ describe('ClipboardItem', () => {
     fireEvent.click(checkbox);
 
     expect(storeMocks.toggleSelected).toHaveBeenCalledWith(42);
-    expect(storeMocks.copyItem).not.toHaveBeenCalled();
+    expect(storeMocks.pasteItem).not.toHaveBeenCalled();
   });
 
   it('uses item clicks for selection instead of copying in selection mode', () => {
@@ -537,7 +698,7 @@ describe('ClipboardItem', () => {
     fireEvent.click(screen.getByText('hello'));
 
     expect(storeMocks.toggleSelected).toHaveBeenCalledWith(42);
-    expect(storeMocks.copyItem).not.toHaveBeenCalled();
+    expect(storeMocks.pasteItem).not.toHaveBeenCalled();
   });
 
   it('renders distinct type treatments for text, image, file, and folder entries', () => {

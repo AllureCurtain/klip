@@ -29,7 +29,7 @@ const RICH_TEXT_TAGS = [
 export function sanitizeRichTextHtml(html: string): string {
   return DOMPurify.sanitize(html, {
     ALLOWED_TAGS: [...RICH_TEXT_TAGS],
-    ALLOWED_ATTR: ['href', 'title'],
+    ALLOWED_ATTR: ['title'],
     ALLOW_DATA_ATTR: false,
   });
 }

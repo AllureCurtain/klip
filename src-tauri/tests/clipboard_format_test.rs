@@ -47,7 +47,7 @@ fn strategy_priority_is_image_file_text() {
 fn writer_copies_text_back_to_clipboard() {
     let _guard = clipboard_test_lock();
     use klip::clipboard::format::text::TextStrategy;
-    use klip::clipboard::writer::copy_to_clipboard;
+    use klip::clipboard::writer::{copy_to_clipboard, ClipboardWriteMode};
     let strategy = TextStrategy;
     let test_data = "Hello, Klip!";
 
@@ -61,7 +61,13 @@ fn writer_copies_text_back_to_clipboard() {
             content: r"{\rtf1\b Hello, Klip!}".into(),
         },
     ];
-    let result = copy_to_clipboard(test_data, &ContentType::Text, None, &formats);
+    let result = copy_to_clipboard(
+        test_data,
+        &ContentType::Text,
+        None,
+        &formats,
+        ClipboardWriteMode::PreserveFormats,
+    );
     // This test requires clipboard access; in CI it may fail
     if result.is_ok() {
         // Verify we can read it back
@@ -79,6 +85,39 @@ fn writer_copies_text_back_to_clipboard() {
                 .any(|format| format.format == ClipboardFormatType::Rtf));
         }
     }
+}
+
+#[test]
+#[cfg(target_os = "windows")]
+fn writer_plain_text_mode_omits_html_and_rtf() {
+    let _guard = clipboard_test_lock();
+    use klip::clipboard::backend;
+    use klip::clipboard::writer::{copy_to_clipboard, ClipboardWriteMode};
+
+    let formats = vec![
+        ClipboardFormat {
+            format: ClipboardFormatType::Html,
+            content: "<b>Plain only</b>".into(),
+        },
+        ClipboardFormat {
+            format: ClipboardFormatType::Rtf,
+            content: r"{\rtf1\b Plain only}".into(),
+        },
+    ];
+
+    copy_to_clipboard(
+        "Plain only",
+        &ContentType::Text,
+        None,
+        &formats,
+        ClipboardWriteMode::PlainText,
+    )
+    .unwrap();
+    let clipboard = backend::read_text_formats().unwrap();
+
+    assert_eq!(clipboard.text, "Plain only");
+    assert_eq!(clipboard.html, None);
+    assert_eq!(clipboard.rtf, None);
 }
 
 #[test]

@@ -4,6 +4,8 @@ import type {
   BackupSummary,
   AdvancedSearchQuery,
   ClipboardItem,
+  ClipboardAnnotationInput,
+  ClipboardContentAction,
   ClipboardQueryOptions,
   DiagnosticsInfo,
   ImportSummary,
@@ -88,6 +90,9 @@ export const clipboardApi = {
   getById: (id: number) =>
     invoke<ClipboardItem | null>('get_clipboard_by_id', { id }),
 
+  updateAnnotations: (id: number, input: ClipboardAnnotationInput) =>
+    invoke<ClipboardItem>('update_clipboard_annotations', { id, input }),
+
   delete: (id: number) => invoke('delete_clipboard_item', { id }),
 
   deleteMany: (ids: number[]) =>
@@ -95,7 +100,22 @@ export const clipboardApi = {
 
   copy: (id: number) => invoke('copy_to_clipboard', { id }),
 
+  copyPlainText: (id: number) =>
+    invoke('copy_plain_text_to_clipboard', { id }),
+
   paste: (id: number) => invoke('paste_from_clipboard', { id }),
+
+  pastePlainText: (id: number) =>
+    invoke('paste_plain_text_from_clipboard', { id }),
+
+  setVisibleItems: (ids: number[]) =>
+    invoke('set_visible_clipboard_items', { ids }),
+
+  getContentActions: (id: number) =>
+    invoke<ClipboardContentAction[]>('get_clipboard_content_actions', { id }),
+
+  executeContentAction: (id: number, action: ClipboardContentAction) =>
+    invoke('execute_clipboard_content_action', { id, action }),
 
   toggleFavorite: (id: number) =>
     invoke<ClipboardItem>('toggle_favorite', { id }),

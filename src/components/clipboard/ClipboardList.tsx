@@ -2,9 +2,11 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { useTranslation } from 'react-i18next';
 import { AnimatePresence } from 'framer-motion';
 import { ClipboardItem } from './ClipboardItem';
+import { ClipboardDetailDialog } from './ClipboardDetailDialog';
 import { useClipboardStore } from '@/stores';
 import type { ClipboardItem as ClipboardItemType } from '@/types';
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { resolveClipboardListKeyAction } from './clipboardListKeyboard';
 
 interface ClipboardListProps {
   items: ClipboardItemType[];
@@ -50,10 +52,18 @@ function getLocalCalendarDayNumber(date: Date): number {
 
 export function ClipboardList({ items, selectionMode = false }: ClipboardListProps) {
   const { t, i18n } = useTranslation();
-  const { copyItem, toggleSelected, hasMore, loadMore, loadingMore } =
-    useClipboardStore();
-  const [selectedIndex, setSelectedIndex] = useState(0);
-  const selectedIndexRef = useRef(0);
+  const {
+    pasteItem,
+    pasteItemPlainText,
+    toggleSelected,
+    hasMore,
+    loadMore,
+    loadingMore,
+  } = useClipboardStore();
+  const [selectedItemId, setSelectedItemId] = useState<number | null>(
+    items[0]?.id ?? null
+  );
+  const [detailItemId, setDetailItemId] = useState<number | null>(null);
   const parentRef = useRef<HTMLDivElement>(null);
 
   // Build virtual rows with time group headers
@@ -80,13 +90,30 @@ export function ClipboardList({ items, selectionMode = false }: ClipboardListPro
     [rows]
   );
 
-  useEffect(() => {
-    if (items.length > 0 && selectedIndex >= items.length) {
-      setSelectedIndex(Math.max(0, items.length - 1));
-    }
-  }, [items.length, selectedIndex]);
-
+  const selectedIndex = useMemo(() => {
+    if (items.length === 0) return null;
+    const index = items.findIndex((item) => item.id === selectedItemId);
+    return index >= 0 ? index : 0;
+  }, [items, selectedItemId]);
+  const selectedIndexRef = useRef<number | null>(selectedIndex);
   selectedIndexRef.current = selectedIndex;
+  const detailItem = useMemo(
+    () => items.find((item) => item.id === detailItemId) ?? null,
+    [detailItemId, items]
+  );
+
+  useEffect(() => {
+    const nextSelectedId = selectedIndex === null ? null : items[selectedIndex]?.id ?? null;
+    if (nextSelectedId !== selectedItemId) {
+      setSelectedItemId(nextSelectedId);
+    }
+  }, [items, selectedIndex, selectedItemId]);
+
+  useEffect(() => {
+    if (detailItemId !== null && !detailItem) {
+      setDetailItemId(null);
+    }
+  }, [detailItem, detailItemId]);
 
   const HEADER_HEIGHT = 28;
   const ITEM_HEIGHT = 62;
@@ -109,33 +136,42 @@ export function ClipboardList({ items, selectionMode = false }: ClipboardListPro
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement).tagName === 'INPUT') return;
+      if (detailItemId !== null) return;
+      const action = resolveClipboardListKeyAction(e);
+      if (!action || items.length === 0) return;
 
-      switch (e.key) {
-        case 'ArrowDown':
-          e.preventDefault();
-          setSelectedIndex((i) => Math.min(i + 1, items.length - 1));
-          break;
-        case 'ArrowUp':
-          e.preventDefault();
-          setSelectedIndex((i) => Math.max(i - 1, 0));
-          break;
-        case 'Enter': {
-          e.preventDefault();
-          const idx = selectedIndexRef.current;
-          const item = items[idx];
-          if (item) {
-            if (selectionMode) {
-              toggleSelected(item.id);
-            } else {
-              copyItem(item.id);
-            }
-          }
-          break;
+      const currentIndex = selectedIndexRef.current ?? 0;
+      if (action === 'next' || action === 'previous') {
+        e.preventDefault();
+        const offset = action === 'next' ? 1 : -1;
+        const nextIndex = Math.max(
+          0,
+          Math.min(currentIndex + offset, items.length - 1)
+        );
+        setSelectedItemId(items[nextIndex]?.id ?? null);
+        return;
+      }
+
+      const item = items[currentIndex];
+      if (!item) return;
+      e.preventDefault();
+      if (action === 'preview') {
+        setDetailItemId(item.id);
+        return;
+      }
+      if (selectionMode) {
+        if (action === 'activate') {
+          toggleSelected(item.id);
         }
+      } else if (action === 'activatePlainText') {
+        if (item.content_type === 'text') {
+          void pasteItemPlainText(item.id);
+        }
+      } else {
+        void pasteItem(item.id);
       }
     },
-    [copyItem, items, selectionMode, toggleSelected]
+    [detailItemId, items, pasteItem, pasteItemPlainText, selectionMode, toggleSelected]
   );
 
   useEffect(() => {
@@ -145,7 +181,7 @@ export function ClipboardList({ items, selectionMode = false }: ClipboardListPro
 
   // Scroll selected item into view
   useEffect(() => {
-    if (itemIndices.length === 0) return;
+    if (selectedIndex === null || itemIndices.length === 0) return;
     const rowIndex = itemIndices[selectedIndex];
     if (rowIndex !== undefined) {
       virtualizer.scrollToIndex(rowIndex, { align: 'auto' });
@@ -209,7 +245,11 @@ export function ClipboardList({ items, selectionMode = false }: ClipboardListPro
                     ageIndex={row.index - 1}
                     isSelected={selectedIndex === row.index - 1}
                     selectionMode={selectionMode}
-                    onSelect={() => setSelectedIndex(row.index - 1)}
+                    onSelect={() => setSelectedItemId(row.item.id)}
+                    onPreview={() => {
+                      setSelectedItemId(row.item.id);
+                      setDetailItemId(row.item.id);
+                    }}
                   />
                 </div>
               );
@@ -223,6 +263,13 @@ export function ClipboardList({ items, selectionMode = false }: ClipboardListPro
         ) : null}
       </div>
       <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-[var(--background)] to-transparent" />
+      <ClipboardDetailDialog
+        item={detailItem}
+        open={detailItem !== null}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) setDetailItemId(null);
+        }}
+      />
     </div>
   );
 }

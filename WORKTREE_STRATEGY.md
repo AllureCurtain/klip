@@ -1,6 +1,12 @@
 # Klip 单活动 Worktree 实施计划与构建/数据目录规范
 
-> 本文档是 Klip 下一阶段的完整实施目标，所有任务在同一执行上下文中连续完成。
+> **历史状态（2026-08-07）：** 本文档对应的 foundation 阶段已经通过 PR #4
+> 合并到 `main`，任务清单和验收记录保留用于追溯，不再作为当前实施入口。
+> 当前任务请读取
+> [`docs/superpowers/plans/2026-08-07-core-clipboard-workflows.md`](docs/superpowers/plans/2026-08-07-core-clipboard-workflows.md)
+> 和 [`docs/CORE_WORKFLOW_PROGRESS.md`](docs/CORE_WORKFLOW_PROGRESS.md)。
+
+> 以下正文曾是 Klip foundation 阶段的完整实施目标，所有任务已在同一执行上下文中完成。
 > 核心原则：**保持 WIP = 1，在当前 `feat/foundation` 工作树中串行完成全部功能；分段提交，最终统一提交 PR。**
 > 覆盖三块硬约束：Windows 构建成本、运行时进程级资源冲突、串行功能之间的依赖与集成边界。
 > 所有"现状"描述都附了 `文件:行号`，可直接跳转核对。
@@ -167,10 +173,10 @@ pnpm install --frozen-lockfile  # 装依赖，并通过 prepare 安装 pre-push 
 
 1. **`index_text(item_id, text)` 归 search 所有** —— search-tantivy 定义签名、错误类型、降级行为并完成实现；rich-text 提取出的纯文本和 OCR 识别结果统一调用它。因此执行顺序必须是 search 在 rich-text 和 OCR 之前。
 2. **`clipboard_formats` 归 rich-text 所有** —— rich-text 创建 `clipboard_formats(item_id, format, content)` 多格式存储接口，HTML、RTF 与未来 Markdown 都走这里。
-3. **DB migration 跟随实际功能** —— 当前 `CURRENT_DB_VERSION = 6`（`src-tauri/src/database/mod.rs:14`）。v3 → v4 引入 `clipboard_formats`，v4 → v5 引入 `clipboard_ocr`，v5 → v6 引入可空的来源字段；每次 schema 变更都随实际功能独立迁移，禁止把未实现功能的猜测一次性塞入旧版本。
+3. **DB migration 跟随实际功能** —— 当前 `CURRENT_DB_VERSION = 7`（`src-tauri/src/database/mod.rs:14`）。v3 → v4 引入 `clipboard_formats`，v4 → v5 引入 `clipboard_ocr`，v5 → v6 引入可空的来源字段，v6 → v7 引入可空的自定义标题与备注；每次 schema 变更都随实际功能独立迁移，禁止把未实现功能的猜测一次性塞入旧版本。
 4. **模块边界随功能落地** —— 命令、HTTP 路由、前端 API 和类型在对应功能实现时拆分，不创建 `rich_text.rs`、`search.rs`、`ocr.rs` 等无行为占位文件。
 
-**schema 版本的副作用：** `database/data_portability.rs` 的备份版本校验会拒绝更高版本的备份恢复到低版本 app。当前 v6 备份不能恢复到只支持 v5 或更早 schema 的 Klip；v3/v4/v5 备份仍按各自迁移链升级恢复。这是预期行为（防止静默降级），每次 schema 变化都必须在对应 CHANGELOG 中说明。
+**schema 版本的副作用：** `database/data_portability.rs` 的备份版本校验会拒绝更高版本的备份恢复到低版本 app。当前 v7 备份不能恢复到只支持 v6 或更早 schema 的 Klip；v3/v4/v5/v6 备份仍按各自迁移链升级恢复。这是预期行为（防止静默降级），每次 schema 变化都必须在对应 CHANGELOG 中说明。
 
 ---
 

@@ -14,6 +14,9 @@ export function useClipboardItemActions({
   const {
     deleteItem,
     copyItem,
+    pasteItem,
+    copyItemPlainText,
+    pasteItemPlainText,
     toggleFavorite,
     tags,
     assignTagToItem,
@@ -25,13 +28,33 @@ export function useClipboardItemActions({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [tagMenuOpen, setTagMenuOpen] = useState(false);
   const confirmTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const isBatchSelected = selectedIds.includes(item.id);
 
-  const handleCopy = useCallback(() => {
-    copyItem(item.id);
+  const showCopiedFeedback = useCallback(() => {
     setCopied(true);
-    setTimeout(() => setCopied(false), 800);
-  }, [copyItem, item.id]);
+    clearTimeout(copyTimerRef.current);
+    copyTimerRef.current = setTimeout(() => setCopied(false), 800);
+  }, []);
+
+  const handleCopy = useCallback((event: React.MouseEvent) => {
+    event.stopPropagation();
+    void copyItem(item.id).then((succeeded) => {
+      if (succeeded) showCopiedFeedback();
+    });
+  }, [copyItem, item.id, showCopiedFeedback]);
+
+  const handleCopyPlainText = useCallback((event: React.MouseEvent) => {
+    event.stopPropagation();
+    void copyItemPlainText(item.id).then((succeeded) => {
+      if (succeeded) showCopiedFeedback();
+    });
+  }, [copyItemPlainText, item.id, showCopiedFeedback]);
+
+  const handlePastePlainText = useCallback((event: React.MouseEvent) => {
+    event.stopPropagation();
+    void pasteItemPlainText(item.id);
+  }, [item.id, pasteItemPlainText]);
 
   const handleClick = useCallback(() => {
     onSelect?.();
@@ -39,8 +62,8 @@ export function useClipboardItemActions({
       toggleSelected(item.id);
       return;
     }
-    handleCopy();
-  }, [handleCopy, item.id, onSelect, selectionMode, toggleSelected]);
+    void pasteItem(item.id);
+  }, [item.id, onSelect, pasteItem, selectionMode, toggleSelected]);
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -83,7 +106,10 @@ export function useClipboardItemActions({
   };
 
   useEffect(() => {
-    return () => clearTimeout(confirmTimerRef.current);
+    return () => {
+      clearTimeout(confirmTimerRef.current);
+      clearTimeout(copyTimerRef.current);
+    };
   }, []);
 
   return {
@@ -93,6 +119,9 @@ export function useClipboardItemActions({
     tags,
     isBatchSelected,
     handleClick,
+    handleCopy,
+    handleCopyPlainText,
+    handlePastePlainText,
     handleDelete,
     handleToggleFavorite,
     handleToggleTagMenu,

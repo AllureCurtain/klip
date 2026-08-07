@@ -7,6 +7,9 @@ use crate::{AppError, Database};
 
 use super::types::ClipboardItem;
 
+pub const MAX_CUSTOM_TITLE_CHARS: usize = 200;
+pub const MAX_NOTE_CHARS: usize = 10_000;
+
 pub fn get_stats(db: &Database) -> Result<StatsResponse, AppError> {
     let conn = db.get_connection()?;
     let total_items =
@@ -296,6 +299,65 @@ mod tests {
         assert_eq!(changed.source_application.as_deref(), Some("second.exe"));
         assert_eq!(changed.source_window_title, None);
     }
+
+    #[test]
+    fn update_annotations_trims_values_and_normalizes_empty_strings() {
+        let db = test_db();
+        let item = insert_text(&db, "annotated content");
+
+        let updated = update_annotations(
+            &db,
+            item.id,
+            Some("  Project brief  ".into()),
+            Some("  Keep the complete source.\n  ".into()),
+        )
+        .unwrap();
+
+        assert_eq!(updated.custom_title.as_deref(), Some("Project brief"));
+        assert_eq!(updated.note.as_deref(), Some("Keep the complete source."));
+
+        let cleared =
+            update_annotations(&db, item.id, Some(" \t ".into()), Some("\n  ".into())).unwrap();
+        assert_eq!(cleared.custom_title, None);
+        assert_eq!(cleared.note, None);
+    }
+
+    #[test]
+    fn update_annotations_validates_unicode_character_limits_and_missing_items() {
+        let db = test_db();
+        let item = insert_text(&db, "annotation limits");
+
+        let accepted = update_annotations(
+            &db,
+            item.id,
+            Some("题".repeat(MAX_CUSTOM_TITLE_CHARS)),
+            Some("注".repeat(MAX_NOTE_CHARS)),
+        )
+        .unwrap();
+        assert_eq!(
+            accepted.custom_title.as_deref().unwrap().chars().count(),
+            MAX_CUSTOM_TITLE_CHARS
+        );
+
+        let long_title = update_annotations(
+            &db,
+            item.id,
+            Some("题".repeat(MAX_CUSTOM_TITLE_CHARS + 1)),
+            None,
+        );
+        assert!(
+            matches!(long_title, Err(AppError::InvalidInput(message)) if message.contains("title"))
+        );
+
+        let long_note =
+            update_annotations(&db, item.id, None, Some("注".repeat(MAX_NOTE_CHARS + 1)));
+        assert!(
+            matches!(long_note, Err(AppError::InvalidInput(message)) if message.contains("note"))
+        );
+
+        let missing = update_annotations(&db, 999_999, None, None);
+        assert!(matches!(missing, Err(AppError::NotFound(message)) if message.contains("999999")));
+    }
 }
 
 pub fn get_list(db: &Database, limit: i64, offset: i64) -> Result<Vec<ClipboardItem>, AppError> {
@@ -434,6 +496,57 @@ pub(crate) fn insert_with_source(
         );
     }
     Ok(saved)
+}
+
+pub fn update_annotations(
+    db: &Database,
+    id: i64,
+    custom_title: Option<String>,
+    note: Option<String>,
+) -> Result<ClipboardItem, AppError> {
+    let custom_title = normalize_annotation(custom_title, MAX_CUSTOM_TITLE_CHARS, "custom title")?;
+    let note = normalize_annotation(note, MAX_NOTE_CHARS, "note")?;
+
+    let conn = db.get_connection()?;
+    let changed = conn.execute(
+        "UPDATE clipboard_items SET custom_title = ?1, note = ?2 WHERE id = ?3",
+        rusqlite::params![custom_title, note, id],
+    )?;
+    if changed == 0 {
+        return Err(AppError::NotFound(format!("clipboard item {id} not found")));
+    }
+
+    let mut updated = clipboard_query::fetch_item_by_id_required_locked(&conn, id)?;
+    clipboard_query::hydrate_tags(&conn, std::slice::from_mut(&mut updated))?;
+    drop(conn);
+    if let Err(error) = crate::search::index_clipboard_item(db, &updated) {
+        tracing::warn!(
+            "Failed to synchronize clipboard item {} annotations to full-text search: {}",
+            updated.id,
+            error
+        );
+    }
+    Ok(updated)
+}
+
+fn normalize_annotation(
+    value: Option<String>,
+    max_chars: usize,
+    field_name: &str,
+) -> Result<Option<String>, AppError> {
+    let normalized = value.and_then(|value| {
+        let trimmed = value.trim();
+        (!trimmed.is_empty()).then(|| trimmed.to_string())
+    });
+    if normalized
+        .as_deref()
+        .is_some_and(|value| value.chars().count() > max_chars)
+    {
+        return Err(AppError::InvalidInput(format!(
+            "clipboard {field_name} must be at most {max_chars} characters"
+        )));
+    }
+    Ok(normalized)
 }
 
 pub fn delete(db: &Database, id: i64) -> Result<(), AppError> {

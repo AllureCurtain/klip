@@ -11,12 +11,12 @@ pub mod schema;
 pub mod snippets;
 pub mod types;
 
-pub const CURRENT_DB_VERSION: i64 = 6;
+pub const CURRENT_DB_VERSION: i64 = 7;
 
 pub use connection::{app_data_dir, get_db_path, init, Database};
 pub use types::{
-    AdvancedSearchQuery, BackupSummary, ClipboardFormat, ClipboardFormatType, ClipboardItem,
-    ClipboardOcr, ConfigEntry, ContentType, DiagnosticsInfo, ImportSummary, NewClipboardItem,
-    OcrStatus, RestoreSummary, Snippet, SnippetInput, SourceRule, SourceRuleInput, StatsResponse,
-    SystemInfo, Tag,
+    AdvancedSearchQuery, BackupSummary, ClipboardAnnotationInput, ClipboardFormat,
+    ClipboardFormatType, ClipboardItem, ClipboardOcr, ConfigEntry, ContentType, DiagnosticsInfo,
+    ImportSummary, NewClipboardItem, OcrStatus, RestoreSummary, Snippet, SnippetInput, SourceRule,
+    SourceRuleInput, StatsResponse, SystemInfo, Tag,
 };

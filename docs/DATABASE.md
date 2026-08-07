@@ -36,6 +36,8 @@ CREATE TABLE clipboard_items (
     metadata        TEXT,                       -- JSON 元数据
     source_application TEXT,                    -- 来源应用；平台不可用时为 NULL
     source_window_title TEXT,                   -- 来源窗口标题；权限不足时可为 NULL
+    custom_title    TEXT,                       -- 用户自定义标题，最多 200 字符
+    note            TEXT,                       -- 用户备注，最多 10,000 字符
     is_favorited    INTEGER NOT NULL DEFAULT 0, -- 是否收藏 (预留字段)
     is_sensitive    INTEGER NOT NULL DEFAULT 0, -- 是否敏感
     sensitivity_reason TEXT,                    -- 敏感原因
@@ -65,6 +67,8 @@ CREATE INDEX idx_clipboard_sensitive ON clipboard_items(is_sensitive, last_used_
 | metadata | TEXT | 否 | 图片或文件元数据 JSON |
 | source_application | TEXT | 否 | 捕获时的前台应用名或进程文件名 |
 | source_window_title | TEXT | 否 | 捕获时的窗口标题；macOS Accessibility 未授权等场景为空 |
+| custom_title | TEXT | 否 | 用户自定义标题；trim 后为空时存为 NULL，最多 200 个 Unicode 字符 |
+| note | TEXT | 否 | 用户备注；trim 后为空时存为 NULL，最多 10,000 个 Unicode 字符 |
 | is_favorited | INTEGER | 是 | 是否收藏，0/1 |
 | is_sensitive | INTEGER | 是 | 是否敏感，0/1 |
 | sensitivity_reason | TEXT | 否 | 敏感内容检测原因 |
@@ -266,6 +270,8 @@ pub struct ClipboardItem {
     pub size: i64,
     pub source_application: Option<String>,
     pub source_window_title: Option<String>,
+    pub custom_title: Option<String>,
+    pub note: Option<String>,
     pub is_favorited: bool,
     pub is_sensitive: bool,
     pub sensitivity_reason: Option<String>,
@@ -365,11 +371,11 @@ VALUES (?, ?, ?);
 
 ### 4.1 版本管理
 
-在 `app_config` 表中存储数据库版本。当前 schema 版本由后端常量 `CURRENT_DB_VERSION` 管理，当前值为 `6`：
+在 `app_config` 表中存储数据库版本。当前 schema 版本由后端常量 `CURRENT_DB_VERSION` 管理，当前值为 `7`：
 
 ```sql
 INSERT INTO app_config (key, value, updated_at)
-VALUES ('db_version', '6', strftime('%s', 'now') * 1000);
+VALUES ('db_version', '7', strftime('%s', 'now') * 1000);
 ```
 
 ### 4.2 迁移流程
@@ -382,6 +388,7 @@ VALUES ('db_version', '6', strftime('%s', 'now') * 1000);
 - v3 -> v4 会创建 `clipboard_formats`，并为既有文本记录回填纯文本格式。
 - v4 -> v5 会创建 `clipboard_ocr`，并把既有图片记录初始化为 `pending`。
 - v5 -> v6 会给 `clipboard_items` 增加两个可空来源字段；既有记录保持 `NULL`。
+- v6 -> v7 会给 `clipboard_items` 增加可空 `custom_title` 与 `note`；既有记录保持 `NULL`。
 - 完成后写回当前 `db_version`。
 
 ```rust
@@ -402,6 +409,9 @@ fn run_migrations(db: &Connection) -> Result<()> {
     }
     if version < 6 {
         migrate_v5_to_v6(db)?;
+    }
+    if version < 7 {
+        migrate_v6_to_v7(db)?;
     }
 
     Ok(())
@@ -449,7 +459,10 @@ fn cleanup_old_records(db: &Connection, max_count: i64) -> Result<()> {
 
 ### 6.1 JSON/CSV 导入导出
 
-当前版本提供 JSON 和 CSV 导入导出命令。JSON v1 的 `ClipboardItem` 会携带两个可空来源字段，旧 JSON 缺少字段时按 `NULL` 导入；CSV v1 为保持严格表头兼容，不导入或导出来源字段。CSV 导入支持带引号的多行字段。导出命令会创建目标父目录。
+当前版本提供 JSON 和 CSV 导入导出命令。JSON v1 的 `ClipboardItem` 会携带可空来源、
+`custom_title` 与 `note`；旧 JSON 缺少这些字段时按 `NULL` 导入。CSV v1 为保持严格表头
+兼容，不导入或导出来源及 annotation 字段。CSV 导入支持带引号的多行字段。导出命令会
+创建目标父目录。
 
 ### 6.2 数据库备份
 
@@ -457,7 +470,14 @@ fn cleanup_old_records(db: &Connection, max_count: i64) -> Result<()> {
 
 ### 6.3 数据库恢复
 
-`restore_database` 会先用只读 SQLite 连接校验备份文件，执行 `PRAGMA integrity_check`，并确认必需表存在。恢复前会自动创建当前数据库的 `.pre-restore.bak` 备份。恢复时通过当前连接 `ATTACH DATABASE` 后导入数据，不直接替换已打开的数据库文件。v3 备份会迁移并回填纯文本格式；v4 备份必须包含 `clipboard_formats`，恢复后为图片补建 pending OCR；v5 备份还必须包含 `clipboard_ocr`，来源字段恢复为 `NULL`；v6 备份必须同时包含 `source_application` 与 `source_window_title` 并原样保留。缺列会在修改当前数据库前被拒绝。旧版应用会拒绝更高 schema 版本，因此 v6 备份不能恢复到只支持 v5 或更早 schema 的 Klip。
+`restore_database` 会先用只读 SQLite 连接校验备份文件，执行 `PRAGMA integrity_check`，并
+确认必需表存在。恢复前会自动创建当前数据库的 `.pre-restore.bak` 备份。恢复时通过当前
+连接 `ATTACH DATABASE` 后导入数据，不直接替换已打开的数据库文件。v3 备份会迁移并回填
+纯文本格式；v4 备份必须包含 `clipboard_formats`，恢复后为图片补建 pending OCR；v5 备份
+还必须包含 `clipboard_ocr`，来源字段恢复为 `NULL`；v6 备份必须同时包含两个来源字段，
+annotation 恢复为 `NULL`；v7 备份必须同时包含 `custom_title` 与 `note` 并原样保留。缺列会
+在修改当前数据库前被拒绝。旧版应用会拒绝更高 schema 版本，因此 v7 备份不能恢复到只
+支持 v6 或更早 schema 的 Klip。
 
 ```rust
 pub struct RestoreSummary {
@@ -491,8 +511,10 @@ pub struct RestoreSummary {
 ### 7.2 查询优化
 
 - 使用 `LIMIT` 限制返回数量
-- 普通关键词搜索由 `search-index` 中的 Tantivy + jieba 生成匹配 ID，SQLite 继续负责类型、标签、收藏、敏感状态、日期、排序和分页
-- 精确匹配继续使用 SQLite 等值查询；Tantivy 初始化、校验、写入或查询失败时自动回退 `LIKE '%keyword%'`
+- 普通关键词搜索把内容、预览、已完成 OCR、`custom_title` 与 `note` 合成为可搜索文本，由
+  `search-index` 中的 Tantivy + jieba 生成匹配 ID；SQLite 继续负责筛选、排序和分页
+- 精确匹配继续对内容、预览、OCR、标题和备注使用 SQLite 等值查询；Tantivy 初始化、
+  校验、写入或查询失败时自动回退 `LIKE '%keyword%'`
 - 索引每 50 条或 5 秒批量提交，查询前刷新待提交内容；删除、清空、导入和恢复同步更新索引
 - 启动时校验 Tantivy checksum，并逐项比较 Tantivy 与 SQLite 的 `(item_id, SHA-256(可搜索内容))`；物理损坏、同数量不同 ID 或同 ID 内容漂移时保留旧索引并从 SQLite 全量重建
 - 批量操作使用事务

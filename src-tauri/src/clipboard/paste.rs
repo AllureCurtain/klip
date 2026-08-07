@@ -1,19 +1,40 @@
+use crate::clipboard::writer::ClipboardWriteMode;
 use crate::database::{self, ClipboardItem};
+use crate::hotkey::visible_items::{position_offset, VisibleClipboardItems, VisibleItemAtPosition};
 use crate::{AppError, Database};
 use tauri::AppHandle;
 
 pub fn copy_item_by_id(db: &Database, id: i64) -> Result<(), AppError> {
     let item = load_item_by_id(db, id)?;
-    copy_loaded_item(db, &item)
+    copy_loaded_item(db, &item, ClipboardWriteMode::PreserveFormats)
+}
+
+pub fn copy_item_as_plain_text_by_id(db: &Database, id: i64) -> Result<(), AppError> {
+    let item = load_item_by_id(db, id)?;
+    copy_loaded_item(db, &item, ClipboardWriteMode::PlainText)
 }
 
 pub fn paste_item_by_id(app: &AppHandle, db: &Database, id: i64) -> Result<(), AppError> {
     let item = load_item_by_id(db, id)?;
-    copy_item_and_simulate_paste(app, db, &item)
+    copy_loaded_item_and_simulate_paste(app, db, &item, ClipboardWriteMode::PreserveFormats)
 }
 
-pub fn quick_paste(app: &AppHandle, db: &Database, index: i64) -> Result<bool, AppError> {
-    match load_item_by_quick_paste_index(db, index)? {
+pub fn paste_item_as_plain_text_by_id(
+    app: &AppHandle,
+    db: &Database,
+    id: i64,
+) -> Result<(), AppError> {
+    let item = load_item_by_id(db, id)?;
+    copy_loaded_item_and_simulate_paste(app, db, &item, ClipboardWriteMode::PlainText)
+}
+
+pub fn quick_paste(
+    app: &AppHandle,
+    db: &Database,
+    visible_items: &VisibleClipboardItems,
+    index: i64,
+) -> Result<bool, AppError> {
+    match load_item_by_quick_paste_index(db, visible_items, index)? {
         Some(item) => {
             copy_item_and_simulate_paste(app, db, &item)?;
             Ok(true)
@@ -27,20 +48,22 @@ pub fn copy_item_and_simulate_paste(
     db: &Database,
     item: &ClipboardItem,
 ) -> Result<(), AppError> {
-    copy_loaded_item(db, item)?;
+    copy_loaded_item_and_simulate_paste(app, db, item, ClipboardWriteMode::PreserveFormats)
+}
+
+fn copy_loaded_item_and_simulate_paste(
+    app: &AppHandle,
+    db: &Database,
+    item: &ClipboardItem,
+    mode: ClipboardWriteMode,
+) -> Result<(), AppError> {
+    copy_loaded_item(db, item, mode)?;
     crate::window::controller::hide_main_window(app)?;
     simulate_platform_paste()
 }
 
 pub(crate) fn quick_paste_offset(index: i64) -> Result<i64, AppError> {
-    if (1..=9).contains(&index) {
-        Ok(index - 1)
-    } else {
-        Err(AppError::InvalidInput(format!(
-            "quick paste index {} must be between 1 and 9",
-            index
-        )))
-    }
+    Ok(position_offset(index)? as i64)
 }
 
 pub(crate) fn load_item_by_id(db: &Database, id: i64) -> Result<ClipboardItem, AppError> {
@@ -50,20 +73,32 @@ pub(crate) fn load_item_by_id(db: &Database, id: i64) -> Result<ClipboardItem, A
 
 pub(crate) fn load_item_by_quick_paste_index(
     db: &Database,
+    visible_items: &VisibleClipboardItems,
     index: i64,
 ) -> Result<Option<ClipboardItem>, AppError> {
-    let offset = quick_paste_offset(index)?;
-    Ok(database::clipboard::get_list(db, 1, offset)?
-        .into_iter()
-        .next())
+    match visible_items.resolve(index)? {
+        VisibleItemAtPosition::Uninitialized => {
+            let offset = quick_paste_offset(index)?;
+            Ok(database::clipboard::get_list(db, 1, offset)?
+                .into_iter()
+                .next())
+        }
+        VisibleItemAtPosition::Id(id) => database::clipboard::get_by_id(db, id),
+        VisibleItemAtPosition::Missing => Ok(None),
+    }
 }
 
-fn copy_loaded_item(db: &Database, item: &ClipboardItem) -> Result<(), AppError> {
+fn copy_loaded_item(
+    db: &Database,
+    item: &ClipboardItem,
+    mode: ClipboardWriteMode,
+) -> Result<(), AppError> {
     crate::clipboard::copy_to_clipboard(
         &item.content,
         &item.content_type,
         item.metadata.as_deref(),
         &item.formats,
+        mode,
     )?;
     let _ = database::clipboard::touch_last_used(db, item.id);
     Ok(())
@@ -109,6 +144,7 @@ fn simulate_platform_paste() -> Result<(), AppError> {
 mod tests {
     use super::*;
     use crate::database::types::{ContentType, NewClipboardItem};
+    use crate::hotkey::visible_items::VisibleClipboardItems;
     use rusqlite::Connection;
     use sha2::{Digest, Sha256};
 
@@ -175,17 +211,75 @@ mod tests {
     }
 
     #[test]
-    fn load_item_by_quick_paste_index_uses_index_minus_one() {
+    fn uninitialized_visible_items_fall_back_to_database_order() {
         let db = test_db();
+        let visible_items = VisibleClipboardItems::default();
         let older = insert_text_at_time(&db, "older", 1_000);
         let newest = insert_text_at_time(&db, "newest", 2_000);
 
-        let first = load_item_by_quick_paste_index(&db, 1).unwrap().unwrap();
-        let second = load_item_by_quick_paste_index(&db, 2).unwrap().unwrap();
-        let missing = load_item_by_quick_paste_index(&db, 3).unwrap();
+        let first = load_item_by_quick_paste_index(&db, &visible_items, 1)
+            .unwrap()
+            .unwrap();
+        let second = load_item_by_quick_paste_index(&db, &visible_items, 2)
+            .unwrap()
+            .unwrap();
+        let missing = load_item_by_quick_paste_index(&db, &visible_items, 3).unwrap();
 
         assert_eq!(first.id, newest.id);
         assert_eq!(second.id, older.id);
         assert!(missing.is_none());
+    }
+
+    #[test]
+    fn initialized_visible_items_use_snapshot_order_and_empty_is_authoritative() {
+        let db = test_db();
+        let visible_items = VisibleClipboardItems::default();
+        let first = insert_text_at_time(&db, "first", 1_000);
+        let second = insert_text_at_time(&db, "second", 2_000);
+
+        visible_items.set(vec![first.id, second.id]).unwrap();
+        let loaded = load_item_by_quick_paste_index(&db, &visible_items, 1)
+            .unwrap()
+            .unwrap();
+        assert_eq!(loaded.id, first.id);
+
+        visible_items.set(Vec::new()).unwrap();
+        assert!(load_item_by_quick_paste_index(&db, &visible_items, 1)
+            .unwrap()
+            .is_none());
+    }
+
+    #[test]
+    fn deleted_visible_id_does_not_fall_back_to_another_item() {
+        let db = test_db();
+        let visible_items = VisibleClipboardItems::default();
+        let fallback = insert_text_at_time(&db, "fallback", 1_000);
+        let deleted = insert_text_at_time(&db, "deleted", 2_000);
+        visible_items.set(vec![deleted.id]).unwrap();
+        database::clipboard::delete(&db, deleted.id).unwrap();
+
+        let loaded = load_item_by_quick_paste_index(&db, &visible_items, 1).unwrap();
+
+        assert!(loaded.is_none());
+        assert!(database::clipboard::get_by_id(&db, fallback.id)
+            .unwrap()
+            .is_some());
+    }
+
+    #[test]
+    fn plain_text_actions_reject_non_text_items() {
+        let db = test_db();
+        let item = insert_text_at_time(&db, "not-text", 1_000);
+        let conn = db.get_connection().unwrap();
+        conn.execute(
+            "UPDATE clipboard_items SET content_type = 'image' WHERE id = ?1",
+            [item.id],
+        )
+        .unwrap();
+        drop(conn);
+
+        let result = copy_item_as_plain_text_by_id(&db, item.id);
+
+        assert!(matches!(result, Err(AppError::InvalidInput(message)) if message.contains("text")));
     }
 }

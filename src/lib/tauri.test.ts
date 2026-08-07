@@ -91,6 +91,73 @@ describe('tauri API wrappers', () => {
     });
   });
 
+  it('keeps copy and paste commands distinct', async () => {
+    vi.mocked(invoke).mockResolvedValue(undefined);
+
+    await clipboardApi.copy(4);
+    await clipboardApi.paste(5);
+
+    expect(invoke).toHaveBeenNthCalledWith(1, 'copy_to_clipboard', { id: 4 });
+    expect(invoke).toHaveBeenNthCalledWith(2, 'paste_from_clipboard', { id: 5 });
+  });
+
+  it('keeps plain-text copy and paste commands distinct', async () => {
+    vi.mocked(invoke).mockResolvedValue(undefined);
+
+    await clipboardApi.copyPlainText(6);
+    await clipboardApi.pastePlainText(7);
+
+    expect(invoke).toHaveBeenNthCalledWith(1, 'copy_plain_text_to_clipboard', {
+      id: 6,
+    });
+    expect(invoke).toHaveBeenNthCalledWith(2, 'paste_plain_text_from_clipboard', {
+      id: 7,
+    });
+  });
+
+  it('syncs the ordered visible clipboard ids', async () => {
+    vi.mocked(invoke).mockResolvedValue(undefined);
+
+    await clipboardApi.setVisibleItems([9, 4, 7]);
+
+    expect(invoke).toHaveBeenCalledWith('set_visible_clipboard_items', {
+      ids: [9, 4, 7],
+    });
+  });
+
+  it('loads and executes typed clipboard content actions', async () => {
+    vi.mocked(invoke).mockResolvedValue([]);
+    const action = { kind: 'open_url', target: 'https://example.com' } as const;
+
+    await clipboardApi.getContentActions(12);
+    await clipboardApi.executeContentAction(12, action);
+
+    expect(invoke).toHaveBeenNthCalledWith(1, 'get_clipboard_content_actions', {
+      id: 12,
+    });
+    expect(invoke).toHaveBeenNthCalledWith(2, 'execute_clipboard_content_action', {
+      id: 12,
+      action,
+    });
+  });
+
+  it('updates clipboard annotations through a typed input', async () => {
+    vi.mocked(invoke).mockResolvedValue({});
+
+    await clipboardApi.updateAnnotations(12, {
+      customTitle: 'Project brief',
+      note: 'Review tomorrow',
+    });
+
+    expect(invoke).toHaveBeenCalledWith('update_clipboard_annotations', {
+      id: 12,
+      input: {
+        customTitle: 'Project brief',
+        note: 'Review tomorrow',
+      },
+    });
+  });
+
   it('subscribes to typed clipboard item updates', async () => {
     vi.mocked(listen).mockResolvedValue(vi.fn());
     const callback = vi.fn();

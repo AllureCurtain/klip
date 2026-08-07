@@ -504,6 +504,8 @@ fn searchable_text(item: &ClipboardItem) -> String {
         &item.content,
         item.preview.as_deref(),
         ocr_text,
+        item.custom_title.as_deref(),
+        item.note.as_deref(),
     )
 }
 
@@ -512,9 +514,11 @@ fn compose_searchable_text(
     content: &str,
     preview: Option<&str>,
     ocr_text: Option<&str>,
+    custom_title: Option<&str>,
+    note: Option<&str>,
 ) -> String {
     let preview = preview.unwrap_or_default();
-    match content_type {
+    let content_text = match content_type {
         ContentType::Image => {
             let ocr_text = ocr_text.unwrap_or_default().trim();
             match (preview.is_empty(), ocr_text.is_empty()) {
@@ -531,7 +535,18 @@ fn compose_searchable_text(
                 format!("{preview}\n{content}")
             }
         }
-    }
+    };
+
+    [
+        custom_title.unwrap_or_default(),
+        note.unwrap_or_default(),
+        content_text.as_str(),
+    ]
+    .into_iter()
+    .map(str::trim)
+    .filter(|value| !value.is_empty())
+    .collect::<Vec<_>>()
+    .join("\n")
 }
 
 fn content_fingerprint(text: &str) -> Vec<u8> {
@@ -595,7 +610,7 @@ fn database_documents(db: &Database) -> Result<Vec<(i64, String)>, SearchError> 
         .prepare(
             "SELECT i.id, i.content_type,
                     CASE WHEN i.content_type = 'image' THEN '' ELSE i.content END,
-                    i.preview, COALESCE(o.text, '')
+                    i.preview, COALESCE(o.text, ''), i.custom_title, i.note
              FROM clipboard_items i
              LEFT JOIN clipboard_ocr o ON o.item_id = i.id AND o.status = 'completed'
              ORDER BY i.id",
@@ -607,11 +622,15 @@ fn database_documents(db: &Database) -> Result<Vec<(i64, String)>, SearchError> 
             let content = row.get::<_, String>(2)?;
             let preview = row.get::<_, Option<String>>(3)?;
             let ocr_text = row.get::<_, String>(4)?;
+            let custom_title = row.get::<_, Option<String>>(5)?;
+            let note = row.get::<_, Option<String>>(6)?;
             let text = compose_searchable_text(
                 content_type,
                 &content,
                 preview.as_deref(),
                 Some(&ocr_text),
+                custom_title.as_deref(),
+                note.as_deref(),
             );
             Ok((row.get::<_, i64>(0)?, text))
         })
@@ -791,6 +810,62 @@ mod tests {
     }
 
     #[test]
+    fn annotations_are_searchable_incrementally_after_rebuild_and_in_sqlite_fallback() {
+        let (root, db) = temp_database("annotations");
+        let item = insert_text(&db, "content without annotation terms");
+        crate::database::clipboard::update_annotations(
+            &db,
+            item.id,
+            Some("Quarterly roadmap".into()),
+            Some("Discuss 北极星指标 with the team".into()),
+        )
+        .expect("save searchable annotations");
+
+        let title_results = crate::database::clipboard::search(&db, "roadmap", None, 20)
+            .expect("search incrementally indexed title");
+        assert_eq!(
+            title_results.iter().map(|item| item.id).collect::<Vec<_>>(),
+            vec![item.id]
+        );
+
+        rebuild(&db).expect("rebuild index with annotations");
+        let note_results = crate::database::clipboard::search(&db, "北极星指标", None, 20)
+            .expect("search rebuilt note");
+        assert_eq!(
+            note_results.iter().map(|item| item.id).collect::<Vec<_>>(),
+            vec![item.id]
+        );
+
+        drop(db);
+        std::fs::remove_dir_all(root).expect("remove annotation search test directory");
+
+        let connection = rusqlite::Connection::open_in_memory().expect("open fallback database");
+        connection
+            .execute_batch("PRAGMA foreign_keys=ON;")
+            .expect("configure fallback database");
+        let fallback = Database::from_conn(connection);
+        fallback.init_schema().expect("initialize fallback schema");
+        let fallback_item = insert_text(&fallback, "fallback annotation content");
+        crate::database::clipboard::update_annotations(
+            &fallback,
+            fallback_item.id,
+            None,
+            Some("fallback-note-marker".into()),
+        )
+        .expect("save fallback annotation");
+        let fallback_results =
+            crate::database::clipboard::search(&fallback, "note-marker", None, 20)
+                .expect("search annotation with SQLite fallback");
+        assert_eq!(
+            fallback_results
+                .iter()
+                .map(|item| item.id)
+                .collect::<Vec<_>>(),
+            vec![fallback_item.id]
+        );
+    }
+
+    #[test]
     fn completed_ocr_text_is_searchable_after_incremental_update_and_rebuild() {
         let (root, db) = temp_database("ocr-rebuild");
         let image = insert_image(&db, "ocr-search-image");
@@ -948,6 +1023,39 @@ mod tests {
 
         drop(reopened);
         std::fs::remove_dir_all(root).expect("remove content drift test directory");
+    }
+
+    #[test]
+    fn same_id_with_stale_annotations_is_rebuilt_from_sqlite() {
+        let (root, db) = temp_database("annotation-drift");
+        let item = insert_text(&db, "stable clipboard content");
+        crate::database::clipboard::search(&db, "stable", None, 20)
+            .expect("flush initial search index");
+        drop(db);
+
+        let connection = rusqlite::Connection::open(root.join("klip.db"))
+            .expect("open database without search synchronization");
+        connection
+            .execute(
+                "UPDATE clipboard_items SET custom_title = ?1, note = ?2 WHERE id = ?3",
+                rusqlite::params!["Database annotation", "fingerprint-note-drift", item.id],
+            )
+            .expect("replace annotations directly");
+        drop(connection);
+
+        let reopened = Database::new(&root.join("klip.db"))
+            .expect("reopen database and rebuild annotation drift");
+        let results = crate::database::clipboard::search(&reopened, "fingerprint-note", None, 20)
+            .expect("search rebuilt annotation");
+
+        assert_eq!(
+            results.iter().map(|item| item.id).collect::<Vec<_>>(),
+            vec![item.id]
+        );
+        assert!(preserved_index_exists(&root));
+
+        drop(reopened);
+        std::fs::remove_dir_all(root).expect("remove annotation drift test directory");
     }
 
     #[test]

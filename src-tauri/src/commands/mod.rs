@@ -43,6 +43,18 @@ pub fn toggle_favorite(
 }
 
 #[tauri::command]
+pub fn update_clipboard_annotations(
+    app: tauri::AppHandle,
+    db: State<'_, database::Database>,
+    id: i64,
+    input: database::ClipboardAnnotationInput,
+) -> Result<ClipboardItem, AppError> {
+    let updated = database::clipboard::update_annotations(&db, id, input.custom_title, input.note)?;
+    let _ = app.emit("clipboard-item-updated", &updated);
+    Ok(updated)
+}
+
+#[tauri::command]
 pub fn clear_clipboard_history(
     app: tauri::AppHandle,
     db: State<'_, database::Database>,
@@ -58,12 +70,55 @@ pub fn copy_to_clipboard(db: State<'_, database::Database>, id: i64) -> Result<(
 }
 
 #[tauri::command]
+pub fn copy_plain_text_to_clipboard(
+    db: State<'_, database::Database>,
+    id: i64,
+) -> Result<(), AppError> {
+    crate::clipboard::paste::copy_item_as_plain_text_by_id(&db, id)
+}
+
+#[tauri::command]
 pub fn paste_from_clipboard(
     app: tauri::AppHandle,
     db: State<'_, database::Database>,
     id: i64,
 ) -> Result<(), AppError> {
     crate::clipboard::paste::paste_item_by_id(&app, &db, id)
+}
+
+#[tauri::command]
+pub fn paste_plain_text_from_clipboard(
+    app: tauri::AppHandle,
+    db: State<'_, database::Database>,
+    id: i64,
+) -> Result<(), AppError> {
+    crate::clipboard::paste::paste_item_as_plain_text_by_id(&app, &db, id)
+}
+
+#[tauri::command]
+pub fn set_visible_clipboard_items(
+    visible_items: State<'_, crate::hotkey::VisibleClipboardItems>,
+    ids: Vec<i64>,
+) -> Result<(), AppError> {
+    visible_items.set(ids)
+}
+
+#[tauri::command]
+pub fn get_clipboard_content_actions(
+    db: State<'_, database::Database>,
+    id: i64,
+) -> Result<Vec<crate::clipboard::actions::ClipboardContentAction>, AppError> {
+    crate::clipboard::actions::get_actions_by_id(&db, id)
+}
+
+#[tauri::command]
+pub fn execute_clipboard_content_action(
+    app: tauri::AppHandle,
+    db: State<'_, database::Database>,
+    id: i64,
+    action: crate::clipboard::actions::ClipboardContentAction,
+) -> Result<(), AppError> {
+    crate::clipboard::actions::execute_action_by_id(&app, &db, id, action)
 }
 
 #[tauri::command]

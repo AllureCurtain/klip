@@ -8,6 +8,8 @@ export interface ClipboardItem {
   metadata: string | null;
   source_application: string | null;
   source_window_title: string | null;
+  custom_title: string | null;
+  note: string | null;
   is_favorited: boolean;
   is_sensitive: boolean;
   sensitivity_reason: string | null;
@@ -16,6 +18,11 @@ export interface ClipboardItem {
   tags: Tag[];
   created_at: number;
   last_used_at: number;
+}
+
+export interface ClipboardAnnotationInput {
+  customTitle: string | null;
+  note: string | null;
 }
 
 export interface ClipboardFormat {
@@ -29,6 +36,14 @@ export interface ClipboardOcr {
   error: string | null;
   updated_at: number;
 }
+
+export type ClipboardContentAction =
+  | { kind: 'open_url'; target: string }
+  | { kind: 'compose_email'; target: string }
+  | { kind: 'open_path'; target: string }
+  | { kind: 'reveal_path'; target: string }
+  | { kind: 'copy_path'; target: string }
+  | { kind: 'copy_file_name'; target: string };
 
 export interface Tag {
   id: number;

@@ -2,10 +2,15 @@ import {
   AppWindow,
   Check,
   CircleAlert,
+  ClipboardCopy,
+  ClipboardPaste,
+  Copy,
+  Eye,
   LoaderCircle,
   ScanText,
   ShieldAlert,
   Star,
+  StickyNote,
   Tags,
   Trash2,
 } from 'lucide-react';
@@ -16,9 +21,13 @@ import { useConfigStore } from '@/stores/configStore';
 import { formatTime, cn } from '@/lib/utils';
 import { springs, cardVariants } from '@/lib/motion';
 import type { ClipboardItem as ClipboardItemType } from '@/types';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { ImagePreview } from './ImagePreview';
+import { useEffect, useMemo, useRef } from 'react';
 import { useClipboardItemActions } from './useClipboardItemActions';
+import { useClipboardContentActions } from './useClipboardContentActions';
+import {
+  contentActionPresentation,
+  isPrimaryContentAction,
+} from './clipboardContentActions';
 import {
   classifyFile,
   getClipKind,
@@ -37,6 +46,7 @@ interface ClipboardItemProps {
   isSelected: boolean;
   selectionMode?: boolean;
   onSelect?: () => void;
+  onPreview?: () => void;
 }
 
 export function ClipboardItem({
@@ -45,9 +55,9 @@ export function ClipboardItem({
   isSelected,
   selectionMode = false,
   onSelect,
+  onPreview,
 }: ClipboardItemProps) {
   const { t } = useTranslation();
-  const [imagePreviewOpen, setImagePreviewOpen] = useState(false);
   const itemRef = useRef<HTMLDivElement>(null);
   const maskSensitivePreviews = useConfigStore(
     (state) => state.config.mask_sensitive_previews
@@ -59,6 +69,9 @@ export function ClipboardItem({
     tags,
     isBatchSelected,
     handleClick,
+    handleCopy,
+    handleCopyPlainText,
+    handlePastePlainText,
     handleDelete,
     handleToggleFavorite,
     handleToggleTagMenu,
@@ -78,6 +91,12 @@ export function ClipboardItem({
   const tone = CLIP_TONES[clipKind];
   const Renderer = RENDERER_REGISTRY[item.content_type];
   const shouldMaskPreview = item.is_sensitive && maskSensitivePreviews;
+  const { actions: contentActions, executeAction: executeContentAction } =
+    useClipboardContentActions(
+      item.id,
+      !selectionMode && !shouldMaskPreview
+    );
+  const primaryContentAction = contentActions.find(isPrimaryContentAction) ?? null;
   const opacityForAge = Math.max(0.85, 1 - ageIndex * 0.005);
   const typeLabel = t(`clipboard.types.${clipKind}`);
   const strongRowState = copied || (selectionMode && isBatchSelected);
@@ -90,11 +109,24 @@ export function ClipboardItem({
 
   const handleImageClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setImagePreviewOpen(true);
+    onSelect?.();
+    onPreview?.();
+  };
+
+  const handlePreview = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onSelect?.();
+    onPreview?.();
+  };
+
+  const handleContentAction = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (primaryContentAction) {
+      void executeContentAction(primaryContentAction).catch(() => undefined);
+    }
   };
 
   return (
-    <>
       <motion.div
         data-testid="clipboard-item"
         ref={itemRef}
@@ -141,17 +173,28 @@ export function ClipboardItem({
         </span>
 
         <div className="min-w-0 flex-1">
-          <Renderer
-            item={item}
-            shouldMaskPreview={shouldMaskPreview}
-            fileShape={fileShape}
-            imageMeta={imageMeta}
-            onImageClick={handleImageClick}
-          />
+          {!shouldMaskPreview && item.custom_title ? (
+            <span
+              className="block truncate text-xs font-medium text-foreground"
+              data-testid="clipboard-custom-title"
+              title={item.custom_title}
+            >
+              {item.custom_title}
+            </span>
+          ) : (
+            <Renderer
+              item={item}
+              shouldMaskPreview={shouldMaskPreview}
+              fileShape={fileShape}
+              imageMeta={imageMeta}
+              onImageClick={handleImageClick}
+            />
+          )}
           <MetaLine
             item={item}
             copied={copied}
             imageMeta={imageMeta}
+            shouldMaskPreview={shouldMaskPreview}
             toneDot={tone.dot}
             typeLabel={typeLabel}
           />
@@ -162,31 +205,18 @@ export function ClipboardItem({
           confirmDelete={confirmDelete}
           tagMenuOpen={tagMenuOpen}
           tags={tags}
+          primaryContentAction={primaryContentAction}
+          onContentAction={handleContentAction}
+          onPreview={handlePreview}
+          onCopy={handleCopy}
+          onCopyPlainText={handleCopyPlainText}
+          onPastePlainText={handlePastePlainText}
           onDelete={handleDelete}
           onTagAction={handleTagAction}
           onToggleFavorite={handleToggleFavorite}
           onToggleTagMenu={handleToggleTagMenu}
         />
       </motion.div>
-
-      {item.content_type === 'image' && (
-        <ImagePreview
-          src={item.content}
-          alt=""
-          metadata={
-            imageMeta
-              ? {
-                  width: imageMeta.width,
-                  height: imageMeta.height,
-                  format: imageMeta.format,
-                }
-              : undefined
-          }
-          open={imagePreviewOpen}
-          onOpenChange={setImagePreviewOpen}
-        />
-      )}
-    </>
   );
 }
 
@@ -194,12 +224,14 @@ function MetaLine({
   item,
   copied,
   imageMeta,
+  shouldMaskPreview,
   toneDot,
   typeLabel,
 }: {
   item: ClipboardItemType;
   copied: boolean;
   imageMeta: { width: number; height: number; format: string } | null;
+  shouldMaskPreview: boolean;
   toneDot: string;
   typeLabel: string;
 }) {
@@ -286,6 +318,16 @@ function MetaLine({
           {t('clipboard.copied')}
         </span>
       )}
+      {item.note && !shouldMaskPreview && (
+        <span
+          className="inline-flex shrink-0 items-center text-muted-foreground"
+          aria-label={t('clipboard.hasNote')}
+          title={t('clipboard.hasNote')}
+          data-testid="clipboard-note-indicator"
+        >
+          <StickyNote className="h-2.5 w-2.5" aria-hidden="true" />
+        </span>
+      )}
       {item.is_sensitive && (
         <span
           className="inline-flex shrink-0 items-center gap-0.5 text-muted-foreground"
@@ -319,7 +361,13 @@ function RowActions({
   confirmDelete,
   tagMenuOpen,
   tags,
+  primaryContentAction,
+  onContentAction,
+  onPreview,
   onDelete,
+  onCopy,
+  onCopyPlainText,
+  onPastePlainText,
   onTagAction,
   onToggleFavorite,
   onToggleTagMenu,
@@ -328,12 +376,21 @@ function RowActions({
   confirmDelete: boolean;
   tagMenuOpen: boolean;
   tags: Array<{ id: number; name: string; color: string | null }>;
+  primaryContentAction: import('@/types').ClipboardContentAction | null;
+  onContentAction: (event: React.MouseEvent) => void;
+  onPreview: (event: React.MouseEvent) => void;
   onDelete: (event: React.MouseEvent) => void;
+  onCopy: (event: React.MouseEvent) => void;
+  onCopyPlainText: (event: React.MouseEvent) => void;
+  onPastePlainText: (event: React.MouseEvent) => void;
   onTagAction: (event: React.MouseEvent, tagId: number, assigned: boolean) => void;
   onToggleFavorite: (event: React.MouseEvent) => void;
   onToggleTagMenu: (event: React.MouseEvent) => void;
 }) {
   const { t } = useTranslation();
+  const primaryAction = primaryContentAction
+    ? contentActionPresentation(primaryContentAction, t)
+    : null;
 
   return (
     <div
@@ -342,6 +399,62 @@ function RowActions({
         (item.is_favorited || confirmDelete) && 'opacity-100'
       )}
     >
+      {primaryAction && (
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label={primaryAction.label}
+          title={primaryAction.label}
+          className="size-6"
+          onClick={onContentAction}
+        >
+          <primaryAction.icon className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+        </Button>
+      )}
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label={t('clipboard.preview')}
+        title={t('clipboard.preview')}
+        className="size-6"
+        onClick={onPreview}
+      >
+        <Eye className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label={t('clipboard.copy')}
+        title={t('clipboard.copy')}
+        className="size-6"
+        onClick={onCopy}
+      >
+        <Copy className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+      </Button>
+      {item.content_type === 'text' && (
+        <>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={t('clipboard.copyPlainText')}
+            title={t('clipboard.copyPlainText')}
+            className="size-6"
+            onClick={onCopyPlainText}
+          >
+            <ClipboardCopy className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={t('clipboard.pastePlainText')}
+            title={t('clipboard.pastePlainText')}
+            className="size-6"
+            onClick={onPastePlainText}
+          >
+            <ClipboardPaste className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+          </Button>
+        </>
+      )}
       <Button
         variant="ghost"
         size="icon"

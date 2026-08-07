@@ -16,6 +16,12 @@ use crate::AppError;
 
 const PNG_DATA_URL_PREFIX: &str = "data:image/png;base64,";
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClipboardWriteMode {
+    PreserveFormats,
+    PlainText,
+}
+
 /// Write a stored item back to the clipboard.
 ///
 /// `metadata` is accepted because it is part of the stored representation, but
@@ -26,14 +32,21 @@ pub fn copy_to_clipboard(
     content_type: &ContentType,
     _metadata: Option<&str>,
     formats: &[ClipboardFormat],
+    mode: ClipboardWriteMode,
 ) -> Result<(), AppError> {
+    if mode == ClipboardWriteMode::PlainText && *content_type != ContentType::Text {
+        return Err(AppError::InvalidInput(
+            "plain-text clipboard actions require a text item".to_string(),
+        ));
+    }
+
     // Arm before writing. Arming afterwards would leave a window in which the
     // clipboard has already changed but the monitor has nothing to match
     // against, which is exactly the feedback loop this guards.
     suppress::arm(hash::hash_stored_content(content_type.as_str(), content));
 
     let result = match content_type {
-        ContentType::Text => write_text(content, formats),
+        ContentType::Text => write_text(content, formats, mode),
         ContentType::Image => write_image(content),
         ContentType::File => write_files(content),
     };
@@ -47,10 +60,26 @@ pub fn copy_to_clipboard(
     result
 }
 
-fn write_text(content: &str, formats: &[ClipboardFormat]) -> Result<(), AppError> {
-    let html = format_content(formats, ClipboardFormatType::Html);
-    let rtf = format_content(formats, ClipboardFormatType::Rtf);
+fn write_text(
+    content: &str,
+    formats: &[ClipboardFormat],
+    mode: ClipboardWriteMode,
+) -> Result<(), AppError> {
+    let (html, rtf) = text_formats_for_mode(formats, mode);
     backend::write_text_formats(content, html, rtf).map_err(AppError::from)
+}
+
+fn text_formats_for_mode(
+    formats: &[ClipboardFormat],
+    mode: ClipboardWriteMode,
+) -> (Option<&str>, Option<&str>) {
+    match mode {
+        ClipboardWriteMode::PreserveFormats => (
+            format_content(formats, ClipboardFormatType::Html),
+            format_content(formats, ClipboardFormatType::Rtf),
+        ),
+        ClipboardWriteMode::PlainText => (None, None),
+    }
 }
 
 fn format_content(formats: &[ClipboardFormat], expected: ClipboardFormatType) -> Option<&str> {
@@ -137,6 +166,29 @@ mod tests {
         assert_eq!(
             format_content(&formats, ClipboardFormatType::Rtf),
             Some(r"{\rtf1\b Hello}")
+        );
+    }
+
+    #[test]
+    fn write_mode_selects_preserved_or_plain_text_formats() {
+        let formats = vec![
+            ClipboardFormat {
+                format: ClipboardFormatType::Html,
+                content: "<b>Hello</b>".into(),
+            },
+            ClipboardFormat {
+                format: ClipboardFormatType::Rtf,
+                content: r"{\rtf1\b Hello}".into(),
+            },
+        ];
+
+        assert_eq!(
+            text_formats_for_mode(&formats, ClipboardWriteMode::PreserveFormats),
+            (Some("<b>Hello</b>"), Some(r"{\rtf1\b Hello}"))
+        );
+        assert_eq!(
+            text_formats_for_mode(&formats, ClipboardWriteMode::PlainText),
+            (None, None)
         );
     }
 }

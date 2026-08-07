@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type {
   BackupSummary,
+  ClipboardAnnotationInput,
   ClipboardItem,
   ClipboardQueryOptions,
   ImportSummary,
@@ -32,9 +33,16 @@ interface ClipboardStore {
   deleteTag: (id: number) => Promise<void>;
   deleteItem: (id: number) => Promise<void>;
   deleteSelected: () => Promise<void>;
-  copyItem: (id: number) => Promise<void>;
+  copyItem: (id: number) => Promise<boolean>;
+  pasteItem: (id: number) => Promise<void>;
+  copyItemPlainText: (id: number) => Promise<boolean>;
+  pasteItemPlainText: (id: number) => Promise<void>;
   clearItems: () => Promise<void>;
   toggleFavorite: (id: number) => Promise<void>;
+  updateAnnotations: (
+    id: number,
+    input: ClipboardAnnotationInput
+  ) => Promise<ClipboardItem | null>;
   setFavoriteForSelected: (isFavorited: boolean) => Promise<void>;
   assignTagToItem: (itemId: number, tagId: number) => Promise<void>;
   assignTagToSelected: (tagId: number) => Promise<void>;
@@ -197,6 +205,16 @@ export const useClipboardStore = create<ClipboardStore>((set) => ({
 
   copyItem: async (id: number) => {
     try {
+      await clipboardApi.copy(id);
+      return true;
+    } catch (error) {
+      set({ error: getErrorMessage(error) });
+      return false;
+    }
+  },
+
+  pasteItem: async (id: number) => {
+    try {
       await clipboardApi.paste(id);
     } catch (error) {
       set({ error: getErrorMessage(error) });
@@ -222,6 +240,19 @@ export const useClipboardStore = create<ClipboardStore>((set) => ({
       }));
     } catch (error) {
       set({ error: getErrorMessage(error) });
+    }
+  },
+
+  updateAnnotations: async (id: number, input: ClipboardAnnotationInput) => {
+    try {
+      const updated = await clipboardApi.updateAnnotations(id, input);
+      set((state) => ({
+        items: state.items.map((item) => (item.id === id ? updated : item)),
+      }));
+      return updated;
+    } catch (error) {
+      set({ error: getErrorMessage(error) });
+      return null;
     }
   },
 
@@ -328,6 +359,24 @@ export const useClipboardStore = create<ClipboardStore>((set) => ({
       );
       return { items: [...uniqueNewItems, ...state.items] };
     });
+  },
+
+  copyItemPlainText: async (id: number) => {
+    try {
+      await clipboardApi.copyPlainText(id);
+      return true;
+    } catch (error) {
+      set({ error: getErrorMessage(error) });
+      return false;
+    }
+  },
+
+  pasteItemPlainText: async (id: number) => {
+    try {
+      await clipboardApi.pastePlainText(id);
+    } catch (error) {
+      set({ error: getErrorMessage(error) });
+    }
   },
 
   upsertItem: (updatedItem: ClipboardItem) => {

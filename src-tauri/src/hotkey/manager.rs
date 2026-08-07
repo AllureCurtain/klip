@@ -276,8 +276,9 @@ fn quick_paste_digit_code(index: i64) -> Code {
 fn quick_paste(app_handle: &AppHandle, index: i64) {
     tracing::info!("Quick paste index {}", index);
     let db = app_handle.state::<crate::database::Database>();
+    let visible_items = app_handle.state::<crate::hotkey::VisibleClipboardItems>();
 
-    match crate::clipboard::paste::quick_paste(app_handle, &db, index) {
+    match crate::clipboard::paste::quick_paste(app_handle, &db, &visible_items, index) {
         Ok(true) => tracing::info!("Quick paste: pasted item at position {}", index),
         Ok(false) => tracing::warn!("Quick paste: no item at position {}", index),
         Err(error) => tracing::error!("Quick paste failed: {}", error),

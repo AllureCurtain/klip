@@ -63,11 +63,16 @@
     }
   },
   "clipboard": {
+    "copy": "Copy",
+    "paste": "Paste",
+    "copyPlainText": "Copy as plain text",
+    "pastePlainText": "Paste as plain text",
     "copied": "Copied",
     "favorite": "Favorite",
     "unfavorite": "Unfavorite",
     "select": "Select item",
     "previewImage": "Preview image",
+    "preview": "Preview details",
     "sensitive": "Sensitive",
     "sensitiveHidden": "Sensitive content hidden",
     "delete": "Delete",
@@ -85,6 +90,37 @@
       "empty": "No text found",
       "failed": "Recognition failed"
     },
+    "detail": {
+      "title": "Clipboard details",
+      "description": "Inspect the complete clipboard item and choose an action",
+      "actions": "Clipboard actions",
+      "viewMode": "Text view",
+      "plainText": "Plain text",
+      "richText": "Rich text",
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom out",
+      "resetZoom": "Reset zoom",
+      "downloadImage": "Download image",
+      "imageAlt": "Clipboard image",
+      "ocrText": "Recognized text",
+      "source": "Source",
+      "capturedAt": "Captured",
+      "size": "Size",
+      "tags": "Tags",
+      "editAnnotations": "Edit title and note",
+      "customTitle": "Custom title",
+      "note": "Note",
+      "unknown": "Unknown",
+      "none": "None"
+    },
+    "contentActions": {
+      "openUrl": "Open link",
+      "composeEmail": "Write email",
+      "openPath": "Open",
+      "revealPath": "Show in folder",
+      "copyPath": "Copy path",
+      "copyFileName": "Copy file name"
+    },
     "types": {
       "text": "Text",
       "image": "Image",
@@ -97,7 +133,8 @@
     "folderCount_other": "{{count}} folders",
     "moreItems": " and {{count}} more",
     "summarySeparator": ", ",
-    "sampleSeparator": ", "
+    "sampleSeparator": ", ",
+    "hasNote": "Has note"
   },
   "emptyState": {
     "noFavorites": "No favorites yet",
@@ -111,10 +148,6 @@
     "yesterday": "Yesterday",
     "daysAgo_one": "{{count}} day ago",
     "daysAgo_other": "{{count}} days ago"
-  },
-  "imagePreview": {
-    "title": "Image preview",
-    "download": "Download image"
   },
   "settings": {
     "title": "Settings",

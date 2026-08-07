@@ -52,6 +52,11 @@ const MIGRATIONS: &[Migration] = &[
         _name: "persist clipboard source attribution",
         run: migrate_to_v6,
     },
+    Migration {
+        version: 7,
+        _name: "persist clipboard annotations",
+        run: migrate_to_v7,
+    },
 ];
 
 fn read_schema_version(conn: &Connection) -> Result<i64, AppError> {
@@ -126,6 +131,10 @@ fn migrate_to_v5(conn: &Connection, now: i64) -> Result<(), AppError> {
 
 fn migrate_to_v6(conn: &Connection, _now: i64) -> Result<(), AppError> {
     crate::database::schema::add_clipboard_source_columns(conn)
+}
+
+fn migrate_to_v7(conn: &Connection, _now: i64) -> Result<(), AppError> {
+    crate::database::schema::add_clipboard_annotation_columns(conn)
 }
 
 fn migrate_window_size_defaults(conn: &Connection, now: i64) -> Result<(), AppError> {

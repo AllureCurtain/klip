@@ -189,6 +189,8 @@ pub fn import_csv(db: &Database, path: &str) -> Result<ImportSummary, AppError> 
             metadata: None,
             source_application: None,
             source_window_title: None,
+            custom_title: None,
+            note: None,
             is_favorited: row.is_favorited,
             is_sensitive: row.is_sensitive,
             sensitivity_reason: empty_to_none(&row.sensitivity_reason),
@@ -281,9 +283,9 @@ fn import_items(db: &Database, items: Vec<ClipboardItem>) -> Result<ImportSummar
         let result = tx.execute(
             "INSERT OR IGNORE INTO clipboard_items
              (content_type, content, preview, hash, size, metadata, source_application,
-               source_window_title, is_favorited, is_sensitive, sensitivity_reason,
-               created_at, last_used_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+               source_window_title, custom_title, note, is_favorited, is_sensitive,
+               sensitivity_reason, created_at, last_used_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
             rusqlite::params![
                 item.content_type.as_str(),
                 item.content,
@@ -293,6 +295,8 @@ fn import_items(db: &Database, items: Vec<ClipboardItem>) -> Result<ImportSummar
                 item.metadata,
                 item.source_application,
                 item.source_window_title,
+                item.custom_title,
+                item.note,
                 item.is_favorited as i64,
                 item.is_sensitive as i64,
                 item.sensitivity_reason,
@@ -421,6 +425,7 @@ struct BackupLayout {
     has_clipboard_formats: bool,
     has_clipboard_ocr: bool,
     has_clipboard_source: bool,
+    has_clipboard_annotations: bool,
 }
 
 fn validate_backup_database(path: &Path) -> Result<BackupLayout, AppError> {
@@ -514,6 +519,16 @@ fn validate_backup_database(path: &Path) -> Result<BackupLayout, AppError> {
         ));
     }
 
+    let has_custom_title = table_has_column(&conn, "clipboard_items", "custom_title")?;
+    let has_note = table_has_column(&conn, "clipboard_items", "note")?;
+    if backup_version >= 7 {
+        require_table_columns(&conn, "clipboard_items", &["custom_title", "note"])?;
+    } else if has_custom_title != has_note {
+        return Err(AppError::InvalidInput(
+            "backup database has incomplete clipboard annotation columns".into(),
+        ));
+    }
+
     let has_clipboard_formats: bool = conn
         .query_row(
             "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'clipboard_formats'",
@@ -560,6 +575,7 @@ fn validate_backup_database(path: &Path) -> Result<BackupLayout, AppError> {
         has_clipboard_formats,
         has_clipboard_ocr,
         has_clipboard_source: has_source_application && has_source_window_title,
+        has_clipboard_annotations: has_custom_title && has_note,
     })
 }
 
@@ -641,6 +657,11 @@ fn restore_from_attached_database(
     } else {
         "NULL, NULL"
     };
+    let annotation_restore_columns = if layout.has_clipboard_annotations {
+        "custom_title, note"
+    } else {
+        "NULL, NULL"
+    };
     let result = conn.execute_batch(&format!(
         "BEGIN IMMEDIATE;
          DELETE FROM clipboard_item_tags;
@@ -653,10 +674,10 @@ fn restore_from_attached_database(
          INSERT INTO clipboard_items
            (id, content_type, content, preview, hash, size, metadata, is_favorited,
             created_at, last_used_at, is_sensitive, sensitivity_reason,
-            source_application, source_window_title)
+            source_application, source_window_title, custom_title, note)
          SELECT id, content_type, content, preview, hash, size, metadata, is_favorited,
             created_at, last_used_at, is_sensitive, sensitivity_reason,
-            {source_restore_columns}
+            {source_restore_columns}, {annotation_restore_columns}
          FROM restore_db.clipboard_items;
 
          INSERT INTO tags (id, name, color, created_at)
@@ -840,6 +861,8 @@ mod tests {
         assert_eq!(summary.skipped, 1);
         assert_eq!(count_items(&db_path), 1);
         let existing = crate::database::clipboard::get_list(&db, 10, 0).unwrap();
+        assert_eq!(existing[0].custom_title, None);
+        assert_eq!(existing[0].note, None);
         assert!(existing[0]
             .formats
             .iter()
@@ -871,6 +894,31 @@ mod tests {
             imported[0].source_window_title.as_deref(),
             Some("Research notes")
         );
+    }
+
+    #[test]
+    fn json_export_and_import_preserve_annotations() {
+        let dir = temp_dir("json-annotations");
+        let source_path = dir.join("source.db");
+        let target_path = dir.join("target.db");
+        let export_path = dir.join("items.json");
+        let source = create_db(&source_path);
+        let item = insert_text_with_source(&source, "annotated export", "notes.exe", None);
+        crate::database::clipboard::update_annotations(
+            &source,
+            item.id,
+            Some("Export title".into()),
+            Some("Export note".into()),
+        )
+        .unwrap();
+
+        export_json(&source, export_path.to_str().unwrap()).unwrap();
+        let target = create_db(&target_path);
+        import_json(&target, export_path.to_str().unwrap()).unwrap();
+
+        let imported = crate::database::clipboard::get_list(&target, 10, 0).unwrap();
+        assert_eq!(imported[0].custom_title.as_deref(), Some("Export title"));
+        assert_eq!(imported[0].note.as_deref(), Some("Export note"));
     }
 
     #[test]
@@ -1097,7 +1145,7 @@ mod tests {
         let version = crate::database::config::get(&current, "db_version")
             .unwrap()
             .unwrap();
-        assert_eq!(version, "6");
+        assert_eq!(version, "7");
     }
 
     #[test]
@@ -1181,6 +1229,15 @@ mod tests {
             "browser.exe",
             Some("Foundation plan"),
         );
+        {
+            let conn = source.get_connection().unwrap();
+            conn.execute_batch(
+                "UPDATE app_config SET value = '6' WHERE key = 'db_version';
+                 ALTER TABLE clipboard_items DROP COLUMN custom_title;
+                 ALTER TABLE clipboard_items DROP COLUMN note;",
+            )
+            .unwrap();
+        }
         backup_database(&source, backup_path.to_str().unwrap()).unwrap();
 
         restore_database(&current, &current_path, backup_path.to_str().unwrap()).unwrap();
@@ -1195,6 +1252,63 @@ mod tests {
             restored[0].source_window_title.as_deref(),
             Some("Foundation plan")
         );
+        assert_eq!(restored[0].custom_title, None);
+        assert_eq!(restored[0].note, None);
+    }
+
+    #[test]
+    fn restore_preserves_v7_annotations() {
+        let dir = temp_dir("v7-annotation-restore");
+        let current_path = dir.join("current.db");
+        let source_path = dir.join("source.db");
+        let backup_path = dir.join("source-backup.db");
+
+        let current = create_db(&current_path);
+        insert_text(&current, "current-item");
+        let source = create_db(&source_path);
+        let item = insert_text_with_source(&source, "annotated text", "notes.exe", None);
+        crate::database::clipboard::update_annotations(
+            &source,
+            item.id,
+            Some("Restored title".into()),
+            Some("Restored note".into()),
+        )
+        .unwrap();
+        backup_database(&source, backup_path.to_str().unwrap()).unwrap();
+
+        restore_database(&current, &current_path, backup_path.to_str().unwrap()).unwrap();
+
+        let restored = crate::database::clipboard::get_list(&current, 10, 0).unwrap();
+        assert_eq!(restored.len(), 1);
+        assert_eq!(restored[0].custom_title.as_deref(), Some("Restored title"));
+        assert_eq!(restored[0].note.as_deref(), Some("Restored note"));
+    }
+
+    #[test]
+    fn restore_rejects_v7_backup_missing_annotation_columns_before_mutation() {
+        let dir = temp_dir("v7-missing-annotation-columns");
+        let current_path = dir.join("current.db");
+        let restore_path = dir.join("restore-v7.db");
+
+        let current = create_db(&current_path);
+        insert_text(&current, "keep-current-data");
+        let restore = create_db(&restore_path);
+        {
+            let conn = restore.get_connection().unwrap();
+            conn.execute("ALTER TABLE clipboard_items DROP COLUMN note", [])
+                .unwrap();
+        }
+        drop(restore);
+
+        let result = restore_database(&current, &current_path, restore_path.to_str().unwrap());
+
+        assert!(matches!(
+            result,
+            Err(AppError::InvalidInput(message))
+                if message.contains("clipboard_items") && message.contains("note")
+        ));
+        assert_eq!(count_items(&current_path), 1);
+        assert_eq!(first_content(&current_path), "keep-current-data");
     }
 
     #[test]
