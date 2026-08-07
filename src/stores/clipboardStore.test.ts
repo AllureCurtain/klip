@@ -252,8 +252,9 @@ describe('clipboardStore', () => {
     it('copies without invoking paste', async () => {
       vi.mocked(clipboardApi.copy).mockResolvedValue(undefined);
 
-      await useClipboardStore.getState().copyItem(7);
+      const result = await useClipboardStore.getState().copyItem(7);
 
+      expect(result).toBe(true);
       expect(clipboardApi.copy).toHaveBeenCalledWith(7);
       expect(clipboardApi.paste).not.toHaveBeenCalled();
     });
@@ -271,11 +272,28 @@ describe('clipboardStore', () => {
       vi.mocked(clipboardApi.copyPlainText).mockResolvedValue(undefined);
       vi.mocked(clipboardApi.pastePlainText).mockResolvedValue(undefined);
 
-      await useClipboardStore.getState().copyItemPlainText(9);
+      const copyResult = await useClipboardStore.getState().copyItemPlainText(9);
       await useClipboardStore.getState().pasteItemPlainText(10);
 
+      expect(copyResult).toBe(true);
       expect(clipboardApi.copyPlainText).toHaveBeenCalledWith(9);
       expect(clipboardApi.pastePlainText).toHaveBeenCalledWith(10);
+    });
+
+    it('reports copy failures without returning a successful result', async () => {
+      vi.mocked(clipboardApi.copy).mockRejectedValue(new Error('copy failed'));
+      vi.mocked(clipboardApi.copyPlainText).mockRejectedValue(
+        new Error('plain copy failed')
+      );
+
+      const copyResult = await useClipboardStore.getState().copyItem(7);
+      const plainCopyResult = await useClipboardStore
+        .getState()
+        .copyItemPlainText(9);
+
+      expect(copyResult).toBe(false);
+      expect(plainCopyResult).toBe(false);
+      expect(useClipboardStore.getState().error).toContain('plain copy failed');
     });
   });
 

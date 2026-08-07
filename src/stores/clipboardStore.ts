@@ -33,9 +33,9 @@ interface ClipboardStore {
   deleteTag: (id: number) => Promise<void>;
   deleteItem: (id: number) => Promise<void>;
   deleteSelected: () => Promise<void>;
-  copyItem: (id: number) => Promise<void>;
+  copyItem: (id: number) => Promise<boolean>;
   pasteItem: (id: number) => Promise<void>;
-  copyItemPlainText: (id: number) => Promise<void>;
+  copyItemPlainText: (id: number) => Promise<boolean>;
   pasteItemPlainText: (id: number) => Promise<void>;
   clearItems: () => Promise<void>;
   toggleFavorite: (id: number) => Promise<void>;
@@ -206,8 +206,10 @@ export const useClipboardStore = create<ClipboardStore>((set) => ({
   copyItem: async (id: number) => {
     try {
       await clipboardApi.copy(id);
+      return true;
     } catch (error) {
       set({ error: getErrorMessage(error) });
+      return false;
     }
   },
 
@@ -362,8 +364,10 @@ export const useClipboardStore = create<ClipboardStore>((set) => ({
   copyItemPlainText: async (id: number) => {
     try {
       await clipboardApi.copyPlainText(id);
+      return true;
     } catch (error) {
       set({ error: getErrorMessage(error) });
+      return false;
     }
   },
 

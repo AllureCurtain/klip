@@ -39,14 +39,16 @@ export function useClipboardItemActions({
 
   const handleCopy = useCallback((event: React.MouseEvent) => {
     event.stopPropagation();
-    void copyItem(item.id);
-    showCopiedFeedback();
+    void copyItem(item.id).then((succeeded) => {
+      if (succeeded) showCopiedFeedback();
+    });
   }, [copyItem, item.id, showCopiedFeedback]);
 
   const handleCopyPlainText = useCallback((event: React.MouseEvent) => {
     event.stopPropagation();
-    void copyItemPlainText(item.id);
-    showCopiedFeedback();
+    void copyItemPlainText(item.id).then((succeeded) => {
+      if (succeeded) showCopiedFeedback();
+    });
   }, [copyItemPlainText, item.id, showCopiedFeedback]);
 
   const handlePastePlainText = useCallback((event: React.MouseEvent) => {

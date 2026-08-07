@@ -122,6 +122,8 @@ function makeFolderItem(overrides: Partial<ClipboardItemType> = {}): ClipboardIt
 describe('ClipboardItem', () => {
   beforeEach(() => {
     Element.prototype.scrollIntoView = vi.fn();
+    storeMocks.copyItem.mockResolvedValue(true);
+    storeMocks.copyItemPlainText.mockResolvedValue(true);
     useConfigStore.setState((state) => ({
       config: { ...state.config, mask_sensitive_previews: true },
     }));
@@ -487,7 +489,7 @@ describe('ClipboardItem', () => {
     expect(screen.queryByText('已复制')).toBeNull();
   });
 
-  it('uses a readable quiet row treatment after explicit copy feedback', () => {
+  it('uses a readable quiet row treatment after a successful explicit copy', async () => {
     render(<ClipboardItem item={makeTextItem()} index={1} isSelected={false} />);
 
     fireEvent.click(screen.getByRole('button', { name: '复制' }));
@@ -496,14 +498,25 @@ describe('ClipboardItem', () => {
 
     expect(storeMocks.copyItem).toHaveBeenCalledWith(42);
     expect(storeMocks.pasteItem).not.toHaveBeenCalled();
-    expect(screen.getByText('已复制')).toBeTruthy();
+    expect(await screen.findByText('已复制')).toBeTruthy();
     expect(row?.className).toContain('border-primary/35');
     expect(row?.className).toContain('bg-primary/8');
     expect(row?.className).toContain('text-foreground');
     expect(row?.className).not.toContain('bg-indigo-500/8');
   });
 
-  it('offers plain-text copy and paste only for text items', () => {
+  it('does not show copy feedback when the copy action fails', async () => {
+    storeMocks.copyItem.mockResolvedValue(false);
+    render(<ClipboardItem item={makeTextItem()} index={1} isSelected={false} />);
+
+    fireEvent.click(screen.getByRole('button', { name: '复制' }));
+    await act(async () => Promise.resolve());
+
+    expect(storeMocks.copyItem).toHaveBeenCalledWith(42);
+    expect(screen.queryByText('已复制')).toBeNull();
+  });
+
+  it('offers plain-text copy and paste only for text items', async () => {
     const { rerender } = render(
       <ClipboardItem item={makeTextItem()} index={1} isSelected={false} />
     );
@@ -513,6 +526,7 @@ describe('ClipboardItem', () => {
 
     expect(storeMocks.copyItemPlainText).toHaveBeenCalledWith(42);
     expect(storeMocks.pasteItemPlainText).toHaveBeenCalledWith(42);
+    expect(await screen.findByText('已复制')).toBeTruthy();
 
     rerender(<ClipboardItem item={makeImageItem()} index={1} isSelected={false} />);
     expect(screen.queryByRole('button', { name: '复制纯文本' })).toBeNull();
