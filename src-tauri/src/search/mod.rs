@@ -1,4 +1,5 @@
 use crate::database::{ClipboardItem, ContentType, Database, OcrStatus};
+use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -7,9 +8,10 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tantivy::collector::TopDocs;
 use tantivy::indexer::LogMergePolicy;
-use tantivy::query::{BooleanQuery, Occur, Query, TermQuery};
+use tantivy::query::{AllQuery, BooleanQuery, Occur, Query, TermQuery};
 use tantivy::schema::{
-    Field, IndexRecordOption, Schema, TextFieldIndexing, TextOptions, Value, INDEXED, STORED,
+    BytesOptions, Field, IndexRecordOption, Schema, TextFieldIndexing, TextOptions, Value, INDEXED,
+    STORED,
 };
 use tantivy::tokenizer::{LowerCaser, TextAnalyzer, TokenStream};
 use tantivy::{doc, Index, IndexReader, IndexWriter, ReloadPolicy, TantivyDocument, Term};
@@ -50,6 +52,7 @@ struct SearchCore {
     reader: IndexReader,
     id_field: Field,
     text_field: Field,
+    fingerprint_field: Field,
     writer: Mutex<WriterState>,
     healthy: AtomicBool,
 }
@@ -161,12 +164,13 @@ impl SearchIndex {
             )));
         }
 
-        let database_count = database_item_count(db)?;
-        let indexed_count = index.reader()?.searcher().num_docs();
-        if indexed_count != database_count {
+        let database_fingerprints = database_document_fingerprints(db)?;
+        let index_fingerprints = index_document_fingerprints(&index)?;
+        if index_fingerprints != database_fingerprints {
             return Err(SearchError::Unavailable(format!(
-                "index contains {} documents but SQLite contains {} rows",
-                indexed_count, database_count
+                "index identities or searchable content do not match SQLite ({} index documents, {} database rows)",
+                index_fingerprints.len(),
+                database_fingerprints.len()
             )));
         }
 
@@ -193,6 +197,9 @@ impl SearchIndex {
         let text_field = schema
             .get_field("text")
             .map_err(|error| SearchError::Unavailable(error.to_string()))?;
+        let fingerprint_field = schema
+            .get_field("content_fingerprint")
+            .map_err(|error| SearchError::Unavailable(error.to_string()))?;
         let reader = index
             .reader_builder()
             .reload_policy(ReloadPolicy::Manual)
@@ -205,6 +212,7 @@ impl SearchIndex {
             reader,
             id_field,
             text_field,
+            fingerprint_field,
             writer: Mutex::new(WriterState {
                 writer,
                 pending_operations: 0,
@@ -253,6 +261,7 @@ impl SearchIndex {
         if let Err(error) = state.writer.add_document(doc!(
             self.core.id_field => item_id,
             self.core.text_field => text,
+            self.core.fingerprint_field => content_fingerprint(text),
         )) {
             self.core.mark_unhealthy();
             return Err(error.into());
@@ -424,7 +433,8 @@ impl SearchCore {
         for (item_id, text) in documents {
             if let Err(error) = state.writer.add_document(doc!(
                 self.id_field => item_id,
-                self.text_field => text,
+                self.text_field => text.as_str(),
+                self.fingerprint_field => content_fingerprint(&text),
             )) {
                 self.mark_unhealthy();
                 return Err(error.into());
@@ -472,6 +482,7 @@ fn search_schema() -> Schema {
             .set_index_option(IndexRecordOption::WithFreqsAndPositions),
     );
     builder.add_text_field("text", text_options);
+    builder.add_bytes_field("content_fingerprint", BytesOptions::default().set_stored());
     builder.build()
 }
 
@@ -483,15 +494,29 @@ fn register_tokenizer(index: &Index) {
 }
 
 fn searchable_text(item: &ClipboardItem) -> String {
-    let preview = item.preview.as_deref().unwrap_or_default();
-    match item.content_type {
+    let ocr_text = item
+        .ocr
+        .as_ref()
+        .filter(|ocr| ocr.status == OcrStatus::Completed)
+        .map(|ocr| ocr.text.as_str());
+    compose_searchable_text(
+        item.content_type,
+        &item.content,
+        item.preview.as_deref(),
+        ocr_text,
+    )
+}
+
+fn compose_searchable_text(
+    content_type: ContentType,
+    content: &str,
+    preview: Option<&str>,
+    ocr_text: Option<&str>,
+) -> String {
+    let preview = preview.unwrap_or_default();
+    match content_type {
         ContentType::Image => {
-            let ocr_text = item
-                .ocr
-                .as_ref()
-                .filter(|ocr| ocr.status == OcrStatus::Completed)
-                .map(|ocr| ocr.text.trim())
-                .unwrap_or_default();
+            let ocr_text = ocr_text.unwrap_or_default().trim();
             match (preview.is_empty(), ocr_text.is_empty()) {
                 (true, true) => String::new(),
                 (false, true) => preview.to_string(),
@@ -500,26 +525,66 @@ fn searchable_text(item: &ClipboardItem) -> String {
             }
         }
         ContentType::Text | ContentType::File => {
-            if preview.is_empty() || item.content.contains(preview) {
-                item.content.clone()
+            if preview.is_empty() || content.contains(preview) {
+                content.to_string()
             } else {
-                format!("{preview}\n{}", item.content)
+                format!("{preview}\n{content}")
             }
         }
     }
 }
 
-fn database_item_count(db: &Database) -> Result<u64, SearchError> {
-    let conn = db
-        .get_connection()
+fn content_fingerprint(text: &str) -> Vec<u8> {
+    Sha256::digest(text.as_bytes()).to_vec()
+}
+
+fn database_document_fingerprints(db: &Database) -> Result<Vec<(i64, Vec<u8>)>, SearchError> {
+    Ok(database_documents(db)?
+        .into_iter()
+        .map(|(item_id, text)| (item_id, content_fingerprint(&text)))
+        .collect())
+}
+
+fn index_document_fingerprints(index: &Index) -> Result<Vec<(i64, Vec<u8>)>, SearchError> {
+    let schema = index.schema();
+    let id_field = schema
+        .get_field("item_id")
         .map_err(|error| SearchError::Unavailable(error.to_string()))?;
-    let count = conn
-        .query_row("SELECT COUNT(*) FROM clipboard_items", [], |row| {
-            row.get::<_, i64>(0)
-        })
+    let fingerprint_field = schema
+        .get_field("content_fingerprint")
         .map_err(|error| SearchError::Unavailable(error.to_string()))?;
-    u64::try_from(count)
-        .map_err(|_| SearchError::Unavailable(format!("invalid SQLite item count: {count}")))
+    let reader = index.reader()?;
+    let searcher = reader.searcher();
+    let document_count = usize::try_from(searcher.num_docs()).map_err(|_| {
+        SearchError::Unavailable("index document count does not fit in memory".to_string())
+    })?;
+    if document_count == 0 {
+        return Ok(Vec::new());
+    }
+
+    let hits = searcher.search(&AllQuery, &TopDocs::with_limit(document_count))?;
+    let mut fingerprints = Vec::with_capacity(hits.len());
+    for (_, address) in hits {
+        let document: TantivyDocument = searcher.doc(address)?;
+        let item_id = document
+            .get_first(id_field)
+            .and_then(|value| value.as_i64())
+            .ok_or_else(|| {
+                SearchError::Unavailable("index document is missing item_id".to_string())
+            })?;
+        let fingerprint = document
+            .get_first(fingerprint_field)
+            .and_then(|value| value.as_bytes())
+            .map(ToOwned::to_owned)
+            .ok_or_else(|| {
+                SearchError::Unavailable(
+                    "index document is missing content_fingerprint".to_string(),
+                )
+            })?;
+        fingerprints.push((item_id, fingerprint));
+    }
+    fingerprints.sort_by_key(|(item_id, _)| *item_id);
+    Ok(fingerprints)
 }
 
 fn database_documents(db: &Database) -> Result<Vec<(i64, String)>, SearchError> {
@@ -528,7 +593,9 @@ fn database_documents(db: &Database) -> Result<Vec<(i64, String)>, SearchError> 
         .map_err(|error| SearchError::Unavailable(error.to_string()))?;
     let mut statement = conn
         .prepare(
-            "SELECT i.id, i.content_type, i.content, i.preview, COALESCE(o.text, '')
+            "SELECT i.id, i.content_type,
+                    CASE WHEN i.content_type = 'image' THEN '' ELSE i.content END,
+                    i.preview, COALESCE(o.text, '')
              FROM clipboard_items i
              LEFT JOIN clipboard_ocr o ON o.item_id = i.id AND o.status = 'completed'
              ORDER BY i.id",
@@ -540,23 +607,12 @@ fn database_documents(db: &Database) -> Result<Vec<(i64, String)>, SearchError> 
             let content = row.get::<_, String>(2)?;
             let preview = row.get::<_, Option<String>>(3)?;
             let ocr_text = row.get::<_, String>(4)?;
-            let text = match content_type {
-                ContentType::Image => {
-                    let preview = preview.unwrap_or_default();
-                    match (preview.is_empty(), ocr_text.is_empty()) {
-                        (true, true) => String::new(),
-                        (false, true) => preview,
-                        (true, false) => ocr_text,
-                        (false, false) => format!("{preview}\n{ocr_text}"),
-                    }
-                }
-                ContentType::Text | ContentType::File => match preview {
-                    Some(preview) if !preview.is_empty() && !content.contains(&preview) => {
-                        format!("{preview}\n{content}")
-                    }
-                    _ => content,
-                },
-            };
+            let text = compose_searchable_text(
+                content_type,
+                &content,
+                preview.as_deref(),
+                Some(&ocr_text),
+            );
             Ok((row.get::<_, i64>(0)?, text))
         })
         .map_err(|error| SearchError::Unavailable(error.to_string()))?;
@@ -652,6 +708,18 @@ mod tests {
             formats: Vec::new(),
         };
         crate::database::clipboard::insert(db, &item).expect("insert searchable image")
+    }
+
+    fn preserved_index_exists(root: &Path) -> bool {
+        std::fs::read_dir(root)
+            .expect("read search test root")
+            .filter_map(Result::ok)
+            .any(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with("search-index.corrupt-")
+            })
     }
 
     #[test]
@@ -784,6 +852,105 @@ mod tests {
     }
 
     #[test]
+    fn same_count_with_different_ids_is_rebuilt_from_sqlite() {
+        let (root, db) = temp_database("id-drift");
+        let stale = insert_text(&db, "stale-index-identity");
+        crate::database::clipboard::search(&db, "stale-index", None, 20)
+            .expect("flush initial search index");
+        drop(db);
+
+        let replacement_content = "replacement-index-identity";
+        let replacement_hash = format!("{:x}", Sha256::digest(replacement_content.as_bytes()));
+        let connection = rusqlite::Connection::open(root.join("klip.db"))
+            .expect("open database without search synchronization");
+        connection
+            .execute_batch("PRAGMA foreign_keys=ON;")
+            .expect("enable foreign keys");
+        connection
+            .execute("DELETE FROM clipboard_items WHERE id = ?1", [stale.id])
+            .expect("delete indexed row directly");
+        connection
+            .execute(
+                "INSERT INTO clipboard_items
+                 (content_type, content, preview, hash, size, created_at, last_used_at)
+                 VALUES ('text', ?1, ?1, ?2, ?3, 2, 2)",
+                rusqlite::params![
+                    replacement_content,
+                    replacement_hash,
+                    replacement_content.len() as i64
+                ],
+            )
+            .expect("insert replacement row directly");
+        let replacement_id = connection.last_insert_rowid();
+        assert_ne!(replacement_id, stale.id);
+        drop(connection);
+
+        let reopened = Database::new(&root.join("klip.db"))
+            .expect("reopen database and rebuild identity drift");
+        let replacement =
+            crate::database::clipboard::search(&reopened, "replacement-index", None, 20)
+                .expect("search replacement item");
+        let stale_results = crate::database::clipboard::search(&reopened, "stale-index", None, 20)
+            .expect("search removed item");
+
+        assert_eq!(
+            replacement.iter().map(|item| item.id).collect::<Vec<_>>(),
+            vec![replacement_id]
+        );
+        assert!(stale_results.is_empty());
+        assert!(preserved_index_exists(&root));
+
+        drop(reopened);
+        std::fs::remove_dir_all(root).expect("remove ID drift test directory");
+    }
+
+    #[test]
+    fn same_id_with_stale_searchable_content_is_rebuilt_from_sqlite() {
+        let (root, db) = temp_database("content-drift");
+        let stale = insert_text(&db, "stale-index-content");
+        crate::database::clipboard::search(&db, "stale-index", None, 20)
+            .expect("flush initial search index");
+        drop(db);
+
+        let replacement_content = "current-database-content";
+        let replacement_hash = format!("{:x}", Sha256::digest(replacement_content.as_bytes()));
+        let connection = rusqlite::Connection::open(root.join("klip.db"))
+            .expect("open database without search synchronization");
+        connection
+            .execute(
+                "UPDATE clipboard_items
+                 SET content = ?1, preview = ?1, hash = ?2, size = ?3
+                 WHERE id = ?4",
+                rusqlite::params![
+                    replacement_content,
+                    replacement_hash,
+                    replacement_content.len() as i64,
+                    stale.id
+                ],
+            )
+            .expect("replace searchable content directly");
+        drop(connection);
+
+        let reopened = Database::new(&root.join("klip.db"))
+            .expect("reopen database and rebuild content drift");
+        let replacement =
+            crate::database::clipboard::search(&reopened, "current-database", None, 20)
+                .expect("search current database content");
+        let stale_results = crate::database::clipboard::search(&reopened, "stale-index", None, 20)
+            .expect("search stale index content");
+
+        assert_eq!(
+            replacement.iter().map(|item| item.id).collect::<Vec<_>>(),
+            vec![stale.id]
+        );
+        assert!(stale_results.is_empty());
+        assert!(preserved_index_exists(&root));
+
+        drop(reopened);
+        std::fs::remove_dir_all(root).expect("remove content drift test directory");
+    }
+
+    #[test]
     fn corrupted_index_is_preserved_and_rebuilt_from_sqlite() {
         let (root, db) = temp_database("corrupt");
         let expected = insert_text(&db, "recoverable-index-content");
@@ -813,16 +980,7 @@ mod tests {
             .expect("search rebuilt index");
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].id, expected.id);
-        assert!(
-            std::fs::read_dir(&root)
-                .expect("read test root")
-                .filter_map(Result::ok)
-                .any(|entry| entry
-                    .file_name()
-                    .to_string_lossy()
-                    .starts_with("search-index.corrupt-")),
-            "the corrupt index should be preserved for diagnosis"
-        );
+        assert!(preserved_index_exists(&root));
 
         drop(reopened);
         std::fs::remove_dir_all(root).expect("remove search test directory");
@@ -874,7 +1032,23 @@ mod tests {
         );
         eprintln!("100k Tantivy search latency: {elapsed:?}");
 
+        drop(results);
         drop(db);
+        let validation_started = Instant::now();
+        let reopened =
+            Database::new(&root.join("klip.db")).expect("reopen and validate 100k-document index");
+        let validation_elapsed = validation_started.elapsed();
+        assert!(
+            validation_elapsed < Duration::from_secs(10),
+            "100k-document startup validation took {validation_elapsed:?}, expected under 10 seconds"
+        );
+        let reopened_results =
+            crate::database::clipboard::search(&reopened, "benchmarkneedle99999", None, 20)
+                .expect("search validated 100k-document index");
+        assert_eq!(reopened_results.len(), 1);
+        eprintln!("100k Tantivy startup validation: {validation_elapsed:?}");
+
+        drop(reopened);
         std::fs::remove_dir_all(root).expect("remove search benchmark directory");
     }
 }
