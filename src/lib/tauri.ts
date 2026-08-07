@@ -4,6 +4,7 @@ import type {
   BackupSummary,
   AdvancedSearchQuery,
   ClipboardItem,
+  ClipboardContentAction,
   ClipboardQueryOptions,
   DiagnosticsInfo,
   ImportSummary,
@@ -105,6 +106,12 @@ export const clipboardApi = {
 
   setVisibleItems: (ids: number[]) =>
     invoke('set_visible_clipboard_items', { ids }),
+
+  getContentActions: (id: number) =>
+    invoke<ClipboardContentAction[]>('get_clipboard_content_actions', { id }),
+
+  executeContentAction: (id: number, action: ClipboardContentAction) =>
+    invoke('execute_clipboard_content_action', { id, action }),
 
   toggleFavorite: (id: number) =>
     invoke<ClipboardItem>('toggle_favorite', { id }),

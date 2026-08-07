@@ -307,6 +307,55 @@ void
 
 ---
 
+#### `get_clipboard_content_actions`
+
+按记录 ID 检测当前可用的有限内容动作。文本只在完整 trim 后内容为安全的
+`http`/`https` URL、保守校验通过的邮箱或当前存在的单一路径时返回动作；文件记录按
+已保存路径逐项返回。返回值不包含本地化文案。
+
+**参数**:
+```typescript
+{
+  id: number;
+}
+```
+
+**返回**:
+```typescript
+type ClipboardContentAction =
+  | { kind: 'open_url'; target: string }
+  | { kind: 'compose_email'; target: string }
+  | { kind: 'open_path'; target: string }
+  | { kind: 'reveal_path'; target: string }
+  | { kind: 'copy_path'; target: string }
+  | { kind: 'copy_file_name'; target: string };
+
+ClipboardContentAction[]
+```
+
+---
+
+#### `execute_clipboard_content_action`
+
+执行检测器返回的动作。后端会按 `id` 重新加载记录并重新检测，只有请求的 `kind` 与
+`target` 仍完整匹配当前动作集合时才执行；伪造目标、危险协议、已失效的打开/定位路径
+返回 `invalid_input`。命令不接受任意 shell 字符串。
+
+**参数**:
+```typescript
+{
+  id: number;
+  action: ClipboardContentAction;
+}
+```
+
+**返回**:
+```typescript
+void
+```
+
+---
+
 ### 1.2 标签、数据导入导出和敏感内容
 
 #### `list_tags`
@@ -1028,6 +1077,12 @@ export const clipboardApi = {
 
   setVisibleItems: (ids: number[]) =>
     invoke('set_visible_clipboard_items', { ids }),
+
+  getContentActions: (id: number) =>
+    invoke<ClipboardContentAction[]>('get_clipboard_content_actions', { id }),
+
+  executeContentAction: (id: number, action: ClipboardContentAction) =>
+    invoke('execute_clipboard_content_action', { id, action }),
 
   toggleFavorite: (id: number) =>
     invoke<ClipboardItem>('toggle_favorite', { id }),

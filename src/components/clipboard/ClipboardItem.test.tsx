@@ -20,8 +20,21 @@ const storeMocks = vi.hoisted(() => ({
   toggleSelected: vi.fn(),
 }));
 
+const contentActionMocks = vi.hoisted(() => ({
+  actions: [] as import('@/types').ClipboardContentAction[],
+  executeAction: vi.fn(),
+  refresh: vi.fn(),
+}));
+
 vi.mock('@/stores', () => ({
   useClipboardStore: () => storeMocks,
+}));
+
+vi.mock('./useClipboardContentActions', () => ({
+  useClipboardContentActions: (_itemId: number, enabled: boolean) =>
+    enabled
+      ? contentActionMocks
+      : { ...contentActionMocks, actions: [] },
 }));
 
 type ClipboardItemWithSelectionProps = ComponentProps<typeof ClipboardItem> & {
@@ -127,6 +140,9 @@ describe('ClipboardItem', () => {
     storeMocks.toggleSelected.mockReset();
     storeMocks.tags = [];
     storeMocks.selectedIds = [];
+    contentActionMocks.actions = [];
+    contentActionMocks.executeAction.mockReset();
+    contentActionMocks.refresh.mockReset();
   });
 
   it('requires two clicks to delete (confirmation pattern)', () => {
@@ -496,6 +512,21 @@ describe('ClipboardItem', () => {
     fireEvent.click(screen.getByRole('button', { name: '预览详情' }));
 
     expect(onPreview).toHaveBeenCalledTimes(3);
+  });
+
+  it('shows only the primary validated content action on the compact row', () => {
+    const action = { kind: 'open_url', target: 'https://example.com' } as const;
+    contentActionMocks.actions = [
+      action,
+      { kind: 'copy_path', target: 'C:\\not-primary.txt' },
+    ];
+    contentActionMocks.executeAction.mockResolvedValue(undefined);
+    render(<ClipboardItem item={makeTextItem()} index={1} isSelected={false} />);
+
+    fireEvent.click(screen.getByRole('button', { name: '打开链接' }));
+
+    expect(contentActionMocks.executeAction).toHaveBeenCalledWith(action);
+    expect(screen.queryByRole('button', { name: '复制路径' })).toBeNull();
   });
 
   it('uses the same readable quiet row treatment for batch-selected rows', () => {

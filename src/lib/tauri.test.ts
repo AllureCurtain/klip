@@ -125,6 +125,22 @@ describe('tauri API wrappers', () => {
     });
   });
 
+  it('loads and executes typed clipboard content actions', async () => {
+    vi.mocked(invoke).mockResolvedValue([]);
+    const action = { kind: 'open_url', target: 'https://example.com' } as const;
+
+    await clipboardApi.getContentActions(12);
+    await clipboardApi.executeContentAction(12, action);
+
+    expect(invoke).toHaveBeenNthCalledWith(1, 'get_clipboard_content_actions', {
+      id: 12,
+    });
+    expect(invoke).toHaveBeenNthCalledWith(2, 'execute_clipboard_content_action', {
+      id: 12,
+      action,
+    });
+  });
+
   it('subscribes to typed clipboard item updates', async () => {
     vi.mocked(listen).mockResolvedValue(vi.fn());
     const callback = vi.fn();

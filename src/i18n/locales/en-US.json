@@ -110,6 +110,14 @@
       "unknown": "Unknown",
       "none": "None"
     },
+    "contentActions": {
+      "openUrl": "Open link",
+      "composeEmail": "Write email",
+      "openPath": "Open",
+      "revealPath": "Show in folder",
+      "copyPath": "Copy path",
+      "copyFileName": "Copy file name"
+    },
     "types": {
       "text": "Text",
       "image": "Image",

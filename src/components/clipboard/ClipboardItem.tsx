@@ -22,6 +22,11 @@ import { springs, cardVariants } from '@/lib/motion';
 import type { ClipboardItem as ClipboardItemType } from '@/types';
 import { useEffect, useMemo, useRef } from 'react';
 import { useClipboardItemActions } from './useClipboardItemActions';
+import { useClipboardContentActions } from './useClipboardContentActions';
+import {
+  contentActionPresentation,
+  isPrimaryContentAction,
+} from './clipboardContentActions';
 import {
   classifyFile,
   getClipKind,
@@ -85,6 +90,12 @@ export function ClipboardItem({
   const tone = CLIP_TONES[clipKind];
   const Renderer = RENDERER_REGISTRY[item.content_type];
   const shouldMaskPreview = item.is_sensitive && maskSensitivePreviews;
+  const { actions: contentActions, executeAction: executeContentAction } =
+    useClipboardContentActions(
+      item.id,
+      !selectionMode && !shouldMaskPreview
+    );
+  const primaryContentAction = contentActions.find(isPrimaryContentAction) ?? null;
   const opacityForAge = Math.max(0.85, 1 - ageIndex * 0.005);
   const typeLabel = t(`clipboard.types.${clipKind}`);
   const strongRowState = copied || (selectionMode && isBatchSelected);
@@ -105,6 +116,13 @@ export function ClipboardItem({
     e.stopPropagation();
     onSelect?.();
     onPreview?.();
+  };
+
+  const handleContentAction = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (primaryContentAction) {
+      void executeContentAction(primaryContentAction).catch(() => undefined);
+    }
   };
 
   return (
@@ -175,6 +193,8 @@ export function ClipboardItem({
           confirmDelete={confirmDelete}
           tagMenuOpen={tagMenuOpen}
           tags={tags}
+          primaryContentAction={primaryContentAction}
+          onContentAction={handleContentAction}
           onPreview={handlePreview}
           onCopy={handleCopy}
           onCopyPlainText={handleCopyPlainText}
@@ -317,6 +337,8 @@ function RowActions({
   confirmDelete,
   tagMenuOpen,
   tags,
+  primaryContentAction,
+  onContentAction,
   onPreview,
   onDelete,
   onCopy,
@@ -330,6 +352,8 @@ function RowActions({
   confirmDelete: boolean;
   tagMenuOpen: boolean;
   tags: Array<{ id: number; name: string; color: string | null }>;
+  primaryContentAction: import('@/types').ClipboardContentAction | null;
+  onContentAction: (event: React.MouseEvent) => void;
   onPreview: (event: React.MouseEvent) => void;
   onDelete: (event: React.MouseEvent) => void;
   onCopy: (event: React.MouseEvent) => void;
@@ -340,6 +364,9 @@ function RowActions({
   onToggleTagMenu: (event: React.MouseEvent) => void;
 }) {
   const { t } = useTranslation();
+  const primaryAction = primaryContentAction
+    ? contentActionPresentation(primaryContentAction, t)
+    : null;
 
   return (
     <div
@@ -348,6 +375,18 @@ function RowActions({
         (item.is_favorited || confirmDelete) && 'opacity-100'
       )}
     >
+      {primaryAction && (
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label={primaryAction.label}
+          title={primaryAction.label}
+          className="size-6"
+          onClick={onContentAction}
+        >
+          <primaryAction.icon className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+        </Button>
+      )}
       <Button
         variant="ghost"
         size="icon"

@@ -2872,6 +2872,7 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
+ "url",
  "windows 0.59.0",
  "x11rb",
 ]

@@ -42,6 +42,7 @@ import { useConfigStore } from '@/stores/configStore';
 import { cn, formatSize } from '@/lib/utils';
 import type {
   ClipboardItem,
+  ClipboardContentAction,
   FileItemSummary,
   FileMetadata,
   ImageMetadata,
@@ -51,6 +52,8 @@ import {
   parseFileMetadata,
   parseImageMetadata,
 } from './renderers/clipboardContentModel';
+import { useClipboardContentActions } from './useClipboardContentActions';
+import { contentActionPresentation } from './clipboardContentActions';
 
 interface ClipboardDetailDialogProps {
   item: ClipboardItem | null;
@@ -73,10 +76,16 @@ export function ClipboardDetailDialog({
     copyItemPlainText,
     pasteItemPlainText,
   } = useClipboardStore();
+  const shouldMaskPreview = Boolean(
+    item?.is_sensitive && maskSensitivePreviews
+  );
+  const { actions: contentActions, executeAction: executeContentAction } =
+    useClipboardContentActions(
+      item?.id ?? 0,
+      Boolean(item) && !shouldMaskPreview
+    );
 
   if (!item) return null;
-
-  const shouldMaskPreview = item.is_sensitive && maskSensitivePreviews;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -108,7 +117,13 @@ export function ClipboardDetailDialog({
           {shouldMaskPreview ? (
             <MaskedDetail />
           ) : (
-            <DetailContent item={item} />
+            <DetailContent
+              item={item}
+              actions={contentActions}
+              onAction={(action) =>
+                void executeContentAction(action).catch(() => undefined)
+              }
+            />
           )}
         </div>
 
@@ -191,15 +206,70 @@ function MaskedDetail() {
   );
 }
 
-function DetailContent({ item }: { item: ClipboardItem }) {
+function DetailContent({
+  item,
+  actions,
+  onAction,
+}: {
+  item: ClipboardItem;
+  actions: ClipboardContentAction[];
+  onAction: (action: ClipboardContentAction) => void;
+}) {
+  if (item.content_type === 'file') {
+    return <FileDetail item={item} actions={actions} onAction={onAction} />;
+  }
+
+  let content: React.ReactNode;
   switch (item.content_type) {
     case 'text':
-      return <TextDetail item={item} />;
+      content = <TextDetail item={item} />;
+      break;
     case 'image':
-      return <ImageDetail item={item} />;
-    case 'file':
-      return <FileDetail item={item} />;
+      content = <ImageDetail item={item} />;
+      break;
+    default:
+      content = null;
   }
+
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="min-h-0 flex-1 overflow-hidden">{content}</div>
+      <ContentActionBar actions={actions} onAction={onAction} />
+    </div>
+  );
+}
+
+function ContentActionBar({
+  actions,
+  onAction,
+}: {
+  actions: ClipboardContentAction[];
+  onAction: (action: ClipboardContentAction) => void;
+}) {
+  const { t } = useTranslation();
+  if (actions.length === 0) return null;
+
+  return (
+    <div className="flex shrink-0 flex-wrap items-center gap-1 border-t border-border/50 px-3 py-2">
+      {actions.map((action) => {
+        const presentation = contentActionPresentation(action, t);
+        const Icon = presentation.icon;
+        return (
+          <Button
+            key={`${action.kind}-${action.target}`}
+            variant="ghost"
+            size="sm"
+            aria-label={presentation.label}
+            title={presentation.label}
+            onClick={() => onAction(action)}
+          >
+            <Icon className="size-3.5" />
+            {presentation.label}
+          </Button>
+        );
+      })}
+    </div>
+  );
 }
 
 function TextDetail({ item }: { item: ClipboardItem }) {
@@ -418,7 +488,15 @@ interface FileDetailEntry {
   summary: FileItemSummary | null;
 }
 
-function FileDetail({ item }: { item: ClipboardItem }) {
+function FileDetail({
+  item,
+  actions,
+  onAction,
+}: {
+  item: ClipboardItem;
+  actions: ClipboardContentAction[];
+  onAction: (action: ClipboardContentAction) => void;
+}) {
   const { t } = useTranslation();
   const metadata = parseFileMetadata(item);
   const entries = useMemo(
@@ -439,6 +517,9 @@ function FileDetail({ item }: { item: ClipboardItem }) {
         {entries.map((entry, index) => {
           const isDirectory = entry.summary?.is_dir ?? false;
           const Icon = isDirectory ? Folder : File;
+          const entryActions = actions.filter(
+            (action) => action.target === entry.path
+          );
           return (
             <div
               key={`${entry.path}-${index}`}
@@ -458,11 +539,28 @@ function FileDetail({ item }: { item: ClipboardItem }) {
                   {entry.path}
                 </p>
               </div>
-              {entry.summary && !entry.summary.is_dir && (
-                <span className="font-mono text-[10px] text-muted-foreground">
-                  {formatSize(entry.summary.size)}
-                </span>
-              )}
+              <div className="flex flex-col items-end gap-1">
+                {entry.summary && !entry.summary.is_dir && (
+                  <span className="font-mono text-[10px] text-muted-foreground">
+                    {formatSize(entry.summary.size)}
+                  </span>
+                )}
+                {entryActions.length > 0 && (
+                  <div className="flex items-center gap-0.5">
+                    {entryActions.map((action) => {
+                      const presentation = contentActionPresentation(action, t);
+                      return (
+                        <ActionButton
+                          key={action.kind}
+                          label={presentation.label}
+                          onClick={() => onAction(action)}
+                          icon={presentation.icon}
+                        />
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           );
         })}

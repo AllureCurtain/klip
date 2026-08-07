@@ -196,6 +196,8 @@ fn main() {
             commands::paste_from_clipboard,
             commands::paste_plain_text_from_clipboard,
             commands::set_visible_clipboard_items,
+            commands::get_clipboard_content_actions,
+            commands::execute_clipboard_content_action,
             commands::get_config,
             commands::get_all_config,
             commands::set_config,

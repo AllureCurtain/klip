@@ -30,6 +30,14 @@ export interface ClipboardOcr {
   updated_at: number;
 }
 
+export type ClipboardContentAction =
+  | { kind: 'open_url'; target: string }
+  | { kind: 'compose_email'; target: string }
+  | { kind: 'open_path'; target: string }
+  | { kind: 'reveal_path'; target: string }
+  | { kind: 'copy_path'; target: string }
+  | { kind: 'copy_file_name'; target: string };
+
 export interface Tag {
   id: number;
   name: string;

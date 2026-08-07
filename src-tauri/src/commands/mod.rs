@@ -92,6 +92,24 @@ pub fn set_visible_clipboard_items(
 }
 
 #[tauri::command]
+pub fn get_clipboard_content_actions(
+    db: State<'_, database::Database>,
+    id: i64,
+) -> Result<Vec<crate::clipboard::actions::ClipboardContentAction>, AppError> {
+    crate::clipboard::actions::get_actions_by_id(&db, id)
+}
+
+#[tauri::command]
+pub fn execute_clipboard_content_action(
+    app: tauri::AppHandle,
+    db: State<'_, database::Database>,
+    id: i64,
+    action: crate::clipboard::actions::ClipboardContentAction,
+) -> Result<(), AppError> {
+    crate::clipboard::actions::execute_action_by_id(&app, &db, id, action)
+}
+
+#[tauri::command]
 pub fn get_config(
     db: State<'_, database::Database>,
     key: String,

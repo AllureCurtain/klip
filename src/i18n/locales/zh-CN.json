@@ -108,6 +108,14 @@
       "unknown": "未知",
       "none": "无"
     },
+    "contentActions": {
+      "openUrl": "打开链接",
+      "composeEmail": "写邮件",
+      "openPath": "打开",
+      "revealPath": "在文件夹中显示",
+      "copyPath": "复制路径",
+      "copyFileName": "复制文件名"
+    },
     "types": {
       "text": "文本",
       "image": "图片",

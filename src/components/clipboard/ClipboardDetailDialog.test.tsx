@@ -12,8 +12,21 @@ const storeMocks = vi.hoisted(() => ({
   pasteItemPlainText: vi.fn(),
 }));
 
+const contentActionMocks = vi.hoisted(() => ({
+  actions: [] as import('@/types').ClipboardContentAction[],
+  executeAction: vi.fn(),
+  refresh: vi.fn(),
+}));
+
 vi.mock('@/stores', () => ({
   useClipboardStore: () => storeMocks,
+}));
+
+vi.mock('./useClipboardContentActions', () => ({
+  useClipboardContentActions: (_itemId: number, enabled: boolean) =>
+    enabled
+      ? contentActionMocks
+      : { ...contentActionMocks, actions: [] },
 }));
 
 function makeItem(overrides: Partial<ClipboardItem> = {}): ClipboardItem {
@@ -53,6 +66,9 @@ describe('ClipboardDetailDialog', () => {
     storeMocks.pasteItem.mockReset();
     storeMocks.copyItemPlainText.mockReset();
     storeMocks.pasteItemPlainText.mockReset();
+    contentActionMocks.actions = [];
+    contentActionMocks.executeAction.mockReset();
+    contentActionMocks.refresh.mockReset();
   });
 
   it('shows complete plain and sanitized rich text in separate tabs', () => {
@@ -236,6 +252,46 @@ describe('ClipboardDetailDialog', () => {
     expect(storeMocks.pasteItem).toHaveBeenCalledWith(42);
     expect(storeMocks.copyItemPlainText).toHaveBeenCalledWith(42);
     expect(storeMocks.pasteItemPlainText).toHaveBeenCalledWith(42);
+  });
+
+  it('executes validated text and per-file actions from the detail surface', () => {
+    const openUrl = { kind: 'open_url', target: 'https://example.com' } as const;
+    contentActionMocks.actions = [openUrl];
+    contentActionMocks.executeAction.mockResolvedValue(undefined);
+    const { rerender } = render(
+      <ClipboardDetailDialog
+        item={makeItem({ content: 'https://example.com' })}
+        open
+        onOpenChange={() => undefined}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '打开链接' }));
+    expect(contentActionMocks.executeAction).toHaveBeenCalledWith(openUrl);
+
+    const target = 'C:\\资料\\report.txt';
+    const openPath = { kind: 'open_path', target } as const;
+    const revealPath = { kind: 'reveal_path', target } as const;
+    contentActionMocks.actions = [openPath, revealPath];
+    rerender(
+      <ClipboardDetailDialog
+        item={makeItem({
+          content_type: 'file',
+          content: JSON.stringify([target]),
+          metadata: JSON.stringify({
+            file_count: 1,
+            dir_count: 0,
+            total_size: 10,
+            items: [{ name: 'report.txt', is_dir: false, size: 10 }],
+          }),
+        })}
+        open
+        onOpenChange={() => undefined}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '在文件夹中显示' }));
+    expect(contentActionMocks.executeAction).toHaveBeenCalledWith(revealPath);
   });
 
   it('uses the dialog focus boundary, Escape close behavior, and viewport constraints', () => {

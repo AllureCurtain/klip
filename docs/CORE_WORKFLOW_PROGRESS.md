@@ -1,7 +1,7 @@
 # Core Clipboard Workflows Progress
 
 - 最后更新时间：2026-08-07（Asia/Shanghai）
-- 当前状态：`IN_PROGRESS`，Task 1-4 已完成，下一步执行 Task 5
+- 当前状态：`IN_PROGRESS`，Task 1-5 已完成，下一步执行 Task 6
 - 分支：`feat/core-workflows`
 - worktree：`D:\Study\cc\klip\.worktrees\core-workflows`
 - 基线：`8018aced3cd6b1437a4f8bb681206389d66c68f8`
@@ -37,7 +37,7 @@
 | 2 | 数字快捷键绑定当前可见记录 | `COMPLETED` | `fix: align quick paste with visible history` |
 | 3 | 纯文本复制与粘贴 | `COMPLETED` | `feat: add plain text clipboard actions` |
 | 4 | 统一详情与完整预览 | `COMPLETED` | `feat: add unified clipboard detail preview` |
-| 5 | URL/邮箱/文件快捷动作 | `PENDING` | `feat: add clipboard content actions` |
+| 5 | URL/邮箱/文件快捷动作 | `COMPLETED` | `feat: add clipboard content actions` |
 | 6 | 可搜索自定义标题与备注、DB v7 | `PENDING` | `feat: add searchable clipboard annotations` |
 | 7 | 全量验证、Windows 验收、推送和 PR | `PENDING` | `docs: finalize core workflow delivery` |
 
@@ -151,6 +151,33 @@
   键盘边界、富文本安全、敏感遮罩、图片交互、OCR、文件长路径和响应式约束。
 - `pnpm exec tsc -b --pretty false`、Task 4 前端 ESLint 和 `pnpm build`：通过。
 
+### Task 5：保守的内容快捷动作
+
+- Rust 检测器返回类型化的 `{ kind, target }` 动作；执行命令只接收 item ID 与动作，重新从
+  数据库加载条目、重新检测并要求动作精确匹配，伪造、过期或已变化目标不会执行。
+- 文本按完整 HTTP/HTTPS URL、保守 ASCII 邮箱、存在的完整路径识别；危险/不支持协议、
+  部分匹配和不存在路径均不提供动作。文件记录即使路径失效仍保留复制路径/文件名，只有
+  现存目标提供打开和定位。
+- URL、邮件和路径打开复用 `tauri-plugin-shell`；复制路径/文件名复用统一剪贴板 writer。
+  Windows 定位以独立 OS 参数传递 `/select,` 和路径，macOS 使用 `open -R`，Linux 使用
+  `xdg-open` 打开目录或父目录。
+- 列表行只显示第一个打开类主动作，详情按文本目标或逐个文件显示完整动作；选择模式和
+  敏感遮罩条目不会请求或渲染内容动作。
+- `cargo test clipboard::actions::tests`：7 项通过；`cargo test
+  platform::reveal::windows::tests`：1 项通过；`cargo fmt -- --check` 与
+  `cargo clippy -- -D warnings`：通过。
+- `pnpm test -- --run src/lib/tauri.test.ts
+  src/components/clipboard/useClipboardContentActions.test.tsx
+  src/components/clipboard/ClipboardItem.test.tsx
+  src/components/clipboard/ClipboardDetailDialog.test.tsx
+  src/components/clipboard/ClipboardList.test.tsx`：5 个测试文件、59 项通过。
+- `pnpm exec tsc -b --pretty false`、Task 5 前端/E2E ESLint 与 `git diff --check`：通过。
+- Windows 使用带空格和中文的真实临时路径完成桌面验收；最终执行
+  `scripts/run-e2e.ps1 -SkipBuild`，搜索/粘贴、筛选后可见项快捷粘贴、Explorer 打开与
+  定位共 3/3 通过。验收过程中先修复详情定位按钮缺少可访问名称、Explorer `/select,`
+  参数拼接问题和 Selenium 异步按钮 stale-node 等待；修复后 Klip、tauri-driver、
+  msedgedriver 均已停止。
+
 ## 阻塞与跳过
 
 - 当前无实现阻塞。
@@ -163,12 +190,12 @@
 2. 完整读取实施计划和本进度文件。
 3. 运行 `git status --short --branch`、`git log --oneline -12` 和相关进程检查。
 4. 若工作树有改动，先理解并验证现有 WIP，禁止丢弃不明改动。
-5. 从表格中第一个非 `COMPLETED` Task 继续；当前应从 Task 3 开始。
+5. 从表格中第一个非 `COMPLETED` Task 继续；当前应从 Task 6 开始。
 6. Task 完成前更新本文件的状态、测试证据、限制和下一步，并随代码一起提交。
 7. 提交后确认工作树干净，再进入下一个 Task。
 
 ## 下一步准确操作
 
-- 从 Task 5 开始，先为安全 URL、危险协议、邮箱、存在/不存在路径和文件列表补 Rust 检测
-  失败测试，再实现按 item ID 重新检测的有限系统动作。
-- 不提前实现 Task 6，也不改发布、导入导出、隐私产品化或 P2 功能。
+- 从 Task 6 开始，先补 DB v7 migration、annotation 校验、旧 JSON/备份恢复和搜索重建
+  失败测试，再贯通 Rust/TypeScript/OpenAPI、Tantivy 与详情编辑 UI。
+- 不提前执行 Task 7 的发布收尾，也不改导入导出范围、隐私产品化或 P2 功能。

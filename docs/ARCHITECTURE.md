@@ -344,6 +344,8 @@ interface AppConfig {
 | `copy_plain_text_to_clipboard` | id | void | 以纯文本复制文本记录 |
 | `paste_from_clipboard` | id | void | 复制后模拟粘贴 |
 | `paste_plain_text_from_clipboard` | id | void | 以纯文本复制后模拟粘贴 |
+| `get_clipboard_content_actions` | id | ClipboardContentAction[] | 检测有限内容动作 |
+| `execute_clipboard_content_action` | id, action | void | 重新检测后执行内容动作 |
 | `toggle_favorite` | id | ClipboardItem | 切换收藏 |
 | `set_favorite_for_items` | ids, is_favorited | number | 批量收藏/取消收藏 |
 | `clear_clipboard_history` | - | void | 清空历史 |

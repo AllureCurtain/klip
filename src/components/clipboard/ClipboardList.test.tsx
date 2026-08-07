@@ -53,6 +53,14 @@ vi.mock('@/stores', () => ({
   useClipboardStore: () => storeMocks,
 }));
 
+vi.mock('./useClipboardContentActions', () => ({
+  useClipboardContentActions: () => ({
+    actions: [],
+    executeAction: vi.fn(),
+    refresh: vi.fn(),
+  }),
+}));
+
 function makeTextItem(overrides: Partial<ClipboardItemType> = {}): ClipboardItemType {
   return {
     id: 42,

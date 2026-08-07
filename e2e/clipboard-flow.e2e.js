@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Builder, By, until } from 'selenium-webdriver';
 
 const remoteUrl = process.env.SELENIUM_REMOTE_URL ?? 'http://127.0.0.1:4444';
@@ -124,6 +127,97 @@ function sendWindowsQuickPaste(index) {
   );
 }
 
+function explorerWindowMatches(folderPath, selectedPath) {
+  requireWindowsClipboard();
+  const script = `
+$folder = [IO.Path]::GetFullPath($env:KLIP_E2E_EXPLORER_FOLDER)
+$selected = $env:KLIP_E2E_EXPLORER_SELECTED
+$shell = New-Object -ComObject Shell.Application
+foreach ($window in @($shell.Windows())) {
+  try {
+    $windowFolder = [IO.Path]::GetFullPath($window.Document.Folder.Self.Path)
+    if (-not [StringComparer]::OrdinalIgnoreCase.Equals($windowFolder, $folder)) { continue }
+    if ([string]::IsNullOrWhiteSpace($selected)) { exit 0 }
+    foreach ($item in @($window.Document.SelectedItems())) {
+      if ([StringComparer]::OrdinalIgnoreCase.Equals([IO.Path]::GetFullPath($item.Path), [IO.Path]::GetFullPath($selected))) { exit 0 }
+    }
+    $focused = $window.Document.FocusedItem
+    if ($null -ne $focused -and [StringComparer]::OrdinalIgnoreCase.Equals([IO.Path]::GetFullPath($focused.Path), [IO.Path]::GetFullPath($selected))) { exit 0 }
+  } catch {}
+}
+exit 1
+`;
+  const result = spawnSync('powershell', ['-NoProfile', '-Command', script], {
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      KLIP_E2E_EXPLORER_FOLDER: folderPath,
+      KLIP_E2E_EXPLORER_SELECTED: selectedPath ?? '',
+    },
+  });
+  return result.status === 0;
+}
+
+function closeExplorerWindows(folderPath) {
+  requireWindowsClipboard();
+  runPowerShell(
+    `
+$folder = [IO.Path]::GetFullPath($env:KLIP_E2E_EXPLORER_FOLDER)
+$shell = New-Object -ComObject Shell.Application
+foreach ($window in @($shell.Windows())) {
+  try {
+    $windowFolder = [IO.Path]::GetFullPath($window.Document.Folder.Self.Path)
+    if ([StringComparer]::OrdinalIgnoreCase.Equals($windowFolder, $folder)) { $window.Quit() }
+  } catch {}
+}
+`,
+    { KLIP_E2E_EXPLORER_FOLDER: folderPath },
+  );
+}
+
+async function waitForExplorerWindow(driver, folderPath, selectedPath, label) {
+  for (let attempt = 0; attempt < 24; attempt += 1) {
+    if (explorerWindowMatches(folderPath, selectedPath)) return;
+    await driver.sleep(500);
+  }
+  throw new Error(`Timed out waiting for Explorer ${label}`);
+}
+
+async function waitForActionButton(driver, labels) {
+  return driver.wait(
+    async () => {
+      for (const label of labels) {
+        const matches = await driver.findElements(By.css(`button[aria-label="${label}"]`));
+        for (const match of matches) {
+          try {
+            if (await match.isDisplayed()) return match;
+          } catch {
+            // Async action refresh can replace the node between lookup and visibility check.
+          }
+        }
+      }
+      return false;
+    },
+    15000,
+    `Timed out waiting for action: ${labels.join(' / ')}`,
+  );
+}
+
+async function filterForItem(driver, query, fullContent) {
+  const search = await driver.wait(until.elementLocated(By.css('input[type="text"]')), 15000);
+  await search.clear();
+  await search.sendKeys(query);
+  const content = fullContent.replace(/"/g, '\\"');
+  const marker = await driver.wait(
+    until.elementLocated(
+      By.xpath(`//*[@data-testid="clipboard-item"]//*[@title="${content}"]`),
+    ),
+    15000,
+    `Timed out waiting for filtered item: ${fullContent}`,
+  );
+  return marker.findElement(By.xpath('ancestor::*[@data-testid="clipboard-item"]'));
+}
+
 async function waitForText(driver, text, label = 'text') {
   const escaped = text.replace(/"/g, '\\"');
   return driver.wait(
@@ -164,6 +258,8 @@ describe('clipboard capture, search, and paste flow', function () {
   let driver;
   let originalClipboardText;
   let capturedText;
+  let actionFixtureRoot;
+  let actionFolder;
 
   before(async function () {
     if (!appPath) {
@@ -193,6 +289,16 @@ describe('clipboard capture, search, and paste flow', function () {
     }
     if (originalClipboardText !== undefined) {
       setClipboardText(originalClipboardText);
+    }
+    if (actionFolder && process.platform === 'win32') {
+      try {
+        closeExplorerWindows(actionFolder);
+      } catch {
+        // Best-effort cleanup must not hide the original E2E result.
+      }
+    }
+    if (actionFixtureRoot) {
+      rmSync(actionFixtureRoot, { recursive: true, force: true });
     }
   });
 
@@ -266,5 +372,42 @@ describe('clipboard capture, search, and paste flow', function () {
       10000,
       'Ctrl+Alt+1 did not use the first filtered visible item',
     );
+  });
+
+  it('opens and reveals validated Windows paths with spaces and non-ASCII text', async function () {
+    if (process.platform !== 'win32') this.skip();
+
+    actionFixtureRoot = mkdtempSync(join(tmpdir(), 'klip-actions-'));
+    actionFolder = join(actionFixtureRoot, 'folder with spaces 资料');
+    const filePath = join(actionFolder, '验收 report.txt');
+    mkdirSync(actionFolder, { recursive: true });
+    writeFileSync(filePath, 'klip content action acceptance', 'utf8');
+
+    setClipboardText(actionFolder);
+    await waitForClipboardItem(driver, actionFolder, 'action folder path');
+    await showKlipWindow();
+    await driver.navigate().refresh();
+    let row = await filterForItem(driver, 'folder with spaces', actionFolder);
+    await driver.actions().move({ origin: row }).perform();
+    const openButton = await waitForActionButton(driver, ['打开', 'Open']);
+    await openButton.click();
+    await waitForExplorerWindow(driver, actionFolder, undefined, 'to open the folder');
+    closeExplorerWindows(actionFolder);
+
+    setClipboardText(filePath);
+    await waitForClipboardItem(driver, filePath, 'action file path');
+    await showKlipWindow();
+    await driver.navigate().refresh();
+    row = await filterForItem(driver, '验收 report.txt', filePath);
+    await driver.actions().move({ origin: row }).perform();
+    const previewButton = await waitForActionButton(driver, ['预览详情', 'Preview details']);
+    await previewButton.click();
+    const revealButton = await waitForActionButton(driver, [
+      '在文件夹中显示',
+      'Show in folder',
+    ]);
+    await revealButton.click();
+    await waitForExplorerWindow(driver, actionFolder, filePath, 'to select the file');
+    closeExplorerWindows(actionFolder);
   });
 });
