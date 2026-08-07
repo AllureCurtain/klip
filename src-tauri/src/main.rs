@@ -27,6 +27,7 @@ fn main() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
         ))
+        .manage(klip::hotkey::VisibleClipboardItems::default())
         .setup(move |app| {
             // 初始化日志：stderr + 按天滚动落盘到 app_log_dir/klip.log
             let guard = init_tracing(app.handle());
@@ -192,6 +193,7 @@ fn main() {
             commands::clear_clipboard_history,
             commands::copy_to_clipboard,
             commands::paste_from_clipboard,
+            commands::set_visible_clipboard_items,
             commands::get_config,
             commands::get_all_config,
             commands::set_config,

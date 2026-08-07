@@ -67,6 +67,14 @@ pub fn paste_from_clipboard(
 }
 
 #[tauri::command]
+pub fn set_visible_clipboard_items(
+    visible_items: State<'_, crate::hotkey::VisibleClipboardItems>,
+    ids: Vec<i64>,
+) -> Result<(), AppError> {
+    visible_items.set(ids)
+}
+
+#[tauri::command]
 pub fn get_config(
     db: State<'_, database::Database>,
     key: String,

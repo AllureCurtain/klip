@@ -232,6 +232,25 @@ void
 
 ---
 
+#### `set_visible_clipboard_items`
+
+同步当前界面有序结果中的前 9 个记录 ID，供 `Ctrl+Alt+1` 到 `Ctrl+Alt+9` 使用。
+传入空数组会建立明确的空快照；只有前端从未同步过时，快捷键才回退到数据库最近记录。
+
+**参数**:
+```typescript
+{
+  ids: number[]; // 正整数 ID；超过 9 个时后端只保留前 9 个
+}
+```
+
+**返回**:
+```typescript
+void
+```
+
+---
+
 ### 1.2 标签、数据导入导出和敏感内容
 
 #### `list_tags`
@@ -944,6 +963,9 @@ export const clipboardApi = {
 
   paste: (id: number) =>
     invoke('paste_from_clipboard', { id }),
+
+  setVisibleItems: (ids: number[]) =>
+    invoke('set_visible_clipboard_items', { ids }),
 
   toggleFavorite: (id: number) =>
     invoke<ClipboardItem>('toggle_favorite', { id }),

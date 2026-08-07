@@ -1,7 +1,7 @@
 # Core Clipboard Workflows Progress
 
 - 最后更新时间：2026-08-07（Asia/Shanghai）
-- 当前状态：`IN_PROGRESS`，Task 1 已完成，下一步执行 Task 2
+- 当前状态：`IN_PROGRESS`，Task 1-2 已完成，下一步执行 Task 3
 - 分支：`feat/core-workflows`
 - worktree：`D:\Study\cc\klip\.worktrees\core-workflows`
 - 基线：`8018aced3cd6b1437a4f8bb681206389d66c68f8`
@@ -34,7 +34,7 @@
 | Task | 内容 | 状态 | 目标提交 |
 | --- | --- | --- | --- |
 | 1 | 搜索键盘闭环、复制/粘贴分离 | `COMPLETED` | `fix: complete keyboard clipboard workflow` |
-| 2 | 数字快捷键绑定当前可见记录 | `PENDING` | `fix: align quick paste with visible history` |
+| 2 | 数字快捷键绑定当前可见记录 | `COMPLETED` | `fix: align quick paste with visible history` |
 | 3 | 纯文本复制与粘贴 | `PENDING` | `feat: add plain text clipboard actions` |
 | 4 | 统一详情与完整预览 | `PENDING` | `feat: add unified clipboard detail preview` |
 | 5 | URL/邮箱/文件快捷动作 | `PENDING` | `feat: add clipboard content actions` |
@@ -91,6 +91,27 @@
   `Cannot find module ...\node_modules\vitest\vitest.mjs`；已在不修改锁文件的前提下用
   `pnpm install --offline --frozen-lockfile --force` 从本地 pnpm store 恢复，随后测试通过。
 
+### Task 2：数字快捷键绑定当前可见记录
+
+- 新增进程内 `VisibleClipboardItems`：`None` 表示前端从未同步，`Some([])` 表示明确空
+  结果；快照只保留前 9 个正整数 ID，并按一基位置解析。
+- App 在搜索、类型、收藏、标签、日期筛选或有序结果变化后同步 `items.slice(0, 9)`；
+  快捷键按快照 ID 重新读取数据库，已删除 ID 和越界位置不回退到其他记录。
+- `pnpm test -- --run src/App.test.tsx src/lib/tauri.test.ts`：2 个测试文件、21 项通过，
+  覆盖前九条、明确空快照及搜索/类型/收藏/标签/日期筛选后的重新同步。
+- `cargo test hotkey::visible_items::tests`：3 项通过；`cargo test clipboard::paste::tests`：
+  6 项通过，覆盖未初始化数据库回退、快照顺序、明确空结果和已删除 ID。
+- `pnpm exec tsc -b --pretty false`、Task 2 前端 ESLint、`cargo fmt` 和
+  `cargo clippy -- -D warnings`：通过。
+- `pnpm e2e`：通过，Windows 隔离数据/日志目录下 2 个桌面用例通过；新增用例先建立
+  搜索后的唯一可见项，再写入数据库最新 sentinel，真实发送 `Ctrl+Alt+1` 后系统剪贴板
+  得到可见项。日志记录 `Quick paste index 1` 与 `pasted item at position 1`，验收后 Klip、
+  tauri-driver、msedgedriver 均已停止。
+- 首次 Rust 测试因移动 worktree 后 `target` 仍引用 `.worktrees\foundation` 失败；只执行
+  `cargo clean -p tauri` 和 `cargo clean -p klip` 后恢复。首次 E2E 又因 EdgeDriver 148 与
+  WebView2 151 不匹配而无法创建会话；使用 winget 更新到 EdgeDriver `151.0.4129.72`
+  后解除阻塞并通过完整 E2E。
+
 ## 阻塞与跳过
 
 - 当前无实现阻塞。
@@ -103,11 +124,12 @@
 2. 完整读取实施计划和本进度文件。
 3. 运行 `git status --short --branch`、`git log --oneline -12` 和相关进程检查。
 4. 若工作树有改动，先理解并验证现有 WIP，禁止丢弃不明改动。
-5. 从表格中第一个非 `COMPLETED` Task 继续；当前应从 Task 2 开始。
+5. 从表格中第一个非 `COMPLETED` Task 继续；当前应从 Task 3 开始。
 6. Task 完成前更新本文件的状态、测试证据、限制和下一步，并随代码一起提交。
 7. 提交后确认工作树干净，再进入下一个 Task。
 
 ## 下一步准确操作
 
-- 从 Task 2 开始，为可见条目快照的未初始化、空结果、位置解析和已删除 ID 先补失败测试。
-- 不提前实现 Task 3-6，也不改发布、导入导出、隐私产品化或 P2 功能。
+- 从 Task 3 开始，为 preserve/plain 写入模式、非文本拒绝和前端 plain copy/paste wrapper
+  先补失败测试。
+- 不提前实现 Task 4-6，也不改发布、导入导出、隐私产品化或 P2 功能。

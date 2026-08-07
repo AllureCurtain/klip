@@ -101,6 +101,16 @@ describe('tauri API wrappers', () => {
     expect(invoke).toHaveBeenNthCalledWith(2, 'paste_from_clipboard', { id: 5 });
   });
 
+  it('syncs the ordered visible clipboard ids', async () => {
+    vi.mocked(invoke).mockResolvedValue(undefined);
+
+    await clipboardApi.setVisibleItems([9, 4, 7]);
+
+    expect(invoke).toHaveBeenCalledWith('set_visible_clipboard_items', {
+      ids: [9, 4, 7],
+    });
+  });
+
   it('subscribes to typed clipboard item updates', async () => {
     vi.mocked(listen).mockResolvedValue(vi.fn());
     const callback = vi.fn();

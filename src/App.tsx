@@ -15,6 +15,7 @@ import {
   onConfigChanged,
   onOpenAbout,
   onOpenSettings,
+  clipboardApi,
   configApi,
 } from '@/lib/tauri';
 import { springs, windowVariants } from '@/lib/motion';
@@ -143,6 +144,13 @@ function App() {
       unlistenAboutPromise.then((fn) => fn());
     };
   }, [fetchItems, fetchProductivity, fetchTags, setItems]);
+
+  useEffect(() => {
+    const visibleIds = items.slice(0, 9).map((item) => item.id);
+    void clipboardApi.setVisibleItems(visibleIds).catch((syncError) => {
+      console.error('Failed to sync visible clipboard items', syncError);
+    });
+  }, [items]);
 
   useEffect(() => {
     const hasActiveSearch = searchQuery.trim() !== '';

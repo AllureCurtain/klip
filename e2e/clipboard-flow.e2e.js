@@ -117,6 +117,13 @@ function getClipboardText() {
   throw new Error(`Unsupported E2E clipboard platform: ${process.platform}`);
 }
 
+function sendWindowsQuickPaste(index) {
+  requireWindowsClipboard();
+  runPowerShell(
+    `Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('^%${index}')`,
+  );
+}
+
 async function waitForText(driver, text, label = 'text') {
   const escaped = text.replace(/"/g, '\\"');
   return driver.wait(
@@ -142,9 +149,21 @@ async function listClipboardItems() {
   return response.json();
 }
 
+async function waitForClipboardItem(driver, content, label) {
+  await driver.wait(
+    async () => {
+      const items = await listClipboardItems();
+      return items.some((item) => item.content === content);
+    },
+    15000,
+    `Timed out waiting for captured ${label}: ${content}`,
+  );
+}
+
 describe('clipboard capture, search, and paste flow', function () {
   let driver;
   let originalClipboardText;
+  let capturedText;
 
   before(async function () {
     if (!appPath) {
@@ -213,6 +232,39 @@ describe('clipboard capture, search, and paste flow', function () {
       () => getClipboardText() === uniqueText,
       10000,
       'Timed out waiting for clipboard to be restored by paste_from_clipboard',
+    );
+    capturedText = uniqueText;
+  });
+
+  it('quick-pastes the first filtered visible item instead of the newest database item', async function () {
+    if (process.platform !== 'win32') this.skip();
+
+    assert.ok(capturedText, 'The capture flow must provide a quick-paste candidate');
+    const sentinelText = `sentinel-${Date.now()}`;
+
+    await showKlipWindow();
+    await driver.navigate().refresh();
+    const search = await driver.wait(
+      until.elementLocated(By.css('input[type="text"]')),
+      15000,
+      'Timed out waiting for search before quick paste verification',
+    );
+
+    await search.clear();
+    await search.sendKeys(capturedText);
+    await waitForText(driver, capturedText, 'filtered quick-paste item');
+
+    setClipboardText(sentinelText);
+    await waitForClipboardItem(driver, sentinelText, 'newest sentinel item');
+    await showKlipWindow();
+    await driver.sleep(300);
+
+    sendWindowsQuickPaste(1);
+
+    await driver.wait(
+      () => getClipboardText() === capturedText,
+      10000,
+      'Ctrl+Alt+1 did not use the first filtered visible item',
     );
   });
 });

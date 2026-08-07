@@ -97,6 +97,9 @@ export const clipboardApi = {
 
   paste: (id: number) => invoke('paste_from_clipboard', { id }),
 
+  setVisibleItems: (ids: number[]) =>
+    invoke('set_visible_clipboard_items', { ids }),
+
   toggleFavorite: (id: number) =>
     invoke<ClipboardItem>('toggle_favorite', { id }),
 
