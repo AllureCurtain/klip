@@ -1,6 +1,6 @@
 # Foundation Implementation Progress
 
-- 最后更新时间：2026-08-07 08:42（Asia/Shanghai）
+- 最后更新时间：2026-08-07 08:52（Asia/Shanghai）
 - 当前分支：`feat/foundation`
 - 基准提交：`423ab24`（与 `main` / `origin/main` 一致）
 
@@ -27,6 +27,7 @@
 - `e0fef43`：记录 Windows MSI/NSIS 构建、大小、哈希、签名状态和发布清单证据。
 - `c29b71f`：记录本地-only installer smoke 通过、GitHub release 缺失和清洁用户/VM 安装跳过边界。
 - `87d9572`：记录当前 HEAD Windows Selenium E2E 使用匹配 EdgeDriver 重跑通过。
+- `01528cd`：升级并锁定发布工具链安全补丁，清零 npm high/critical advisories。
 
 ## 当前任务
 
@@ -57,6 +58,7 @@
 - 当前 HEAD Windows `pnpm e2e` 首次运行：前端和 Tauri debug build 通过，业务测试未开始；PATH 中 EdgeDriver 148 与 WebView2 `151.0.4129.59` 不匹配，Selenium `before all` 返回 `SessionNotCreatedError`，runner 正确以 exit 1 失败。已定位 ignored 缓存 `e2e/.tmp/edgedriver-151.0.4129.59/msedgedriver.exe`，下一步临时前置该目录后重跑同一 E2E。
 - 当前 HEAD Windows Selenium E2E 重跑：通过。临时前置 `e2e/.tmp/edgedriver-151.0.4129.59/msedgedriver.exe`，EdgeDriver/WebView2 均为 `151.0.4129.59`；1 项业务测试通过，覆盖文本捕获、关键词搜索、窗口显示/刷新、历史条目点击和剪贴板恢复，runner 退出清理正常。
 - 最终 `pnpm verify`（2026-08-07 07:53）：通过，用时 202.5 秒；ESLint、Vitest 20/149、生产构建、cargo fmt、Clippy、Rust library 143（1 ignored）、main 2 和 clipboard integration 5 全部通过。
+- 依赖修正后的当前 HEAD Windows Selenium E2E（2026-08-07）：通过；Vite 6.4.3、匹配 EdgeDriver/WebView2 151，1 项业务流程通过，runner 清理正常。
 - Windows runtime smoke：`pnpm tauri:dev` 已启动 `klip.exe`；`KLIP_DATA_DIR=C:\tmp\klip-foundation\data` 下生成 `klip.db`/WAL，`KLIP_LOG_DIR=C:\tmp\klip-foundation\logs` 下生成日志文件；进程已停止。完整 UI 闭环尚未执行。
 - search 依赖核验：`tantivy 0.24.2` 使用 `tantivy-tokenizer-api 0.5`；选择同样依赖 tokenizer API 0.5 的 `tantivy-jieba 0.16.0`，避免同时链接不兼容的 tokenizer trait 版本。
 - search 首轮专项测试：未进入测试执行，测试编译因两个既有 `ClipboardQuerySpec` 字面量缺少新增的 `text_match_ids` 字段而失败（`clipboard_query.rs:380`、`:460`）；业务代码 `cargo check` 已通过。处理：补齐测试字段后原命令重跑，不跳过测试。
