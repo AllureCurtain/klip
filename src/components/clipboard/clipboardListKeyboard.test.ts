@@ -52,6 +52,29 @@ describe('resolveClipboardListKeyAction', () => {
     ).toBeNull();
   });
 
+  it('opens preview with Space only outside editable controls', () => {
+    const surface = document.createElement('div');
+    const search = document.createElement('input');
+    search.dataset.clipboardSearchInput = 'true';
+    const textarea = document.createElement('textarea');
+
+    expect(
+      resolveClipboardListKeyAction(
+        keyboardEvent(surface, { key: ' ', keyCode: 32 })
+      )
+    ).toBe('preview');
+    expect(
+      resolveClipboardListKeyAction(
+        keyboardEvent(search, { key: ' ', keyCode: 32 })
+      )
+    ).toBeNull();
+    expect(
+      resolveClipboardListKeyAction(
+        keyboardEvent(textarea, { key: ' ', keyCode: 32 })
+      )
+    ).toBeNull();
+  });
+
   it('ignores IME composition events and key code 229', () => {
     const search = document.createElement('input');
     search.dataset.clipboardSearchInput = 'true';

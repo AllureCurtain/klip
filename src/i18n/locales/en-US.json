@@ -64,6 +64,7 @@
   },
   "clipboard": {
     "copy": "Copy",
+    "paste": "Paste",
     "copyPlainText": "Copy as plain text",
     "pastePlainText": "Paste as plain text",
     "copied": "Copied",
@@ -71,6 +72,7 @@
     "unfavorite": "Unfavorite",
     "select": "Select item",
     "previewImage": "Preview image",
+    "preview": "Preview details",
     "sensitive": "Sensitive",
     "sensitiveHidden": "Sensitive content hidden",
     "delete": "Delete",
@@ -87,6 +89,26 @@
       "completed": "Text recognized",
       "empty": "No text found",
       "failed": "Recognition failed"
+    },
+    "detail": {
+      "title": "Clipboard details",
+      "description": "Inspect the complete clipboard item and choose an action",
+      "actions": "Clipboard actions",
+      "viewMode": "Text view",
+      "plainText": "Plain text",
+      "richText": "Rich text",
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom out",
+      "resetZoom": "Reset zoom",
+      "downloadImage": "Download image",
+      "imageAlt": "Clipboard image",
+      "ocrText": "Recognized text",
+      "source": "Source",
+      "capturedAt": "Captured",
+      "size": "Size",
+      "tags": "Tags",
+      "unknown": "Unknown",
+      "none": "None"
     },
     "types": {
       "text": "Text",
@@ -114,10 +136,6 @@
     "yesterday": "Yesterday",
     "daysAgo_one": "{{count}} day ago",
     "daysAgo_other": "{{count}} days ago"
-  },
-  "imagePreview": {
-    "title": "Image preview",
-    "download": "Download image"
   },
   "settings": {
     "title": "Settings",

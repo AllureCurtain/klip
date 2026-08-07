@@ -1,7 +1,7 @@
 # Core Clipboard Workflows Progress
 
 - 最后更新时间：2026-08-07（Asia/Shanghai）
-- 当前状态：`IN_PROGRESS`，Task 1-3 已完成，下一步执行 Task 4
+- 当前状态：`IN_PROGRESS`，Task 1-4 已完成，下一步执行 Task 5
 - 分支：`feat/core-workflows`
 - worktree：`D:\Study\cc\klip\.worktrees\core-workflows`
 - 基线：`8018aced3cd6b1437a4f8bb681206389d66c68f8`
@@ -36,7 +36,7 @@
 | 1 | 搜索键盘闭环、复制/粘贴分离 | `COMPLETED` | `fix: complete keyboard clipboard workflow` |
 | 2 | 数字快捷键绑定当前可见记录 | `COMPLETED` | `fix: align quick paste with visible history` |
 | 3 | 纯文本复制与粘贴 | `COMPLETED` | `feat: add plain text clipboard actions` |
-| 4 | 统一详情与完整预览 | `PENDING` | `feat: add unified clipboard detail preview` |
+| 4 | 统一详情与完整预览 | `COMPLETED` | `feat: add unified clipboard detail preview` |
 | 5 | URL/邮箱/文件快捷动作 | `PENDING` | `feat: add clipboard content actions` |
 | 6 | 可搜索自定义标题与备注、DB v7 | `PENDING` | `feat: add searchable clipboard annotations` |
 | 7 | 全量验证、Windows 验收、推送和 PR | `PENDING` | `docs: finalize core workflow delivery` |
@@ -132,6 +132,25 @@
 - `pnpm exec tsc -b --pretty false`、Task 3 前端 ESLint、`cargo fmt -- --check` 和
   `cargo clippy -- -D warnings`：通过。
 
+### Task 4：统一详情与完整预览
+
+- 新增唯一的 `ClipboardDetailDialog` 状态源：`ClipboardList` 按条目 ID 管理详情，所有
+  行内预览按钮、图片缩略图和非可编辑区域的 Space 都进入同一对话框；详情打开期间列表
+  不再接管键盘，Base UI Dialog 负责焦点边界和 Esc 关闭。
+- 文本详情完整滚动显示 plain text；存在 HTML 时提供纯文本/富文本标签页，并复用
+  DOMPurify 白名单清洗脚本、事件属性和危险协议。敏感遮罩开启时，文本、HTML、图片数据、
+  OCR 和文件路径均不进入详情 DOM。
+- 图片详情在稳定视口中支持 50%-400% 有界缩放、重置和放大后指针拖动，保留图片下载，
+  并完整显示尺寸、格式与 OCR 状态/文本；控件不会改变对话框尺寸。
+- 文件详情解析已保存路径列表和 metadata，逐项显示文件/文件夹类型、名称、大小和完整
+  路径；长路径使用 `break-all` 与内部纵向滚动，页面级横向溢出被禁止。
+- 详情共享原格式 copy/paste、文本 plain copy/plain paste，以及来源应用、窗口标题、
+  捕获时间、大小和标签事实带；标题/备注字段将在按计划执行的 Task 6 中接入同一详情。
+- 旧 `ImagePreview` 组件、测试与无引用 i18n 已删除，架构文档更新为统一详情组件。
+- `pnpm test -- --run src/components/clipboard`：5 个测试文件、54 项通过，覆盖统一入口、
+  键盘边界、富文本安全、敏感遮罩、图片交互、OCR、文件长路径和响应式约束。
+- `pnpm exec tsc -b --pretty false`、Task 4 前端 ESLint 和 `pnpm build`：通过。
+
 ## 阻塞与跳过
 
 - 当前无实现阻塞。
@@ -150,6 +169,6 @@
 
 ## 下一步准确操作
 
-- 从 Task 4 开始，先盘点现有图片预览、内容 renderer、敏感遮罩与 Dialog 组件，再为统一
-  详情入口、键盘 Space、富文本清洗、图片交互和文件长路径补失败测试。
-- 不提前实现 Task 5-6，也不改发布、导入导出、隐私产品化或 P2 功能。
+- 从 Task 5 开始，先为安全 URL、危险协议、邮箱、存在/不存在路径和文件列表补 Rust 检测
+  失败测试，再实现按 item ID 重新检测的有限系统动作。
+- 不提前实现 Task 6，也不改发布、导入导出、隐私产品化或 P2 功能。

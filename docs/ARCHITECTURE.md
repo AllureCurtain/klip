@@ -125,7 +125,7 @@ src/
 │   ├── clipboard/       # 剪贴板相关
 │   │   ├── ClipboardList.tsx   # 虚拟滚动列表（@tanstack/react-virtual）
 │   │   ├── ClipboardItem.tsx   # 统一的列表项（内部按 content_type 分支渲染）
-│   │   └── ImagePreview.tsx    # 图片大图预览弹窗
+│   │   └── ClipboardDetailDialog.tsx # 文本、图片、文件和 OCR 的统一详情
 │   └── settings/        # 设置相关
 │       ├── SettingsView.tsx        # 全页设置（通用/快捷键/行为/数据/关于）
 │       └── DataManagementView.tsx  # 标签、导入导出、备份恢复、敏感内容设置

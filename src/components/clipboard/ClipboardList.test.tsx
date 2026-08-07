@@ -8,6 +8,7 @@ const storeMocks = vi.hoisted(() => ({
   deleteItem: vi.fn(),
   copyItem: vi.fn(),
   pasteItem: vi.fn(),
+  copyItemPlainText: vi.fn(),
   pasteItemPlainText: vi.fn(),
   toggleFavorite: vi.fn(),
   tags: [] as { id: number; name: string; color: string | null; created_at: number }[],
@@ -87,6 +88,7 @@ describe('ClipboardList', () => {
     storeMocks.deleteItem.mockReset();
     storeMocks.copyItem.mockReset();
     storeMocks.pasteItem.mockReset();
+    storeMocks.copyItemPlainText.mockReset();
     storeMocks.pasteItemPlainText.mockReset();
     storeMocks.toggleFavorite.mockReset();
     storeMocks.assignTagToItem.mockReset();
@@ -295,5 +297,25 @@ describe('ClipboardList', () => {
 
     expect(storeMocks.pasteItemPlainText).not.toHaveBeenCalled();
     expect(storeMocks.toggleSelected).not.toHaveBeenCalled();
+  });
+
+  it('opens the selected item detail with Space outside editable controls', () => {
+    render(
+      <>
+        <textarea aria-label="notes" />
+        <ClipboardList items={[makeTextItem({ id: 17, content: 'full detail text' })]} />
+      </>
+    );
+
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'notes' }), {
+      key: ' ',
+      keyCode: 32,
+    });
+    expect(screen.queryByRole('dialog')).toBeNull();
+
+    fireEvent.keyDown(document.body, { key: ' ', keyCode: 32 });
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    expect(screen.getByText('full detail text')).toBeTruthy();
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
   });
 });

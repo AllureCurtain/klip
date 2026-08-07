@@ -320,12 +320,20 @@ describe('ClipboardItem', () => {
   });
 
   it('opens image preview from an accessible thumbnail action', () => {
-    render(<ClipboardItem item={makeImageItem()} index={1} isSelected={false} />);
+    const onPreview = vi.fn();
+    render(
+      <ClipboardItem
+        item={makeImageItem()}
+        index={1}
+        isSelected={false}
+        onPreview={onPreview}
+      />
+    );
 
     const previewButton = screen.getByRole('button', { name: '预览图片' });
     fireEvent.click(previewButton);
 
-    expect(screen.getByText('图片预览')).toBeTruthy();
+    expect(onPreview).toHaveBeenCalledOnce();
   });
 
   it('shows pending, completed, empty, and failed OCR states on image rows', () => {
@@ -454,6 +462,40 @@ describe('ClipboardItem', () => {
     rerender(<ClipboardItem item={makeImageItem()} index={1} isSelected={false} />);
     expect(screen.queryByRole('button', { name: '复制纯文本' })).toBeNull();
     expect(screen.queryByRole('button', { name: '粘贴纯文本' })).toBeNull();
+  });
+
+  it('offers the same detail preview entry for every content type', () => {
+    const onPreview = vi.fn();
+    const { rerender } = render(
+      <ClipboardItem
+        item={makeTextItem()}
+        index={1}
+        isSelected={false}
+        onPreview={onPreview}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '预览详情' }));
+    rerender(
+      <ClipboardItem
+        item={makeImageItem()}
+        index={1}
+        isSelected={false}
+        onPreview={onPreview}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: '预览详情' }));
+    rerender(
+      <ClipboardItem
+        item={makeFileItem()}
+        index={1}
+        isSelected={false}
+        onPreview={onPreview}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: '预览详情' }));
+
+    expect(onPreview).toHaveBeenCalledTimes(3);
   });
 
   it('uses the same readable quiet row treatment for batch-selected rows', () => {

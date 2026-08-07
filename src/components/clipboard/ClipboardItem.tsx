@@ -5,6 +5,7 @@ import {
   ClipboardCopy,
   ClipboardPaste,
   Copy,
+  Eye,
   LoaderCircle,
   ScanText,
   ShieldAlert,
@@ -19,8 +20,7 @@ import { useConfigStore } from '@/stores/configStore';
 import { formatTime, cn } from '@/lib/utils';
 import { springs, cardVariants } from '@/lib/motion';
 import type { ClipboardItem as ClipboardItemType } from '@/types';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { ImagePreview } from './ImagePreview';
+import { useEffect, useMemo, useRef } from 'react';
 import { useClipboardItemActions } from './useClipboardItemActions';
 import {
   classifyFile,
@@ -40,6 +40,7 @@ interface ClipboardItemProps {
   isSelected: boolean;
   selectionMode?: boolean;
   onSelect?: () => void;
+  onPreview?: () => void;
 }
 
 export function ClipboardItem({
@@ -48,9 +49,9 @@ export function ClipboardItem({
   isSelected,
   selectionMode = false,
   onSelect,
+  onPreview,
 }: ClipboardItemProps) {
   const { t } = useTranslation();
-  const [imagePreviewOpen, setImagePreviewOpen] = useState(false);
   const itemRef = useRef<HTMLDivElement>(null);
   const maskSensitivePreviews = useConfigStore(
     (state) => state.config.mask_sensitive_previews
@@ -96,11 +97,17 @@ export function ClipboardItem({
 
   const handleImageClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setImagePreviewOpen(true);
+    onSelect?.();
+    onPreview?.();
+  };
+
+  const handlePreview = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onSelect?.();
+    onPreview?.();
   };
 
   return (
-    <>
       <motion.div
         data-testid="clipboard-item"
         ref={itemRef}
@@ -168,6 +175,7 @@ export function ClipboardItem({
           confirmDelete={confirmDelete}
           tagMenuOpen={tagMenuOpen}
           tags={tags}
+          onPreview={handlePreview}
           onCopy={handleCopy}
           onCopyPlainText={handleCopyPlainText}
           onPastePlainText={handlePastePlainText}
@@ -177,25 +185,6 @@ export function ClipboardItem({
           onToggleTagMenu={handleToggleTagMenu}
         />
       </motion.div>
-
-      {item.content_type === 'image' && (
-        <ImagePreview
-          src={item.content}
-          alt=""
-          metadata={
-            imageMeta
-              ? {
-                  width: imageMeta.width,
-                  height: imageMeta.height,
-                  format: imageMeta.format,
-                }
-              : undefined
-          }
-          open={imagePreviewOpen}
-          onOpenChange={setImagePreviewOpen}
-        />
-      )}
-    </>
   );
 }
 
@@ -328,6 +317,7 @@ function RowActions({
   confirmDelete,
   tagMenuOpen,
   tags,
+  onPreview,
   onDelete,
   onCopy,
   onCopyPlainText,
@@ -340,6 +330,7 @@ function RowActions({
   confirmDelete: boolean;
   tagMenuOpen: boolean;
   tags: Array<{ id: number; name: string; color: string | null }>;
+  onPreview: (event: React.MouseEvent) => void;
   onDelete: (event: React.MouseEvent) => void;
   onCopy: (event: React.MouseEvent) => void;
   onCopyPlainText: (event: React.MouseEvent) => void;
@@ -357,6 +348,16 @@ function RowActions({
         (item.is_favorited || confirmDelete) && 'opacity-100'
       )}
     >
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label={t('clipboard.preview')}
+        title={t('clipboard.preview')}
+        className="size-6"
+        onClick={onPreview}
+      >
+        <Eye className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+      </Button>
       <Button
         variant="ghost"
         size="icon"

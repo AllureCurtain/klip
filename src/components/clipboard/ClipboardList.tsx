@@ -2,6 +2,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { useTranslation } from 'react-i18next';
 import { AnimatePresence } from 'framer-motion';
 import { ClipboardItem } from './ClipboardItem';
+import { ClipboardDetailDialog } from './ClipboardDetailDialog';
 import { useClipboardStore } from '@/stores';
 import type { ClipboardItem as ClipboardItemType } from '@/types';
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
@@ -62,6 +63,7 @@ export function ClipboardList({ items, selectionMode = false }: ClipboardListPro
   const [selectedItemId, setSelectedItemId] = useState<number | null>(
     items[0]?.id ?? null
   );
+  const [detailItemId, setDetailItemId] = useState<number | null>(null);
   const parentRef = useRef<HTMLDivElement>(null);
 
   // Build virtual rows with time group headers
@@ -95,6 +97,10 @@ export function ClipboardList({ items, selectionMode = false }: ClipboardListPro
   }, [items, selectedItemId]);
   const selectedIndexRef = useRef<number | null>(selectedIndex);
   selectedIndexRef.current = selectedIndex;
+  const detailItem = useMemo(
+    () => items.find((item) => item.id === detailItemId) ?? null,
+    [detailItemId, items]
+  );
 
   useEffect(() => {
     const nextSelectedId = selectedIndex === null ? null : items[selectedIndex]?.id ?? null;
@@ -102,6 +108,12 @@ export function ClipboardList({ items, selectionMode = false }: ClipboardListPro
       setSelectedItemId(nextSelectedId);
     }
   }, [items, selectedIndex, selectedItemId]);
+
+  useEffect(() => {
+    if (detailItemId !== null && !detailItem) {
+      setDetailItemId(null);
+    }
+  }, [detailItem, detailItemId]);
 
   const HEADER_HEIGHT = 28;
   const ITEM_HEIGHT = 62;
@@ -124,6 +136,7 @@ export function ClipboardList({ items, selectionMode = false }: ClipboardListPro
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
+      if (detailItemId !== null) return;
       const action = resolveClipboardListKeyAction(e);
       if (!action || items.length === 0) return;
 
@@ -142,6 +155,10 @@ export function ClipboardList({ items, selectionMode = false }: ClipboardListPro
       const item = items[currentIndex];
       if (!item) return;
       e.preventDefault();
+      if (action === 'preview') {
+        setDetailItemId(item.id);
+        return;
+      }
       if (selectionMode) {
         if (action === 'activate') {
           toggleSelected(item.id);
@@ -154,7 +171,7 @@ export function ClipboardList({ items, selectionMode = false }: ClipboardListPro
         void pasteItem(item.id);
       }
     },
-    [items, pasteItem, pasteItemPlainText, selectionMode, toggleSelected]
+    [detailItemId, items, pasteItem, pasteItemPlainText, selectionMode, toggleSelected]
   );
 
   useEffect(() => {
@@ -229,6 +246,10 @@ export function ClipboardList({ items, selectionMode = false }: ClipboardListPro
                     isSelected={selectedIndex === row.index - 1}
                     selectionMode={selectionMode}
                     onSelect={() => setSelectedItemId(row.item.id)}
+                    onPreview={() => {
+                      setSelectedItemId(row.item.id);
+                      setDetailItemId(row.item.id);
+                    }}
                   />
                 </div>
               );
@@ -242,6 +263,13 @@ export function ClipboardList({ items, selectionMode = false }: ClipboardListPro
         ) : null}
       </div>
       <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-[var(--background)] to-transparent" />
+      <ClipboardDetailDialog
+        item={detailItem}
+        open={detailItem !== null}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) setDetailItemId(null);
+        }}
+      />
     </div>
   );
 }

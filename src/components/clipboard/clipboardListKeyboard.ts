@@ -4,7 +4,8 @@ export type ClipboardListKeyAction =
   | 'next'
   | 'previous'
   | 'activate'
-  | 'activatePlainText';
+  | 'activatePlainText'
+  | 'preview';
 
 interface ClipboardListKeyEvent {
   key: string;
@@ -37,11 +38,18 @@ export function resolveClipboardListKeyAction(
   const editableTarget = target?.closest(
     'input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"]'
   );
+  const interactiveTarget = target?.closest(
+    'button, a, [role="button"], [role="menuitem"], [role="tab"]'
+  );
 
-  if (editableTarget && !searchInput) return null;
+  if ((editableTarget && !searchInput) || interactiveTarget) return null;
 
   if (event.ctrlKey) {
     return event.key === 'Enter' && searchInput ? 'activatePlainText' : null;
+  }
+
+  if (event.key === ' ') {
+    return editableTarget ? null : 'preview';
   }
 
   switch (event.key) {
