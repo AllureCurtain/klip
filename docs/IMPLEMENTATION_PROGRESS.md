@@ -1,6 +1,6 @@
 # Foundation Implementation Progress
 
-- 最后更新时间：2026-08-07 09:28（Asia/Shanghai）
+- 最后更新时间：2026-08-07 09:56（Asia/Shanghai）
 - 当前分支：`feat/foundation`
 - 基准提交：`423ab24`（与 `main` / `origin/main` 一致）
 
@@ -31,7 +31,7 @@
 
 ## 当前任务
 
-- 当前任务：推送 OCR 字典字节稳定性修复并确认新 CI；本地属性/哈希和中文 fixture 已通过，远端 Actions 尚未重跑。
+- 当前任务：等待并审查修复后的 GitHub Actions run `31139329318`；本地最终 `pnpm verify` 已通过，远端仍在运行。
 - README 已补齐 `pnpm install --frozen-lockfile` worktree 初始化、`KLIP_DATA_DIR` / `KLIP_LOG_DIR` / `KLIP_HTTP_PORT`、单活动 worktree 串行执行和可选 sccache。CHANGELOG 已在 rich-text 提交中说明 DB v4 备份不能回退到只支持 v3 的旧版；各功能行为与限制已分布记录在 README、CHANGELOG、API、DATABASE 与 ARCHITECTURE。
 - `platform-source` 已在 `1e5b63e` 提交，§8.5 与串行功能队列均已据实勾选；macOS/Linux 真实桌面验收仍保持 SKIPPED，不影响已完成的代码、目标编译和 Windows 验收结论。
 - Windows 保留现有进程文件名和窗口标题行为；macOS 使用 `NSWorkspace.frontmostApplication`，Accessibility 未授权时保留应用名且窗口标题为空；X11 使用 EWMH 活动窗口/PID/标题并从 `/proc` 解析应用名；Wayland和其他不支持平台一次性提示后返回空来源。
@@ -61,6 +61,8 @@
 - 依赖修正后的当前 HEAD Windows Selenium E2E（2026-08-07）：通过；Vite 6.4.3、匹配 EdgeDriver/WebView2 151，1 项业务流程通过，runner 清理正常。
 - CI OCR 字典失败（GitHub Actions run `31136758905`）：backend `cargo test` 仅失败于 `ocr::tests::bundled_models_recognize_chinese_fixture`。CI 计算字典 SHA-256 为 `1ea29636956177e400af712d9782e7693f3fb25f98617bed10479d2965a836fd`，仓库期望/Windows 工作树 LF 字节为 `d1979e9f794c464c0d2e0b70a7fe14dd978e9dc644c0e71f14158cdf8342af1b`；本地将每个 LF 精确转换为 CRLF 后得到 CI 哈希和 92,395 字节，已确认是 checkout 换行转换而非模型内容漂移。Ubuntu/macOS/Windows frontend、backend fmt/Clippy 均通过；RustSec 步骤因 cargo test 先失败而未执行。
 - OCR 字典 checkout 修复（本地 2026-08-07）：`.gitattributes` 对 `src-tauri/resources/ocr/ppocrv5_dict.txt` 设置 `-text`；`git check-attr` 返回 `text: unset`，`git ls-files --eol` 返回 `i/lf w/lf attr/-text`，工作树 SHA-256 保持 `d1979e...2af1b`；`cargo test ocr::tests::bundled_models_recognize_chinese_fixture -- --test-threads=1` 通过（1 项）。
+- 修复后的最终本地 `pnpm verify`（2026-08-07 09:52）：通过，用时 162.9 秒；ESLint、Vitest 20 个文件/149 项测试、Vite 生产构建、cargo fmt、Clippy、Rust library 143 项（1 个显式性能测试 ignored）、main 2 项和 clipboard integration 5 项全部通过。
+- 修复推送后的 GitHub Actions：run `31139329318`（head `5f1679511f5ce4af49d05d9bb4ef183a92609154`）已创建，当前 `in_progress`；需等待 backend cargo test、RustSec 和所有平台 job 完成后再关闭该阻塞。
 - Windows runtime smoke：`pnpm tauri:dev` 已启动 `klip.exe`；`KLIP_DATA_DIR=C:\tmp\klip-foundation\data` 下生成 `klip.db`/WAL，`KLIP_LOG_DIR=C:\tmp\klip-foundation\logs` 下生成日志文件；进程已停止。完整 UI 闭环尚未执行。
 - search 依赖核验：`tantivy 0.24.2` 使用 `tantivy-tokenizer-api 0.5`；选择同样依赖 tokenizer API 0.5 的 `tantivy-jieba 0.16.0`，避免同时链接不兼容的 tokenizer trait 版本。
 - search 首轮专项测试：未进入测试执行，测试编译因两个既有 `ClipboardQuerySpec` 字面量缺少新增的 `text_match_ids` 字段而失败（`clipboard_query.rs:380`、`:460`）；业务代码 `cargo check` 已通过。处理：补齐测试字段后原命令重跑，不跳过测试。
@@ -164,9 +166,9 @@
 - RESOLVED：npm 开发/测试工具链 high advisory 已通过同主版本升级和精确 overrides 清零；完整 npm audit 通过。RustSec 仍报告 22 个允许 warnings，保留为独立的 Rust 依赖审查项。
 - BLOCKED：GitHub 尚无 `v1.0.0` release/安装器资产，完整 installer smoke 不能通过；创建 tag/release 超出本 PR 收尾范围，解除条件是版本决策完成后由发布流程生成并上传对应资产。
 - SKIPPED/BLOCKED：当前没有清洁 Windows 测试用户或 VM，不在真实用户配置上安装未签名 NSIS；安装后托盘/快捷键/About 和重启 autostart 验收依赖该隔离环境。
-- BLOCKED（待远端确认）：GitHub Actions run `31136758905` 的 OCR 字典测试因 Windows checkout 将 LF 转成 CRLF 失败；`.gitattributes` 修复已在本地验证并待推送。受影响下游为 backend cargo test 后的 RustSec 步骤和 PR CI 绿灯；解除条件是新 CI run 的 backend test 与 RustSec 均完成。
+- BLOCKED（待远端确认）：GitHub Actions run `31139329318` 需要确认 `-text` 规则阻止 Windows checkout 将 OCR 字典 LF 转成 CRLF；本地和推送前完整验证已通过。受影响下游为 backend cargo test 后的 RustSec 步骤和 PR CI 绿灯；解除条件是该 run 的 backend test 与 RustSec 均完成。
 
 ## 下一步准确操作
 
-- 推送当前 CI 修复 commit，监控新 GitHub Actions run；若 backend test 通过，再记录 RustSec 结果并更新 PR #4；随后重跑最终 `pnpm verify`，确认远端一致、工作树干净、PR 仍为 OPEN，不 merge main。
+- 监控 run `31139329318` 直至完成；按结果更新阻塞/清单并同步 PR #4 证据。若全部通过，最终确认远端一致、工作树干净、PR 仍为 OPEN，不 merge main。
 - 解除默认目录回退阻塞需隔离 Windows 测试用户/VM；真实 macOS/Linux 与浏览器/Word 富文本验收需对应桌面/应用环境和测试材料。
