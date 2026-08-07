@@ -1,6 +1,12 @@
 # Klip 单活动 Worktree 实施计划与构建/数据目录规范
 
-> 本文档是 Klip 下一阶段的完整实施目标，所有任务在同一执行上下文中连续完成。
+> **历史状态（2026-08-07）：** 本文档对应的 foundation 阶段已经通过 PR #4
+> 合并到 `main`，任务清单和验收记录保留用于追溯，不再作为当前实施入口。
+> 当前任务请读取
+> [`docs/superpowers/plans/2026-08-07-core-clipboard-workflows.md`](docs/superpowers/plans/2026-08-07-core-clipboard-workflows.md)
+> 和 [`docs/CORE_WORKFLOW_PROGRESS.md`](docs/CORE_WORKFLOW_PROGRESS.md)。
+
+> 以下正文曾是 Klip foundation 阶段的完整实施目标，所有任务已在同一执行上下文中完成。
 > 核心原则：**保持 WIP = 1，在当前 `feat/foundation` 工作树中串行完成全部功能；分段提交，最终统一提交 PR。**
 > 覆盖三块硬约束：Windows 构建成本、运行时进程级资源冲突、串行功能之间的依赖与集成边界。
 > 所有"现状"描述都附了 `文件:行号`，可直接跳转核对。

@@ -19,6 +19,21 @@
 
 当前 MVP 的核心链路已经齐全：复制内容、记录历史、搜索筛选、恢复粘贴、托盘常驻、快捷键操作、本地数据管理和基础隐私控制。
 
+## 当前实施任务
+
+基础模块已经具备，但对照 EcoPaste 和 muutot-Clipboard 后，仍发现键盘操作闭环、
+可见列表快捷粘贴、复制/粘贴动作区分、完整预览、内容动作、纯文本粘贴和条目备注等
+日常使用缺口。当前只在一个 worktree 中串行补齐这些能力：
+
+| 文档 | 用途 |
+|------|------|
+| [2026-08-07-core-clipboard-workflows.md](superpowers/plans/2026-08-07-core-clipboard-workflows.md) | 当前任务的范围、设计、执行顺序、测试和提交边界 |
+| [CORE_WORKFLOW_PROGRESS.md](CORE_WORKFLOW_PROGRESS.md) | 当前进度、验证证据、阻塞项和中断恢复入口 |
+
+实施路径固定为 `D:\Study\cc\klip\.worktrees\core-workflows`，分支固定为
+`feat/core-workflows`。`WORKTREE_STRATEGY.md` 和 `IMPLEMENTATION_PROGRESS.md` 已转为
+foundation 阶段的历史记录。
+
 ## 推荐阅读顺序
 
 | 顺序 | 文档 | 适合场景 |
@@ -41,6 +56,8 @@
 | [RELEASE_HANDOFF.md](RELEASE_HANDOFF.md) | 早期发布流程和剩余验收记录 |
 | [DEVELOPMENT_REPORT.md](DEVELOPMENT_REPORT.md) | 较完整的阶段开发报告 |
 | [superpowers/plans](superpowers/plans) | 已执行或历史保留的实现计划 |
+| [../WORKTREE_STRATEGY.md](../WORKTREE_STRATEGY.md) | 已完成的 foundation 单 worktree 实施记录 |
+| [IMPLEMENTATION_PROGRESS.md](IMPLEMENTATION_PROGRESS.md) | 已完成的 foundation 持续实施记录 |
 
 ## MVP 功能完成情况
 
