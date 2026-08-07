@@ -15,6 +15,8 @@ export function useClipboardItemActions({
     deleteItem,
     copyItem,
     pasteItem,
+    copyItemPlainText,
+    pasteItemPlainText,
     toggleFavorite,
     tags,
     assignTagToItem,
@@ -29,13 +31,28 @@ export function useClipboardItemActions({
   const copyTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const isBatchSelected = selectedIds.includes(item.id);
 
-  const handleCopy = useCallback((event: React.MouseEvent) => {
-    event.stopPropagation();
-    void copyItem(item.id);
+  const showCopiedFeedback = useCallback(() => {
     setCopied(true);
     clearTimeout(copyTimerRef.current);
     copyTimerRef.current = setTimeout(() => setCopied(false), 800);
-  }, [copyItem, item.id]);
+  }, []);
+
+  const handleCopy = useCallback((event: React.MouseEvent) => {
+    event.stopPropagation();
+    void copyItem(item.id);
+    showCopiedFeedback();
+  }, [copyItem, item.id, showCopiedFeedback]);
+
+  const handleCopyPlainText = useCallback((event: React.MouseEvent) => {
+    event.stopPropagation();
+    void copyItemPlainText(item.id);
+    showCopiedFeedback();
+  }, [copyItemPlainText, item.id, showCopiedFeedback]);
+
+  const handlePastePlainText = useCallback((event: React.MouseEvent) => {
+    event.stopPropagation();
+    void pasteItemPlainText(item.id);
+  }, [item.id, pasteItemPlainText]);
 
   const handleClick = useCallback(() => {
     onSelect?.();
@@ -101,6 +118,8 @@ export function useClipboardItemActions({
     isBatchSelected,
     handleClick,
     handleCopy,
+    handleCopyPlainText,
+    handlePastePlainText,
     handleDelete,
     handleToggleFavorite,
     handleToggleTagMenu,

@@ -1,7 +1,7 @@
 # Core Clipboard Workflows Progress
 
 - 最后更新时间：2026-08-07（Asia/Shanghai）
-- 当前状态：`IN_PROGRESS`，Task 1-2 已完成，下一步执行 Task 3
+- 当前状态：`IN_PROGRESS`，Task 1-3 已完成，下一步执行 Task 4
 - 分支：`feat/core-workflows`
 - worktree：`D:\Study\cc\klip\.worktrees\core-workflows`
 - 基线：`8018aced3cd6b1437a4f8bb681206389d66c68f8`
@@ -35,7 +35,7 @@
 | --- | --- | --- | --- |
 | 1 | 搜索键盘闭环、复制/粘贴分离 | `COMPLETED` | `fix: complete keyboard clipboard workflow` |
 | 2 | 数字快捷键绑定当前可见记录 | `COMPLETED` | `fix: align quick paste with visible history` |
-| 3 | 纯文本复制与粘贴 | `PENDING` | `feat: add plain text clipboard actions` |
+| 3 | 纯文本复制与粘贴 | `COMPLETED` | `feat: add plain text clipboard actions` |
 | 4 | 统一详情与完整预览 | `PENDING` | `feat: add unified clipboard detail preview` |
 | 5 | URL/邮箱/文件快捷动作 | `PENDING` | `feat: add clipboard content actions` |
 | 6 | 可搜索自定义标题与备注、DB v7 | `PENDING` | `feat: add searchable clipboard annotations` |
@@ -112,6 +112,26 @@
   WebView2 151 不匹配而无法创建会话；使用 winget 更新到 EdgeDriver `151.0.4129.72`
   后解除阻塞并通过完整 E2E。
 
+### Task 3：纯文本复制与粘贴
+
+- 剪贴板 writer 现在显式区分 `PreserveFormats` 与 `PlainText`：原格式模式继续写入
+  text/HTML/RTF，纯文本模式只写 `ClipboardItem.content`；非文本记录在抑制器 arming、
+  `last_used` 更新和隐藏窗口之前返回 `invalid_input`。
+- 新增 plain copy/plain paste 后端命令、前端 IPC wrapper 和 store 动作；文本条目提供
+  独立的纯文本复制与粘贴图标，搜索框中的 `Ctrl+Enter` 对当前文本条目执行纯文本粘贴，
+  批量选择模式和非文本条目不触发该动作。
+- `docs/API.md` 和 `docs/ARCHITECTURE.md` 已登记 copy、paste、plain copy、plain paste
+  的行为边界，英文与中文动作文案同步补齐。
+- `pnpm test -- --run src/components/clipboard/clipboardListKeyboard.test.ts
+  src/components/clipboard/ClipboardList.test.tsx src/components/clipboard/ClipboardItem.test.tsx
+  src/stores/clipboardStore.test.ts src/lib/tauri.test.ts`：5 个测试文件、69 项通过。
+- `cargo test clipboard::`：50 项通过；覆盖 preserve/plain formats 选择、纯文本类型拒绝，
+  以及现有剪贴板、快照和数据库相关回归。
+- `cargo test --test clipboard_format_test`：Windows 当前桌面 6 项通过；其中
+  `writer_plain_text_mode_omits_html_and_rtf` 验证纯文本回写后 HTML/RTF 均不存在。
+- `pnpm exec tsc -b --pretty false`、Task 3 前端 ESLint、`cargo fmt -- --check` 和
+  `cargo clippy -- -D warnings`：通过。
+
 ## 阻塞与跳过
 
 - 当前无实现阻塞。
@@ -130,6 +150,6 @@
 
 ## 下一步准确操作
 
-- 从 Task 3 开始，为 preserve/plain 写入模式、非文本拒绝和前端 plain copy/paste wrapper
-  先补失败测试。
-- 不提前实现 Task 4-6，也不改发布、导入导出、隐私产品化或 P2 功能。
+- 从 Task 4 开始，先盘点现有图片预览、内容 renderer、敏感遮罩与 Dialog 组件，再为统一
+  详情入口、键盘 Space、富文本清洗、图片交互和文件长路径补失败测试。
+- 不提前实现 Task 5-6，也不改发布、导入导出、隐私产品化或 P2 功能。

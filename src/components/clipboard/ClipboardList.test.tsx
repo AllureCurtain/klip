@@ -8,6 +8,7 @@ const storeMocks = vi.hoisted(() => ({
   deleteItem: vi.fn(),
   copyItem: vi.fn(),
   pasteItem: vi.fn(),
+  pasteItemPlainText: vi.fn(),
   toggleFavorite: vi.fn(),
   tags: [] as { id: number; name: string; color: string | null; created_at: number }[],
   assignTagToItem: vi.fn(),
@@ -86,6 +87,7 @@ describe('ClipboardList', () => {
     storeMocks.deleteItem.mockReset();
     storeMocks.copyItem.mockReset();
     storeMocks.pasteItem.mockReset();
+    storeMocks.pasteItemPlainText.mockReset();
     storeMocks.toggleFavorite.mockReset();
     storeMocks.assignTagToItem.mockReset();
     storeMocks.removeTagFromItem.mockReset();
@@ -249,5 +251,49 @@ describe('ClipboardList', () => {
 
     expect(storeMocks.toggleSelected).toHaveBeenCalledWith(7);
     expect(storeMocks.pasteItem).not.toHaveBeenCalled();
+  });
+
+  it('plain-pastes the current text item on Ctrl+Enter', () => {
+    render(
+      <>
+        <input data-clipboard-search-input="true" aria-label="search" />
+        <ClipboardList items={[makeTextItem({ id: 11 })]} />
+      </>
+    );
+
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'search' }), {
+      key: 'Enter',
+      ctrlKey: true,
+    });
+
+    expect(storeMocks.pasteItemPlainText).toHaveBeenCalledWith(11);
+    expect(storeMocks.pasteItem).not.toHaveBeenCalled();
+  });
+
+  it('does not plain-paste non-text items or items in selection mode', () => {
+    const { rerender } = render(
+      <>
+        <input data-clipboard-search-input="true" aria-label="search" />
+        <ClipboardList
+          items={[makeTextItem({ id: 12, content_type: 'image' })]}
+        />
+      </>
+    );
+    const search = screen.getByRole('textbox', { name: 'search' });
+
+    fireEvent.keyDown(search, { key: 'Enter', ctrlKey: true });
+    rerender(
+      <>
+        <input data-clipboard-search-input="true" aria-label="search" />
+        <ClipboardList items={[makeTextItem({ id: 13 })]} selectionMode />
+      </>
+    );
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'search' }), {
+      key: 'Enter',
+      ctrlKey: true,
+    });
+
+    expect(storeMocks.pasteItemPlainText).not.toHaveBeenCalled();
+    expect(storeMocks.toggleSelected).not.toHaveBeenCalled();
   });
 });

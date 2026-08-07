@@ -95,7 +95,13 @@ export const clipboardApi = {
 
   copy: (id: number) => invoke('copy_to_clipboard', { id }),
 
+  copyPlainText: (id: number) =>
+    invoke('copy_plain_text_to_clipboard', { id }),
+
   paste: (id: number) => invoke('paste_from_clipboard', { id }),
+
+  pastePlainText: (id: number) =>
+    invoke('paste_plain_text_from_clipboard', { id }),
 
   setVisibleItems: (ids: number[]) =>
     invoke('set_visible_clipboard_items', { ids }),

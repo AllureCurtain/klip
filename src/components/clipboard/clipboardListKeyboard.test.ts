@@ -31,6 +31,9 @@ describe('resolveClipboardListKeyAction', () => {
       resolveClipboardListKeyAction(keyboardEvent(search, { key: 'ArrowUp' }))
     ).toBe('previous');
     expect(resolveClipboardListKeyAction(keyboardEvent(search))).toBe('activate');
+    expect(
+      resolveClipboardListKeyAction(keyboardEvent(search, { ctrlKey: true }))
+    ).toBe('activatePlainText');
   });
 
   it('leaves other editable controls and modified keys untouched', () => {
@@ -43,7 +46,9 @@ describe('resolveClipboardListKeyAction', () => {
     expect(resolveClipboardListKeyAction(keyboardEvent(textarea))).toBeNull();
     expect(resolveClipboardListKeyAction(keyboardEvent(editor))).toBeNull();
     expect(
-      resolveClipboardListKeyAction(keyboardEvent(search, { ctrlKey: true }))
+      resolveClipboardListKeyAction(
+        keyboardEvent(search, { key: 'ArrowDown', ctrlKey: true })
+      )
     ).toBeNull();
   });
 

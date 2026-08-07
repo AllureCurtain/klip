@@ -216,12 +216,68 @@ number
 
 #### `copy_to_clipboard`
 
-将记录内容复制到系统剪贴板。
+将记录内容按原有格式复制到系统剪贴板，不模拟粘贴。
 
 **参数**:
 ```typescript
 {
   id: number;  // 记录 ID
+}
+```
+
+**返回**:
+```typescript
+void
+```
+
+---
+
+#### `paste_from_clipboard`
+
+将记录内容按原有格式写入系统剪贴板，隐藏 Klip 窗口并模拟粘贴。
+
+**参数**:
+```typescript
+{
+  id: number;  // 记录 ID
+}
+```
+
+**返回**:
+```typescript
+void
+```
+
+---
+
+#### `copy_plain_text_to_clipboard`
+
+仅将文本记录的纯文本内容复制到系统剪贴板，不写入 HTML/RTF，也不模拟粘贴。
+非文本记录返回 `invalid_input`。
+
+**参数**:
+```typescript
+{
+  id: number;  // 文本记录 ID
+}
+```
+
+**返回**:
+```typescript
+void
+```
+
+---
+
+#### `paste_plain_text_from_clipboard`
+
+仅将文本记录的纯文本内容写入系统剪贴板，隐藏 Klip 窗口并模拟粘贴。
+非文本记录返回 `invalid_input`，且不会隐藏窗口或模拟粘贴。
+
+**参数**:
+```typescript
+{
+  id: number;  // 文本记录 ID
 }
 ```
 
@@ -961,8 +1017,14 @@ export const clipboardApi = {
   copy: (id: number) =>
     invoke('copy_to_clipboard', { id }),
 
+  copyPlainText: (id: number) =>
+    invoke('copy_plain_text_to_clipboard', { id }),
+
   paste: (id: number) =>
     invoke('paste_from_clipboard', { id }),
+
+  pastePlainText: (id: number) =>
+    invoke('paste_plain_text_from_clipboard', { id }),
 
   setVisibleItems: (ids: number[]) =>
     invoke('set_visible_clipboard_items', { ids }),

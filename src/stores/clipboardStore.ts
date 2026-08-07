@@ -34,6 +34,8 @@ interface ClipboardStore {
   deleteSelected: () => Promise<void>;
   copyItem: (id: number) => Promise<void>;
   pasteItem: (id: number) => Promise<void>;
+  copyItemPlainText: (id: number) => Promise<void>;
+  pasteItemPlainText: (id: number) => Promise<void>;
   clearItems: () => Promise<void>;
   toggleFavorite: (id: number) => Promise<void>;
   setFavoriteForSelected: (isFavorited: boolean) => Promise<void>;
@@ -337,6 +339,22 @@ export const useClipboardStore = create<ClipboardStore>((set) => ({
       );
       return { items: [...uniqueNewItems, ...state.items] };
     });
+  },
+
+  copyItemPlainText: async (id: number) => {
+    try {
+      await clipboardApi.copyPlainText(id);
+    } catch (error) {
+      set({ error: getErrorMessage(error) });
+    }
+  },
+
+  pasteItemPlainText: async (id: number) => {
+    try {
+      await clipboardApi.pastePlainText(id);
+    } catch (error) {
+      set({ error: getErrorMessage(error) });
+    }
   },
 
   upsertItem: (updatedItem: ClipboardItem) => {

@@ -101,6 +101,20 @@ describe('tauri API wrappers', () => {
     expect(invoke).toHaveBeenNthCalledWith(2, 'paste_from_clipboard', { id: 5 });
   });
 
+  it('keeps plain-text copy and paste commands distinct', async () => {
+    vi.mocked(invoke).mockResolvedValue(undefined);
+
+    await clipboardApi.copyPlainText(6);
+    await clipboardApi.pastePlainText(7);
+
+    expect(invoke).toHaveBeenNthCalledWith(1, 'copy_plain_text_to_clipboard', {
+      id: 6,
+    });
+    expect(invoke).toHaveBeenNthCalledWith(2, 'paste_plain_text_from_clipboard', {
+      id: 7,
+    });
+  });
+
   it('syncs the ordered visible clipboard ids', async () => {
     vi.mocked(invoke).mockResolvedValue(undefined);
 

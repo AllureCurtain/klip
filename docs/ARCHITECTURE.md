@@ -341,7 +341,9 @@ interface AppConfig {
 | `delete_clipboard_item` | id | void | 删除 |
 | `delete_clipboard_items` | ids | number | 批量删除 |
 | `copy_to_clipboard` | id | void | 复制到系统剪贴板 |
+| `copy_plain_text_to_clipboard` | id | void | 以纯文本复制文本记录 |
 | `paste_from_clipboard` | id | void | 复制后模拟粘贴 |
+| `paste_plain_text_from_clipboard` | id | void | 以纯文本复制后模拟粘贴 |
 | `toggle_favorite` | id | ClipboardItem | 切换收藏 |
 | `set_favorite_for_items` | ids, is_favorited | number | 批量收藏/取消收藏 |
 | `clear_clipboard_history` | - | void | 清空历史 |

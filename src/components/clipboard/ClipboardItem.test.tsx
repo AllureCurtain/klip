@@ -10,6 +10,8 @@ const storeMocks = vi.hoisted(() => ({
   deleteItem: vi.fn(),
   copyItem: vi.fn(),
   pasteItem: vi.fn(),
+  copyItemPlainText: vi.fn(),
+  pasteItemPlainText: vi.fn(),
   toggleFavorite: vi.fn(),
   tags: [] as { id: number; name: string; color: string | null; created_at: number }[],
   assignTagToItem: vi.fn(),
@@ -117,6 +119,8 @@ describe('ClipboardItem', () => {
     storeMocks.deleteItem.mockReset();
     storeMocks.copyItem.mockReset();
     storeMocks.pasteItem.mockReset();
+    storeMocks.copyItemPlainText.mockReset();
+    storeMocks.pasteItemPlainText.mockReset();
     storeMocks.toggleFavorite.mockReset();
     storeMocks.assignTagToItem.mockReset();
     storeMocks.removeTagFromItem.mockReset();
@@ -434,6 +438,22 @@ describe('ClipboardItem', () => {
     expect(row?.className).toContain('bg-primary/8');
     expect(row?.className).toContain('text-foreground');
     expect(row?.className).not.toContain('bg-indigo-500/8');
+  });
+
+  it('offers plain-text copy and paste only for text items', () => {
+    const { rerender } = render(
+      <ClipboardItem item={makeTextItem()} index={1} isSelected={false} />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '复制纯文本' }));
+    fireEvent.click(screen.getByRole('button', { name: '粘贴纯文本' }));
+
+    expect(storeMocks.copyItemPlainText).toHaveBeenCalledWith(42);
+    expect(storeMocks.pasteItemPlainText).toHaveBeenCalledWith(42);
+
+    rerender(<ClipboardItem item={makeImageItem()} index={1} isSelected={false} />);
+    expect(screen.queryByRole('button', { name: '复制纯文本' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '粘贴纯文本' })).toBeNull();
   });
 
   it('uses the same readable quiet row treatment for batch-selected rows', () => {

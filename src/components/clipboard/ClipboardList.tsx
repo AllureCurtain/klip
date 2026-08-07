@@ -51,8 +51,14 @@ function getLocalCalendarDayNumber(date: Date): number {
 
 export function ClipboardList({ items, selectionMode = false }: ClipboardListProps) {
   const { t, i18n } = useTranslation();
-  const { pasteItem, toggleSelected, hasMore, loadMore, loadingMore } =
-    useClipboardStore();
+  const {
+    pasteItem,
+    pasteItemPlainText,
+    toggleSelected,
+    hasMore,
+    loadMore,
+    loadingMore,
+  } = useClipboardStore();
   const [selectedItemId, setSelectedItemId] = useState<number | null>(
     items[0]?.id ?? null
   );
@@ -137,12 +143,18 @@ export function ClipboardList({ items, selectionMode = false }: ClipboardListPro
       if (!item) return;
       e.preventDefault();
       if (selectionMode) {
-        toggleSelected(item.id);
+        if (action === 'activate') {
+          toggleSelected(item.id);
+        }
+      } else if (action === 'activatePlainText') {
+        if (item.content_type === 'text') {
+          void pasteItemPlainText(item.id);
+        }
       } else {
         void pasteItem(item.id);
       }
     },
-    [items, pasteItem, selectionMode, toggleSelected]
+    [items, pasteItem, pasteItemPlainText, selectionMode, toggleSelected]
   );
 
   useEffect(() => {

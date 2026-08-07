@@ -15,6 +15,8 @@ vi.mock('@/lib/tauri', () => ({
     deleteMany: vi.fn(),
     copy: vi.fn(),
     paste: vi.fn(),
+    copyPlainText: vi.fn(),
+    pastePlainText: vi.fn(),
     clear: vi.fn(),
     toggleFavorite: vi.fn(),
     setFavoriteForItems: vi.fn(),
@@ -219,6 +221,17 @@ describe('clipboardStore', () => {
 
       expect(clipboardApi.paste).toHaveBeenCalledWith(8);
       expect(clipboardApi.copy).not.toHaveBeenCalled();
+    });
+
+    it('routes plain-text copy and paste independently', async () => {
+      vi.mocked(clipboardApi.copyPlainText).mockResolvedValue(undefined);
+      vi.mocked(clipboardApi.pastePlainText).mockResolvedValue(undefined);
+
+      await useClipboardStore.getState().copyItemPlainText(9);
+      await useClipboardStore.getState().pasteItemPlainText(10);
+
+      expect(clipboardApi.copyPlainText).toHaveBeenCalledWith(9);
+      expect(clipboardApi.pastePlainText).toHaveBeenCalledWith(10);
     });
   });
 

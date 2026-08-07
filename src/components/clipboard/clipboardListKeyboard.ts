@@ -1,6 +1,10 @@
 export const CLIPBOARD_SEARCH_INPUT_ATTRIBUTE = 'data-clipboard-search-input';
 
-export type ClipboardListKeyAction = 'next' | 'previous' | 'activate';
+export type ClipboardListKeyAction =
+  | 'next'
+  | 'previous'
+  | 'activate'
+  | 'activatePlainText';
 
 interface ClipboardListKeyEvent {
   key: string;
@@ -19,7 +23,6 @@ export function resolveClipboardListKeyAction(
   if (
     event.isComposing ||
     event.keyCode === 229 ||
-    event.ctrlKey ||
     event.altKey ||
     event.metaKey ||
     event.shiftKey
@@ -36,6 +39,10 @@ export function resolveClipboardListKeyAction(
   );
 
   if (editableTarget && !searchInput) return null;
+
+  if (event.ctrlKey) {
+    return event.key === 'Enter' && searchInput ? 'activatePlainText' : null;
+  }
 
   switch (event.key) {
     case 'ArrowDown':

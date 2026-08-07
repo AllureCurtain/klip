@@ -64,6 +64,8 @@
   },
   "clipboard": {
     "copy": "Copy",
+    "copyPlainText": "Copy as plain text",
+    "pastePlainText": "Paste as plain text",
     "copied": "Copied",
     "favorite": "Favorite",
     "unfavorite": "Unfavorite",

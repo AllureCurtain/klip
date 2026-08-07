@@ -62,6 +62,8 @@
   },
   "clipboard": {
     "copy": "复制",
+    "copyPlainText": "复制纯文本",
+    "pastePlainText": "粘贴纯文本",
     "copied": "已复制",
     "favorite": "收藏",
     "unfavorite": "取消收藏",

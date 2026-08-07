@@ -1,3 +1,4 @@
+use crate::clipboard::writer::ClipboardWriteMode;
 use crate::database::{self, ClipboardItem};
 use crate::hotkey::visible_items::{position_offset, VisibleClipboardItems, VisibleItemAtPosition};
 use crate::{AppError, Database};
@@ -5,12 +6,26 @@ use tauri::AppHandle;
 
 pub fn copy_item_by_id(db: &Database, id: i64) -> Result<(), AppError> {
     let item = load_item_by_id(db, id)?;
-    copy_loaded_item(db, &item)
+    copy_loaded_item(db, &item, ClipboardWriteMode::PreserveFormats)
+}
+
+pub fn copy_item_as_plain_text_by_id(db: &Database, id: i64) -> Result<(), AppError> {
+    let item = load_item_by_id(db, id)?;
+    copy_loaded_item(db, &item, ClipboardWriteMode::PlainText)
 }
 
 pub fn paste_item_by_id(app: &AppHandle, db: &Database, id: i64) -> Result<(), AppError> {
     let item = load_item_by_id(db, id)?;
-    copy_item_and_simulate_paste(app, db, &item)
+    copy_loaded_item_and_simulate_paste(app, db, &item, ClipboardWriteMode::PreserveFormats)
+}
+
+pub fn paste_item_as_plain_text_by_id(
+    app: &AppHandle,
+    db: &Database,
+    id: i64,
+) -> Result<(), AppError> {
+    let item = load_item_by_id(db, id)?;
+    copy_loaded_item_and_simulate_paste(app, db, &item, ClipboardWriteMode::PlainText)
 }
 
 pub fn quick_paste(
@@ -33,7 +48,16 @@ pub fn copy_item_and_simulate_paste(
     db: &Database,
     item: &ClipboardItem,
 ) -> Result<(), AppError> {
-    copy_loaded_item(db, item)?;
+    copy_loaded_item_and_simulate_paste(app, db, item, ClipboardWriteMode::PreserveFormats)
+}
+
+fn copy_loaded_item_and_simulate_paste(
+    app: &AppHandle,
+    db: &Database,
+    item: &ClipboardItem,
+    mode: ClipboardWriteMode,
+) -> Result<(), AppError> {
+    copy_loaded_item(db, item, mode)?;
     crate::window::controller::hide_main_window(app)?;
     simulate_platform_paste()
 }
@@ -64,12 +88,17 @@ pub(crate) fn load_item_by_quick_paste_index(
     }
 }
 
-fn copy_loaded_item(db: &Database, item: &ClipboardItem) -> Result<(), AppError> {
+fn copy_loaded_item(
+    db: &Database,
+    item: &ClipboardItem,
+    mode: ClipboardWriteMode,
+) -> Result<(), AppError> {
     crate::clipboard::copy_to_clipboard(
         &item.content,
         &item.content_type,
         item.metadata.as_deref(),
         &item.formats,
+        mode,
     )?;
     let _ = database::clipboard::touch_last_used(db, item.id);
     Ok(())
@@ -235,5 +264,22 @@ mod tests {
         assert!(database::clipboard::get_by_id(&db, fallback.id)
             .unwrap()
             .is_some());
+    }
+
+    #[test]
+    fn plain_text_actions_reject_non_text_items() {
+        let db = test_db();
+        let item = insert_text_at_time(&db, "not-text", 1_000);
+        let conn = db.get_connection().unwrap();
+        conn.execute(
+            "UPDATE clipboard_items SET content_type = 'image' WHERE id = ?1",
+            [item.id],
+        )
+        .unwrap();
+        drop(conn);
+
+        let result = copy_item_as_plain_text_by_id(&db, item.id);
+
+        assert!(matches!(result, Err(AppError::InvalidInput(message)) if message.contains("text")));
     }
 }

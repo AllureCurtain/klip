@@ -58,12 +58,29 @@ pub fn copy_to_clipboard(db: State<'_, database::Database>, id: i64) -> Result<(
 }
 
 #[tauri::command]
+pub fn copy_plain_text_to_clipboard(
+    db: State<'_, database::Database>,
+    id: i64,
+) -> Result<(), AppError> {
+    crate::clipboard::paste::copy_item_as_plain_text_by_id(&db, id)
+}
+
+#[tauri::command]
 pub fn paste_from_clipboard(
     app: tauri::AppHandle,
     db: State<'_, database::Database>,
     id: i64,
 ) -> Result<(), AppError> {
     crate::clipboard::paste::paste_item_by_id(&app, &db, id)
+}
+
+#[tauri::command]
+pub fn paste_plain_text_from_clipboard(
+    app: tauri::AppHandle,
+    db: State<'_, database::Database>,
+    id: i64,
+) -> Result<(), AppError> {
+    crate::clipboard::paste::paste_item_as_plain_text_by_id(&app, &db, id)
 }
 
 #[tauri::command]

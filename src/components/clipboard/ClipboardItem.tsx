@@ -2,6 +2,8 @@ import {
   AppWindow,
   Check,
   CircleAlert,
+  ClipboardCopy,
+  ClipboardPaste,
   Copy,
   LoaderCircle,
   ScanText,
@@ -61,6 +63,8 @@ export function ClipboardItem({
     isBatchSelected,
     handleClick,
     handleCopy,
+    handleCopyPlainText,
+    handlePastePlainText,
     handleDelete,
     handleToggleFavorite,
     handleToggleTagMenu,
@@ -165,6 +169,8 @@ export function ClipboardItem({
           tagMenuOpen={tagMenuOpen}
           tags={tags}
           onCopy={handleCopy}
+          onCopyPlainText={handleCopyPlainText}
+          onPastePlainText={handlePastePlainText}
           onDelete={handleDelete}
           onTagAction={handleTagAction}
           onToggleFavorite={handleToggleFavorite}
@@ -324,6 +330,8 @@ function RowActions({
   tags,
   onDelete,
   onCopy,
+  onCopyPlainText,
+  onPastePlainText,
   onTagAction,
   onToggleFavorite,
   onToggleTagMenu,
@@ -334,6 +342,8 @@ function RowActions({
   tags: Array<{ id: number; name: string; color: string | null }>;
   onDelete: (event: React.MouseEvent) => void;
   onCopy: (event: React.MouseEvent) => void;
+  onCopyPlainText: (event: React.MouseEvent) => void;
+  onPastePlainText: (event: React.MouseEvent) => void;
   onTagAction: (event: React.MouseEvent, tagId: number, assigned: boolean) => void;
   onToggleFavorite: (event: React.MouseEvent) => void;
   onToggleTagMenu: (event: React.MouseEvent) => void;
@@ -357,6 +367,30 @@ function RowActions({
       >
         <Copy className="h-3 w-3 text-muted-foreground hover:text-foreground" />
       </Button>
+      {item.content_type === 'text' && (
+        <>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={t('clipboard.copyPlainText')}
+            title={t('clipboard.copyPlainText')}
+            className="size-6"
+            onClick={onCopyPlainText}
+          >
+            <ClipboardCopy className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={t('clipboard.pastePlainText')}
+            title={t('clipboard.pastePlainText')}
+            className="size-6"
+            onClick={onPastePlainText}
+          >
+            <ClipboardPaste className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+          </Button>
+        </>
+      )}
       <Button
         variant="ghost"
         size="icon"
