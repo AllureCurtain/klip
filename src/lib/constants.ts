@@ -4,3 +4,5 @@ export const DEFAULT_WINDOW_HEIGHT = 760;
 export const MIN_WINDOW_WIDTH = 360;
 export const MIN_WINDOW_HEIGHT = 480;
 export const SEARCH_DEBOUNCE_MS = 150;
+export const MAX_CLIPBOARD_TITLE_LENGTH = 200;
+export const MAX_CLIPBOARD_NOTE_LENGTH = 10000;

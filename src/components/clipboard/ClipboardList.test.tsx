@@ -72,6 +72,8 @@ function makeTextItem(overrides: Partial<ClipboardItemType> = {}): ClipboardItem
     metadata: null,
     source_application: null,
     source_window_title: null,
+    custom_title: null,
+    note: null,
     is_favorited: false,
     is_sensitive: false,
     sensitivity_reason: null,

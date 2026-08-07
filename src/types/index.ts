@@ -8,6 +8,8 @@ export interface ClipboardItem {
   metadata: string | null;
   source_application: string | null;
   source_window_title: string | null;
+  custom_title: string | null;
+  note: string | null;
   is_favorited: boolean;
   is_sensitive: boolean;
   sensitivity_reason: string | null;
@@ -16,6 +18,11 @@ export interface ClipboardItem {
   tags: Tag[];
   created_at: number;
   last_used_at: number;
+}
+
+export interface ClipboardAnnotationInput {
+  customTitle: string | null;
+  note: string | null;
 }
 
 export interface ClipboardFormat {

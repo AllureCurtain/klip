@@ -19,6 +19,7 @@ import {
   RotateCcw,
   ScanText,
   ShieldAlert,
+  SquarePen,
   Tags,
   ZoomIn,
   ZoomOut,
@@ -31,6 +32,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   Tabs,
   TabsContent,
@@ -40,6 +42,10 @@ import {
 import { useClipboardStore } from '@/stores';
 import { useConfigStore } from '@/stores/configStore';
 import { cn, formatSize } from '@/lib/utils';
+import {
+  MAX_CLIPBOARD_NOTE_LENGTH,
+  MAX_CLIPBOARD_TITLE_LENGTH,
+} from '@/lib/constants';
 import type {
   ClipboardItem,
   ClipboardContentAction,
@@ -75,7 +81,12 @@ export function ClipboardDetailDialog({
     pasteItem,
     copyItemPlainText,
     pasteItemPlainText,
+    updateAnnotations,
   } = useClipboardStore();
+  const [editingAnnotations, setEditingAnnotations] = useState(false);
+  const [customTitleDraft, setCustomTitleDraft] = useState('');
+  const [noteDraft, setNoteDraft] = useState('');
+  const [savingAnnotations, setSavingAnnotations] = useState(false);
   const shouldMaskPreview = Boolean(
     item?.is_sensitive && maskSensitivePreviews
   );
@@ -85,7 +96,28 @@ export function ClipboardDetailDialog({
       Boolean(item) && !shouldMaskPreview
     );
 
+  useEffect(() => {
+    if (!editingAnnotations) {
+      setCustomTitleDraft(item?.custom_title ?? '');
+      setNoteDraft(item?.note ?? '');
+    }
+  }, [editingAnnotations, item?.custom_title, item?.id, item?.note]);
+
+  useEffect(() => {
+    if (!open) setEditingAnnotations(false);
+  }, [open]);
+
   if (!item) return null;
+
+  const handleSaveAnnotations = async () => {
+    setSavingAnnotations(true);
+    const updated = await updateAnnotations(item.id, {
+      customTitle: customTitleDraft,
+      note: noteDraft,
+    });
+    setSavingAnnotations(false);
+    if (updated) setEditingAnnotations(false);
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -97,11 +129,18 @@ export function ClipboardDetailDialog({
           <div className="flex min-w-0 items-center justify-between gap-3">
             <div className="min-w-0">
               <DialogTitle className="truncate text-sm">
-                {t('clipboard.detail.title')}
+                {shouldMaskPreview
+                  ? t('clipboard.detail.title')
+                  : item.custom_title || t('clipboard.detail.title')}
               </DialogTitle>
               <DialogDescription className="sr-only">
                 {t('clipboard.detail.description')}
               </DialogDescription>
+              {!shouldMaskPreview && item.note && !editingAnnotations && (
+                <p className="mt-0.5 truncate text-[10px] text-muted-foreground" title={item.note}>
+                  {item.note}
+                </p>
+              )}
             </div>
             <DetailActions
               item={item}
@@ -109,9 +148,23 @@ export function ClipboardDetailDialog({
               onPaste={() => void pasteItem(item.id)}
               onCopyPlainText={() => void copyItemPlainText(item.id)}
               onPastePlainText={() => void pasteItemPlainText(item.id)}
+              canEditAnnotations={!shouldMaskPreview}
+              onEditAnnotations={() => setEditingAnnotations((current) => !current)}
             />
           </div>
         </DialogHeader>
+
+        {editingAnnotations && !shouldMaskPreview && (
+          <AnnotationEditor
+            customTitle={customTitleDraft}
+            note={noteDraft}
+            saving={savingAnnotations}
+            onCustomTitleChange={setCustomTitleDraft}
+            onNoteChange={setNoteDraft}
+            onCancel={() => setEditingAnnotations(false)}
+            onSave={() => void handleSaveAnnotations()}
+          />
+        )}
 
         <div className="min-h-44 flex-1 overflow-hidden">
           {shouldMaskPreview ? (
@@ -139,12 +192,16 @@ function DetailActions({
   onPaste,
   onCopyPlainText,
   onPastePlainText,
+  canEditAnnotations,
+  onEditAnnotations,
 }: {
   item: ClipboardItem;
   onCopy: () => void;
   onPaste: () => void;
   onCopyPlainText: () => void;
   onPastePlainText: () => void;
+  canEditAnnotations: boolean;
+  onEditAnnotations: () => void;
 }) {
   const { t } = useTranslation();
   return (
@@ -169,8 +226,87 @@ function DetailActions({
           />
         </>
       )}
+      {canEditAnnotations && (
+        <ActionButton
+          label={t('clipboard.detail.editAnnotations')}
+          onClick={onEditAnnotations}
+          icon={SquarePen}
+        />
+      )}
     </div>
   );
+}
+
+function AnnotationEditor({
+  customTitle,
+  note,
+  saving,
+  onCustomTitleChange,
+  onNoteChange,
+  onCancel,
+  onSave,
+}: {
+  customTitle: string;
+  note: string;
+  saving: boolean;
+  onCustomTitleChange: (value: string) => void;
+  onNoteChange: (value: string) => void;
+  onCancel: () => void;
+  onSave: () => void;
+}) {
+  const { t } = useTranslation();
+  const titleLength = countCharacters(customTitle);
+  const noteLength = countCharacters(note);
+  const hasLengthError =
+    titleLength > MAX_CLIPBOARD_TITLE_LENGTH ||
+    noteLength > MAX_CLIPBOARD_NOTE_LENGTH;
+
+  return (
+    <div className="shrink-0 border-b border-border/60 px-4 py-3">
+      <div className="grid gap-2 sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)_auto] sm:items-end">
+        <div className="grid min-w-0 gap-1 text-[10px] text-muted-foreground">
+          <span className="flex items-center justify-between gap-2">
+            <label htmlFor="clipboard-custom-title">
+              {t('clipboard.detail.customTitle')}
+            </label>
+            <span className="font-mono">{titleLength}/{MAX_CLIPBOARD_TITLE_LENGTH}</span>
+          </span>
+          <Input
+            id="clipboard-custom-title"
+            value={customTitle}
+            aria-invalid={titleLength > MAX_CLIPBOARD_TITLE_LENGTH}
+            onChange={(event) => onCustomTitleChange(event.target.value)}
+            className="h-8 text-xs"
+          />
+        </div>
+        <div className="grid min-w-0 gap-1 text-[10px] text-muted-foreground">
+          <span className="flex items-center justify-between gap-2">
+            <label htmlFor="clipboard-note">{t('clipboard.detail.note')}</label>
+            <span className="font-mono">{noteLength}/{MAX_CLIPBOARD_NOTE_LENGTH}</span>
+          </span>
+          <textarea
+            id="clipboard-note"
+            value={note}
+            aria-invalid={noteLength > MAX_CLIPBOARD_NOTE_LENGTH}
+            onChange={(event) => onNoteChange(event.target.value)}
+            className="h-16 min-h-16 w-full resize-none rounded-md border border-input bg-transparent px-3 py-2 text-xs text-foreground outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 sm:h-8 sm:min-h-8 sm:resize-y"
+          />
+        </div>
+        <div className="flex items-center justify-end gap-1">
+          <Button variant="ghost" size="sm" disabled={saving} onClick={onCancel}>
+            {t('common.cancel')}
+          </Button>
+          <Button size="sm" disabled={saving || hasLengthError} onClick={onSave}>
+            {t('common.save')}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function countCharacters(value: string): number {
+  return Array.from(value).length;
 }
 
 function ActionButton({

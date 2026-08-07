@@ -146,6 +146,30 @@ ClipboardItem | null
 
 ---
 
+#### `update_clipboard_annotations`
+
+更新单条记录的自定义标题和备注。后端对两个字段整体 trim，空白值归一为 `null`；标题最多
+200 个 Unicode 字符，备注最多 10,000 个 Unicode 字符。记录不存在时返回 `not_found`，超限
+返回 `invalid_input`。成功后返回完整条目并发送 `clipboard-item-updated`。
+
+**参数**:
+```typescript
+{
+  id: number;
+  input: {
+    customTitle: string | null;
+    note: string | null;
+  };
+}
+```
+
+**返回**:
+```typescript
+ClipboardItem
+```
+
+---
+
 #### `delete_clipboard_item`
 
 删除单条剪贴板记录。
@@ -829,7 +853,8 @@ const unlisten = await listen('clipboard-updated', (event) => {
 
 #### `clipboard-item-updated`
 
-已有条目的后台状态发生变化时触发。当前由图片 OCR 在 `pending` 转为 `completed` 或 `failed` 后发送完整 `ClipboardItem`；前端应按 `id` 替换已有条目，若 OCR 文本首次命中当前搜索则插入结果。
+已有条目发生变化时触发。当前由图片 OCR 状态变化和标题/备注更新发送完整
+`ClipboardItem`；普通列表按 `id` 原位替换，活动搜索重新请求后端，以处理新命中或不再命中。
 
 **数据**:
 ```typescript
@@ -879,6 +904,8 @@ interface ClipboardItem {
   metadata: string | null;
   source_application: string | null;
   source_window_title: string | null;
+  custom_title: string | null;
+  note: string | null;
   is_favorited: boolean;
   is_sensitive: boolean;
   sensitivity_reason: string | null;
@@ -896,9 +923,17 @@ interface ClipboardItem {
   created_at: number;   // 毫秒时间戳
   last_used_at: number; // 毫秒时间戳
 }
+
+interface ClipboardAnnotationInput {
+  customTitle: string | null;
+  note: string | null;
+}
 ```
 
-`source_application` 是捕获时可用的应用名或进程文件名，`source_window_title` 是可选窗口标题。macOS 未授予 Accessibility 权限时仍返回应用名但标题为 `null`；Wayland 和不支持的平台两个字段均为 `null`，不会因此跳过捕获。JSON v1 导入导出保留这两个字段，CSV v1 为兼容既有固定表头不携带来源。
+`source_application` 是捕获时可用的应用名或进程文件名，`source_window_title` 是可选窗口标题。
+`custom_title` 与 `note` 是 DB v7 的用户 annotation，并参与普通、精确、Tantivy 重建与 SQLite
+fallback 搜索。JSON v1 保留这些字段并兼容缺字段旧文件；CSV v1 固定表头不携带来源或
+annotation。
 
 ### 3.2 Tag
 
@@ -1083,6 +1118,9 @@ export const clipboardApi = {
 
   executeContentAction: (id: number, action: ClipboardContentAction) =>
     invoke('execute_clipboard_content_action', { id, action }),
+
+  updateAnnotations: (id: number, input: ClipboardAnnotationInput) =>
+    invoke<ClipboardItem>('update_clipboard_annotations', { id, input }),
 
   toggleFavorite: (id: number) =>
     invoke<ClipboardItem>('toggle_favorite', { id }),

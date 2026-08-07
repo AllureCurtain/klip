@@ -107,6 +107,9 @@
       "capturedAt": "Captured",
       "size": "Size",
       "tags": "Tags",
+      "editAnnotations": "Edit title and note",
+      "customTitle": "Custom title",
+      "note": "Note",
       "unknown": "Unknown",
       "none": "None"
     },
@@ -130,7 +133,8 @@
     "folderCount_other": "{{count}} folders",
     "moreItems": " and {{count}} more",
     "summarySeparator": ", ",
-    "sampleSeparator": ", "
+    "sampleSeparator": ", ",
+    "hasNote": "Has note"
   },
   "emptyState": {
     "noFavorites": "No favorites yet",

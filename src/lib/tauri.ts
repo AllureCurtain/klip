@@ -4,6 +4,7 @@ import type {
   BackupSummary,
   AdvancedSearchQuery,
   ClipboardItem,
+  ClipboardAnnotationInput,
   ClipboardContentAction,
   ClipboardQueryOptions,
   DiagnosticsInfo,
@@ -88,6 +89,9 @@ export const clipboardApi = {
 
   getById: (id: number) =>
     invoke<ClipboardItem | null>('get_clipboard_by_id', { id }),
+
+  updateAnnotations: (id: number, input: ClipboardAnnotationInput) =>
+    invoke<ClipboardItem>('update_clipboard_annotations', { id, input }),
 
   delete: (id: number) => invoke('delete_clipboard_item', { id }),
 

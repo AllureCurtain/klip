@@ -224,6 +224,8 @@ mod tests {
             metadata: None,
             source_application: None,
             source_window_title: None,
+            custom_title: None,
+            note: None,
             is_favorited: false,
             is_sensitive: false,
             sensitivity_reason: None,

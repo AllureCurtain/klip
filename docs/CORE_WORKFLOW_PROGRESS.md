@@ -1,7 +1,7 @@
 # Core Clipboard Workflows Progress
 
 - 最后更新时间：2026-08-07（Asia/Shanghai）
-- 当前状态：`IN_PROGRESS`，Task 1-5 已完成，下一步执行 Task 6
+- 当前状态：`IN_PROGRESS`，Task 1-6 已完成，下一步执行 Task 7
 - 分支：`feat/core-workflows`
 - worktree：`D:\Study\cc\klip\.worktrees\core-workflows`
 - 基线：`8018aced3cd6b1437a4f8bb681206389d66c68f8`
@@ -38,7 +38,7 @@
 | 3 | 纯文本复制与粘贴 | `COMPLETED` | `feat: add plain text clipboard actions` |
 | 4 | 统一详情与完整预览 | `COMPLETED` | `feat: add unified clipboard detail preview` |
 | 5 | URL/邮箱/文件快捷动作 | `COMPLETED` | `feat: add clipboard content actions` |
-| 6 | 可搜索自定义标题与备注、DB v7 | `PENDING` | `feat: add searchable clipboard annotations` |
+| 6 | 可搜索自定义标题与备注、DB v7 | `COMPLETED` | `feat: add searchable clipboard annotations` |
 | 7 | 全量验证、Windows 验收、推送和 PR | `PENDING` | `docs: finalize core workflow delivery` |
 
 状态只允许使用：`PENDING`、`IN_PROGRESS`、`COMPLETED`、`SKIPPED`、`BLOCKED`。
@@ -178,6 +178,33 @@
   参数拼接问题和 Selenium 异步按钮 stale-node 等待；修复后 Klip、tauri-driver、
   msedgedriver 均已停止。
 
+### Task 6：可搜索的自定义标题与备注
+
+- DB v7 为 `clipboard_items` 增加 nullable `custom_title` 与 `note`；v6 迁移和全新
+  schema 修复路径都保证两列存在，旧记录保持 `NULL`。Rust、TypeScript 与 OpenAPI
+  的 `ClipboardItem` 已同步字段。
+- `update_clipboard_annotations` 对整体空白 trim，空值归一为 `NULL`；标题限制
+  200 个 Unicode 字符，备注限制 10,000 个 Unicode 字符，超限和不存在记录分别
+  返回 `invalid_input` 与 `not_found`。更新不改动原内容、hash 或 rich formats。
+- 标题和备注已进入 Tantivy 增量索引、全量重建、启动指纹漂移检查以及 SQLite
+  LIKE/精确 fallback；更新后发送 `clipboard-item-updated`，普通列表原位替换，活动
+  搜索重新请求后端。
+- JSON v1 导入导出保留 annotation，缺字段旧 JSON 默认为 `NULL`；v6 备份恢复
+  为空 annotation，v7 备份原样保留并在缺列时修改当前库前拒绝。CSV v1 保持
+  原固定表头，不扩展本轮范围。
+- 统一详情通过铅笔图标编辑并保存标题/备注，前端使用 Unicode 字符计数且
+  超限时禁用保存；列表有标题时优先显示标题，备注只显示低噪声图标。敏感遮罩
+  开启时标题、备注和编辑按钮都不进入 DOM。
+- `cargo test database::`：61 项通过；`cargo test annotations`：8 项通过，覆盖增量/重建/
+  fallback、fingerprint 漂移、迁移、JSON、restore 和 OpenAPI。限值契约修正后重跑
+  `cargo test update_annotations -- --test-threads=1`：2 项通过。
+- `cargo test database::data_portability::tests`：24 项、`database::connection::tests`：13 项、
+  `database::clipboard_query::tests`：5 项、`http::openapi::tests`：7 项通过。
+- Task 6 前端定向 7 个文件、103 项测试通过；限值修正后单独重跑
+  `ClipboardDetailDialog.test.tsx`：10 项通过。`pnpm exec tsc -b --pretty false`、Task 6
+  ESLint、`pnpm build`、`cargo fmt -- --check`、`cargo clippy -- -D warnings` 与 `git diff --check`
+  均通过。
+
 ## 阻塞与跳过
 
 - 当前无实现阻塞。
@@ -190,12 +217,13 @@
 2. 完整读取实施计划和本进度文件。
 3. 运行 `git status --short --branch`、`git log --oneline -12` 和相关进程检查。
 4. 若工作树有改动，先理解并验证现有 WIP，禁止丢弃不明改动。
-5. 从表格中第一个非 `COMPLETED` Task 继续；当前应从 Task 6 开始。
+5. 从表格中第一个非 `COMPLETED` Task 继续；当前应从 Task 7 开始。
 6. Task 完成前更新本文件的状态、测试证据、限制和下一步，并随代码一起提交。
 7. 提交后确认工作树干净，再进入下一个 Task。
 
 ## 下一步准确操作
 
-- 从 Task 6 开始，先补 DB v7 migration、annotation 校验、旧 JSON/备份恢复和搜索重建
-  失败测试，再贯通 Rust/TypeScript/OpenAPI、Tantivy 与详情编辑 UI。
-- 不提前执行 Task 7 的发布收尾，也不改导入导出范围、隐私产品化或 P2 功能。
+- 从 Task 7 开始，先审查 Task 1-6 提交边界、错误处理、TODO/FIXME 和许可证边界，
+  再运行全量 `pnpm verify` 与 Windows 真实桌面验收。
+- 更新计划勾选、PRD 和最终进度记录，完成 `docs: finalize core workflow delivery` 提交后
+  推送 `feat/core-workflows` 并创建面向 `main` 的 PR，不直接合并。

@@ -125,13 +125,13 @@ src/
 │   ├── clipboard/       # 剪贴板相关
 │   │   ├── ClipboardList.tsx   # 虚拟滚动列表（@tanstack/react-virtual）
 │   │   ├── ClipboardItem.tsx   # 统一的列表项（内部按 content_type 分支渲染）
-│   │   └── ClipboardDetailDialog.tsx # 文本、图片、文件和 OCR 的统一详情
+│   │   └── ClipboardDetailDialog.tsx # 统一详情与标题/备注编辑
 │   └── settings/        # 设置相关
 │       ├── SettingsView.tsx        # 全页设置（通用/快捷键/行为/数据/关于）
 │       └── DataManagementView.tsx  # 标签、导入导出、备份恢复、敏感内容设置
 │
 ├── stores/              # Zustand 状态
-│   ├── clipboardStore.ts  # 剪贴板列表、搜索、删除、收藏
+│   ├── clipboardStore.ts  # 剪贴板列表、搜索、删除、收藏和 annotation 更新
 │   ├── configStore.ts     # 应用配置读写
 │   └── themeStore.ts      # 主题（light/dark/system）
 │
@@ -297,6 +297,10 @@ interface ClipboardItem {
   hash: string;
   size: number;
   metadata: string | null;   // JSON: ImageMetadata | FileMetadata
+  source_application: string | null;
+  source_window_title: string | null;
+  custom_title: string | null;
+  note: string | null;
   is_favorited: boolean;
   is_sensitive: boolean;
   sensitivity_reason: string | null;
@@ -346,6 +350,7 @@ interface AppConfig {
 | `paste_plain_text_from_clipboard` | id | void | 以纯文本复制后模拟粘贴 |
 | `get_clipboard_content_actions` | id | ClipboardContentAction[] | 检测有限内容动作 |
 | `execute_clipboard_content_action` | id, action | void | 重新检测后执行内容动作 |
+| `update_clipboard_annotations` | id, input | ClipboardItem | 校验并保存标题/备注 |
 | `toggle_favorite` | id | ClipboardItem | 切换收藏 |
 | `set_favorite_for_items` | ids, is_favorited | number | 批量收藏/取消收藏 |
 | `clear_clipboard_history` | - | void | 清空历史 |
@@ -377,7 +382,7 @@ interface AppConfig {
 | 事件 | 数据 | 说明 |
 |------|------|------|
 | `clipboard-updated` | ClipboardItem | 剪贴板更新 |
-| `clipboard-item-updated` | ClipboardItem | OCR 等后台任务更新已有条目 |
+| `clipboard-item-updated` | ClipboardItem | OCR 或标题/备注更新已有条目 |
 | `clipboard-cleared` | void | 剪贴板历史清空 |
 | `config-changed` | { key, value } | 配置变更 |
 
@@ -450,7 +455,7 @@ interface AppConfig {
 | 数据库索引 | `created_at`、`last_used_at + created_at`、`content_type`、`hash` |
 | 数据库访问模型 | 单个 SQLite 连接 + `Mutex<Connection>` 串行化访问 |
 | 异步处理 | 剪贴板监听独立线程 |
-| 全文搜索 | Tantivy + jieba；50 条/5 秒批量提交，启动时比对 checksum 及逐文档 ID/内容指纹，物理损坏或逻辑漂移时从 SQLite 重建，失败时回退 `LIKE` |
+| 全文搜索 | 内容、预览、OCR、标题和备注进入 Tantivy + jieba；50 条/5 秒批量提交，启动时比对 checksum 及逐文档 ID/可搜索内容指纹，漂移时从 SQLite 重建，失败时回退 `LIKE` |
 | 批量操作 | 批量删除优化 |
 
 ---

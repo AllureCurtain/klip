@@ -4,6 +4,10 @@
 
 ### Added
 
+- Searchable clipboard annotations with custom titles and notes, inline detail editing, compact list
+  indicators, typed IPC, and live active-search refresh.
+- Database schema v7 migration, old JSON compatibility, v6/v7 backup restore coverage, annotation
+  validation, and Tantivy/SQLite/index-fingerprint regression coverage.
 - Clipboard source attribution is persisted and shown compactly for Windows, macOS, and X11. macOS keeps the application name when Accessibility permission is absent; Wayland and unsupported platforms leave source fields empty without blocking capture.
 - Source-attribution migration, hash-conflict, v5/v6 backup/restore, JSON portability, OpenAPI, and frontend regression coverage.
 - Cross-platform paste target restoration: Win32 foreground windows, macOS running applications, and X11 EWMH active windows are captured before Klip opens and reactivated before synthetic paste; Wayland and unsupported platforms degrade without an error.
@@ -38,6 +42,8 @@
 
 ### Changed
 
+- Clipboard search now includes custom titles and notes in incremental indexing, full rebuilds,
+  startup fingerprints, exact matching, and SQLite fallback.
 - Active searches now refresh through the backend when clipboard capture or OCR completion events arrive, keeping live results consistent with Tantivy/jieba tokenization instead of approximating matches in the frontend.
 - Search-index startup validation now compares every live Tantivy document's item ID and SHA-256 searchable-content fingerprint with SQLite, rebuilding on logical drift as well as physical corruption or count mismatches.
 - Database schema version 6 adds nullable `source_application` and `source_window_title` columns. Version 5 databases and backups migrate with empty attribution, while schema-v6 backups require both columns and cannot be restored by Klip versions that only support v5.

@@ -220,6 +220,16 @@ pub fn build_openapi() -> serde_json::Value {
                     v["nullable"] = true.into();
                     v
                 }),
+                ("custom_title", {
+                    let mut v = s_str();
+                    v["nullable"] = true.into();
+                    v
+                }),
+                ("note", {
+                    let mut v = s_str();
+                    v["nullable"] = true.into();
+                    v
+                }),
                 ("is_favorited", s_bool()),
                 ("is_sensitive", s_bool()),
                 ("sensitivity_reason", {
@@ -240,6 +250,8 @@ pub fn build_openapi() -> serde_json::Value {
                 "size",
                 "source_application",
                 "source_window_title",
+                "custom_title",
+                "note",
                 "is_favorited",
                 "is_sensitive",
                 "formats",
@@ -850,6 +862,19 @@ mod tests {
         let required = schema["required"].as_array().unwrap();
         assert!(required.iter().any(|value| value == "source_application"));
         assert!(required.iter().any(|value| value == "source_window_title"));
+    }
+
+    #[test]
+    fn clipboard_item_schema_exposes_nullable_annotations() {
+        let spec = build_openapi();
+        let schema = &spec["components"]["schemas"]["ClipboardItem"];
+
+        assert_eq!(schema["properties"]["custom_title"]["type"], "string");
+        assert_eq!(schema["properties"]["custom_title"]["nullable"], true);
+        assert_eq!(schema["properties"]["note"]["nullable"], true);
+        let required = schema["required"].as_array().unwrap();
+        assert!(required.iter().any(|value| value == "custom_title"));
+        assert!(required.iter().any(|value| value == "note"));
     }
 
     #[test]

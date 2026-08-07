@@ -167,6 +167,7 @@ fn main() {
             commands::delete_clipboard_item,
             commands::delete_clipboard_items,
             commands::toggle_favorite,
+            commands::update_clipboard_annotations,
             commands::set_favorite_for_items,
             commands::list_tags,
             commands::create_tag,

@@ -374,6 +374,61 @@ describe('clipboard capture, search, and paste flow', function () {
     );
   });
 
+  it('persists clipboard annotations and finds them through active search', async function () {
+    assert.ok(capturedText, 'The capture flow must provide an annotation candidate');
+    const title = `E2E title ${Date.now()}`;
+    const noteToken = `annotation-note-${Date.now()}`;
+
+    await showKlipWindow();
+    await driver.navigate().refresh();
+    const row = await filterForItem(driver, capturedText.slice(-6), capturedText);
+    await driver.actions().move({ origin: row }).perform();
+    const previewButton = await waitForActionButton(driver, ['预览详情', 'Preview details']);
+    await previewButton.click();
+    const editButton = await waitForActionButton(driver, [
+      '编辑标题和备注',
+      'Edit title and note',
+    ]);
+    await editButton.click();
+
+    const titleInput = await driver.wait(
+      until.elementLocated(By.id('clipboard-custom-title')),
+      10000,
+    );
+    const noteInput = await driver.findElement(By.id('clipboard-note'));
+    await titleInput.clear();
+    await titleInput.sendKeys(title);
+    await noteInput.clear();
+    await noteInput.sendKeys(noteToken);
+    const saveButton = await waitForActionButton(driver, ['保存', 'Save']);
+    await saveButton.click();
+
+    await driver.wait(
+      async () => {
+        const items = await listClipboardItems();
+        return items.some(
+          (item) =>
+            item.content === capturedText &&
+            item.custom_title === title &&
+            item.note === noteToken,
+        );
+      },
+      15000,
+      'Timed out waiting for annotations to persist',
+    );
+
+    const closeButton = await waitForActionButton(driver, ['关闭', 'Close']);
+    await closeButton.click();
+    const search = await driver.wait(until.elementLocated(By.css('input[type="text"]')), 10000);
+    await search.clear();
+    await search.sendKeys(noteToken);
+    await driver.wait(
+      until.elementLocated(By.css(`[data-testid="clipboard-custom-title"][title="${title}"]`)),
+      15000,
+      'Timed out waiting for the note-only search result',
+    );
+  });
+
   it('opens and reveals validated Windows paths with spaces and non-ASCII text', async function () {
     if (process.platform !== 'win32') this.skip();
 

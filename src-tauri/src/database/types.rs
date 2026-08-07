@@ -110,6 +110,10 @@ pub struct ClipboardItem {
     pub metadata: Option<String>,
     pub source_application: Option<String>,
     pub source_window_title: Option<String>,
+    #[serde(default)]
+    pub custom_title: Option<String>,
+    #[serde(default)]
+    pub note: Option<String>,
     pub is_favorited: bool,
     pub is_sensitive: bool,
     pub sensitivity_reason: Option<String>,
@@ -120,6 +124,13 @@ pub struct ClipboardItem {
     pub tags: Vec<Tag>,
     pub created_at: i64,
     pub last_used_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClipboardAnnotationInput {
+    pub custom_title: Option<String>,
+    pub note: Option<String>,
 }
 
 #[derive(Debug, Clone)]

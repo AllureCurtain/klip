@@ -141,6 +141,23 @@ describe('tauri API wrappers', () => {
     });
   });
 
+  it('updates clipboard annotations through a typed input', async () => {
+    vi.mocked(invoke).mockResolvedValue({});
+
+    await clipboardApi.updateAnnotations(12, {
+      customTitle: 'Project brief',
+      note: 'Review tomorrow',
+    });
+
+    expect(invoke).toHaveBeenCalledWith('update_clipboard_annotations', {
+      id: 12,
+      input: {
+        customTitle: 'Project brief',
+        note: 'Review tomorrow',
+      },
+    });
+  });
+
   it('subscribes to typed clipboard item updates', async () => {
     vi.mocked(listen).mockResolvedValue(vi.fn());
     const callback = vi.fn();

@@ -105,6 +105,9 @@
       "capturedAt": "捕获时间",
       "size": "大小",
       "tags": "标签",
+      "editAnnotations": "编辑标题和备注",
+      "customTitle": "自定义标题",
+      "note": "备注",
       "unknown": "未知",
       "none": "无"
     },
@@ -126,7 +129,8 @@
     "folderCount": "{{count}} 个文件夹",
     "moreItems": " 等 {{count}} 项",
     "summarySeparator": "，",
-    "sampleSeparator": "、"
+    "sampleSeparator": "、",
+    "hasNote": "含备注"
   },
   "emptyState": {
     "noFavorites": "暂无收藏",

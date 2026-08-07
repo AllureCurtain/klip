@@ -19,6 +19,7 @@ vi.mock('@/lib/tauri', () => ({
     pastePlainText: vi.fn(),
     clear: vi.fn(),
     toggleFavorite: vi.fn(),
+    updateAnnotations: vi.fn(),
     setFavoriteForItems: vi.fn(),
     listTags: vi.fn(),
     createTag: vi.fn(),
@@ -61,6 +62,8 @@ function makeItem(id: number, overrides: Partial<ClipboardItem> = {}): Clipboard
     metadata: null,
     source_application: null,
     source_window_title: null,
+    custom_title: null,
+    note: null,
     is_favorited: false,
     is_sensitive: false,
     sensitivity_reason: null,
@@ -201,6 +204,47 @@ describe('clipboardStore', () => {
 
       expect(clipboardApi.clear).toHaveBeenCalled();
       expect(useClipboardStore.getState().items).toEqual([]);
+    });
+  });
+
+  describe('updateAnnotations', () => {
+    it('replaces the updated item in place', async () => {
+      const first = makeItem(1);
+      const annotated = makeItem(2, {
+        custom_title: 'Project brief',
+        note: 'Review tomorrow',
+      });
+      useClipboardStore.setState({ items: [first, makeItem(2)] });
+      vi.mocked(clipboardApi.updateAnnotations).mockResolvedValue(annotated);
+
+      const result = await useClipboardStore.getState().updateAnnotations(2, {
+        customTitle: 'Project brief',
+        note: 'Review tomorrow',
+      });
+
+      expect(result).toEqual(annotated);
+      expect(useClipboardStore.getState().items).toEqual([first, annotated]);
+      expect(clipboardApi.updateAnnotations).toHaveBeenCalledWith(2, {
+        customTitle: 'Project brief',
+        note: 'Review tomorrow',
+      });
+    });
+
+    it('keeps the existing item and reports failure', async () => {
+      const existing = makeItem(1);
+      useClipboardStore.setState({ items: [existing] });
+      vi.mocked(clipboardApi.updateAnnotations).mockRejectedValue(
+        new Error('annotation update failed')
+      );
+
+      const result = await useClipboardStore.getState().updateAnnotations(1, {
+        customTitle: null,
+        note: null,
+      });
+
+      expect(result).toBeNull();
+      expect(useClipboardStore.getState().items).toEqual([existing]);
+      expect(useClipboardStore.getState().error).toContain('annotation update failed');
     });
   });
 

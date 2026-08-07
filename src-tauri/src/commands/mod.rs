@@ -43,6 +43,18 @@ pub fn toggle_favorite(
 }
 
 #[tauri::command]
+pub fn update_clipboard_annotations(
+    app: tauri::AppHandle,
+    db: State<'_, database::Database>,
+    id: i64,
+    input: database::ClipboardAnnotationInput,
+) -> Result<ClipboardItem, AppError> {
+    let updated = database::clipboard::update_annotations(&db, id, input.custom_title, input.note)?;
+    let _ = app.emit("clipboard-item-updated", &updated);
+    Ok(updated)
+}
+
+#[tauri::command]
 pub fn clear_clipboard_history(
     app: tauri::AppHandle,
     db: State<'_, database::Database>,

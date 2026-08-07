@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type {
   BackupSummary,
+  ClipboardAnnotationInput,
   ClipboardItem,
   ClipboardQueryOptions,
   ImportSummary,
@@ -38,6 +39,10 @@ interface ClipboardStore {
   pasteItemPlainText: (id: number) => Promise<void>;
   clearItems: () => Promise<void>;
   toggleFavorite: (id: number) => Promise<void>;
+  updateAnnotations: (
+    id: number,
+    input: ClipboardAnnotationInput
+  ) => Promise<ClipboardItem | null>;
   setFavoriteForSelected: (isFavorited: boolean) => Promise<void>;
   assignTagToItem: (itemId: number, tagId: number) => Promise<void>;
   assignTagToSelected: (tagId: number) => Promise<void>;
@@ -233,6 +238,19 @@ export const useClipboardStore = create<ClipboardStore>((set) => ({
       }));
     } catch (error) {
       set({ error: getErrorMessage(error) });
+    }
+  },
+
+  updateAnnotations: async (id: number, input: ClipboardAnnotationInput) => {
+    try {
+      const updated = await clipboardApi.updateAnnotations(id, input);
+      set((state) => ({
+        items: state.items.map((item) => (item.id === id ? updated : item)),
+      }));
+      return updated;
+    } catch (error) {
+      set({ error: getErrorMessage(error) });
+      return null;
     }
   },
 

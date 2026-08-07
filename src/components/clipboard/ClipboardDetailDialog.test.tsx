@@ -10,6 +10,7 @@ const storeMocks = vi.hoisted(() => ({
   pasteItem: vi.fn(),
   copyItemPlainText: vi.fn(),
   pasteItemPlainText: vi.fn(),
+  updateAnnotations: vi.fn(),
 }));
 
 const contentActionMocks = vi.hoisted(() => ({
@@ -40,6 +41,8 @@ function makeItem(overrides: Partial<ClipboardItem> = {}): ClipboardItem {
     metadata: null,
     source_application: 'browser.exe',
     source_window_title: 'Reference page',
+    custom_title: null,
+    note: null,
     is_favorited: false,
     is_sensitive: false,
     sensitivity_reason: null,
@@ -66,6 +69,7 @@ describe('ClipboardDetailDialog', () => {
     storeMocks.pasteItem.mockReset();
     storeMocks.copyItemPlainText.mockReset();
     storeMocks.pasteItemPlainText.mockReset();
+    storeMocks.updateAnnotations.mockReset();
     contentActionMocks.actions = [];
     contentActionMocks.executeAction.mockReset();
     contentActionMocks.refresh.mockReset();
@@ -98,6 +102,58 @@ describe('ClipboardDetailDialog', () => {
     expect(rich.querySelector('a')?.getAttribute('href')).toBeNull();
   });
 
+  it('edits and saves the custom title and note without closing the detail view', async () => {
+    storeMocks.updateAnnotations.mockResolvedValue(
+      makeItem({ custom_title: 'Updated title', note: 'Updated note' })
+    );
+    render(
+      <ClipboardDetailDialog
+        item={makeItem({ custom_title: 'Original title', note: 'Original note' })}
+        open
+        onOpenChange={() => undefined}
+      />
+    );
+
+    expect(screen.getByText('Original title')).toBeTruthy();
+    expect(screen.getByText('Original note')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '编辑标题和备注' }));
+
+    const title = screen.getByRole('textbox', { name: '自定义标题' });
+    const note = screen.getByRole('textbox', { name: '备注' });
+    fireEvent.change(title, { target: { value: 'Updated title' } });
+    fireEvent.change(note, { target: { value: 'Updated note' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+
+    await vi.waitFor(() => {
+      expect(storeMocks.updateAnnotations).toHaveBeenCalledWith(42, {
+        customTitle: 'Updated title',
+        note: 'Updated note',
+      });
+      expect(screen.queryByRole('textbox', { name: '自定义标题' })).toBeNull();
+    });
+    expect(screen.getByText(/with a second line/)).toBeTruthy();
+  });
+
+  it('uses Unicode character limits for annotation editing', () => {
+    render(
+      <ClipboardDetailDialog
+        item={makeItem()}
+        open
+        onOpenChange={() => undefined}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: '编辑标题和备注' }));
+
+    const title = screen.getByRole('textbox', { name: '自定义标题' });
+    fireEvent.change(title, { target: { value: '😀'.repeat(200) } });
+    expect(screen.getByText('200/200')).toBeTruthy();
+    expect(screen.getByRole('button', { name: '保存' }).hasAttribute('disabled')).toBe(false);
+
+    fireEvent.change(title, { target: { value: '😀'.repeat(201) } });
+    expect(screen.getByText('201/200')).toBeTruthy();
+    expect(screen.getByRole('button', { name: '保存' }).hasAttribute('disabled')).toBe(true);
+  });
+
   it('keeps sensitive text and rich formats hidden when masking is enabled', () => {
     render(
       <ClipboardDetailDialog
@@ -106,6 +162,8 @@ describe('ClipboardDetailDialog', () => {
           preview: 'password=super-secret',
           is_sensitive: true,
           sensitivity_reason: 'credential keyword',
+          custom_title: 'Secret alias',
+          note: 'Secret note',
           formats: [{ format: 'html', content: '<b>super-secret</b>' }],
         })}
         open
@@ -115,6 +173,9 @@ describe('ClipboardDetailDialog', () => {
 
     expect(screen.getByText('已隐藏敏感内容')).toBeTruthy();
     expect(screen.queryByText(/super-secret/)).toBeNull();
+    expect(screen.queryByText('Secret alias')).toBeNull();
+    expect(screen.queryByText('Secret note')).toBeNull();
+    expect(screen.queryByRole('button', { name: '编辑标题和备注' })).toBeNull();
     expect(screen.queryByRole('tab', { name: '富文本' })).toBeNull();
   });
 

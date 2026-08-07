@@ -54,6 +54,8 @@ function makeTextItem(overrides: Partial<ClipboardItemType> = {}): ClipboardItem
     metadata: null,
     source_application: null,
     source_window_title: null,
+    custom_title: null,
+    note: null,
     is_favorited: false,
     is_sensitive: false,
     sensitivity_reason: null,
@@ -266,6 +268,43 @@ describe('ClipboardItem', () => {
     );
 
     expect(screen.getByText('已隐藏敏感内容').getAttribute('title')).toBeNull();
+  });
+
+  it('prioritizes a custom title and shows a low-noise note indicator', () => {
+    render(
+      <ClipboardItem
+        item={makeTextItem({
+          custom_title: 'Release checklist',
+          note: 'Verify signatures',
+        })}
+        index={1}
+        isSelected={false}
+      />
+    );
+
+    expect(screen.getByTestId('clipboard-custom-title').textContent).toBe(
+      'Release checklist'
+    );
+    expect(screen.queryByText('hello')).toBeNull();
+    expect(screen.getByLabelText('含备注')).toBeTruthy();
+  });
+
+  it('does not expose annotations for a masked sensitive item', () => {
+    render(
+      <ClipboardItem
+        item={makeTextItem({
+          custom_title: 'Secret alias',
+          note: 'Secret note',
+          is_sensitive: true,
+        })}
+        index={1}
+        isSelected={false}
+      />
+    );
+
+    expect(screen.queryByText('Secret alias')).toBeNull();
+    expect(screen.queryByLabelText('含备注')).toBeNull();
+    expect(screen.getByText('已隐藏敏感内容')).toBeTruthy();
   });
 
   it('renders allowed rich text while stripping executable HTML', () => {

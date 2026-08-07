@@ -10,6 +10,7 @@ import {
   ScanText,
   ShieldAlert,
   Star,
+  StickyNote,
   Tags,
   Trash2,
 } from 'lucide-react';
@@ -172,17 +173,28 @@ export function ClipboardItem({
         </span>
 
         <div className="min-w-0 flex-1">
-          <Renderer
-            item={item}
-            shouldMaskPreview={shouldMaskPreview}
-            fileShape={fileShape}
-            imageMeta={imageMeta}
-            onImageClick={handleImageClick}
-          />
+          {!shouldMaskPreview && item.custom_title ? (
+            <span
+              className="block truncate text-xs font-medium text-foreground"
+              data-testid="clipboard-custom-title"
+              title={item.custom_title}
+            >
+              {item.custom_title}
+            </span>
+          ) : (
+            <Renderer
+              item={item}
+              shouldMaskPreview={shouldMaskPreview}
+              fileShape={fileShape}
+              imageMeta={imageMeta}
+              onImageClick={handleImageClick}
+            />
+          )}
           <MetaLine
             item={item}
             copied={copied}
             imageMeta={imageMeta}
+            shouldMaskPreview={shouldMaskPreview}
             toneDot={tone.dot}
             typeLabel={typeLabel}
           />
@@ -212,12 +224,14 @@ function MetaLine({
   item,
   copied,
   imageMeta,
+  shouldMaskPreview,
   toneDot,
   typeLabel,
 }: {
   item: ClipboardItemType;
   copied: boolean;
   imageMeta: { width: number; height: number; format: string } | null;
+  shouldMaskPreview: boolean;
   toneDot: string;
   typeLabel: string;
 }) {
@@ -302,6 +316,16 @@ function MetaLine({
         <span className="inline-flex shrink-0 items-center gap-0.5 font-medium text-primary">
           <Check className="h-2.5 w-2.5" />
           {t('clipboard.copied')}
+        </span>
+      )}
+      {item.note && !shouldMaskPreview && (
+        <span
+          className="inline-flex shrink-0 items-center text-muted-foreground"
+          aria-label={t('clipboard.hasNote')}
+          title={t('clipboard.hasNote')}
+          data-testid="clipboard-note-indicator"
+        >
+          <StickyNote className="h-2.5 w-2.5" aria-hidden="true" />
         </span>
       )}
       {item.is_sensitive && (
