@@ -146,11 +146,12 @@ function App() {
   }, [fetchItems, fetchProductivity, fetchTags, setItems]);
 
   useEffect(() => {
-    const visibleIds = items.slice(0, 9).map((item) => item.id);
+    const visibleIds =
+      view === 'clipboard' ? items.slice(0, 9).map((item) => item.id) : [];
     void clipboardApi.setVisibleItems(visibleIds).catch((syncError) => {
       console.error('Failed to sync visible clipboard items', syncError);
     });
-  }, [items]);
+  }, [items, view]);
 
   useEffect(() => {
     const hasActiveSearch = searchQuery.trim() !== '';
@@ -255,27 +256,31 @@ function App() {
           setView('settings');
         }}
       />
-      <main className="flex-1 overflow-hidden">
-        {loading ? (
+      <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        {loading && (
           <div
             role="status"
-            className="flex flex-col items-start px-3 py-4 text-muted-foreground"
+            className="flex shrink-0 flex-col items-start border-b border-border/50 px-3 py-2 text-muted-foreground"
           >
             <p className="text-xs font-medium">{t('app.loading')}</p>
           </div>
-        ) : error ? (
+        )}
+        {!loading && error && (
           <div
             role="alert"
-            className="flex flex-col items-start px-3 py-4 text-destructive"
+            className="flex shrink-0 flex-col items-start border-b border-destructive/20 px-3 py-2 text-destructive"
           >
             <p className="text-xs font-medium">{t('app.errorLabel')}</p>
             <p className="mt-1 text-[11px] text-destructive/80">{error}</p>
           </div>
-        ) : items.length === 0 ? (
-          <EmptyState showFavorites={showFavorites} />
-        ) : (
-          <ClipboardList items={items} selectionMode={selectionMode} />
         )}
+        <div className="min-h-0 flex-1">
+          {items.length > 0 ? (
+            <ClipboardList items={items} selectionMode={selectionMode} />
+          ) : !loading && !error ? (
+            <EmptyState showFavorites={showFavorites} />
+          ) : null}
+        </div>
       </main>
     </motion.div>
   );

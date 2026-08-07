@@ -228,6 +228,42 @@ describe('App status states', () => {
     expect(tauriMocks.setVisibleItems).toHaveBeenLastCalledWith([]);
   });
 
+  it('keeps stale results mounted and synchronized while a refresh loads or fails', async () => {
+    storeState.items = [makeItem(1), makeItem(2)];
+    const { rerender } = render(<App />);
+    await act(async () => Promise.resolve());
+    const list = screen.getByTestId('clipboard-list');
+
+    storeState.loading = true;
+    rerender(<App />);
+
+    expect(screen.getByTestId('clipboard-list')).toBe(list);
+    expect(screen.getByRole('status')).toBeTruthy();
+    expect(tauriMocks.setVisibleItems).toHaveBeenLastCalledWith([1, 2]);
+
+    storeState.loading = false;
+    storeState.error = '搜索失败';
+    rerender(<App />);
+
+    expect(screen.getByTestId('clipboard-list')).toBe(list);
+    expect(screen.getByRole('alert')).toBeTruthy();
+    expect(tauriMocks.setVisibleItems).toHaveBeenLastCalledWith([1, 2]);
+  });
+
+  it('syncs an empty snapshot when the clipboard list is hidden by settings', async () => {
+    storeState.items = [makeItem(1)];
+    render(<App />);
+    await act(async () => Promise.resolve());
+    expect(tauriMocks.setVisibleItems).toHaveBeenLastCalledWith([1]);
+
+    act(() => {
+      tauriMocks.openSettings?.();
+    });
+    await screen.findByTestId('settings-view');
+
+    expect(tauriMocks.setVisibleItems).toHaveBeenLastCalledWith([]);
+  });
+
   it('resyncs results after search, type, favorite, tag, and date filters change', async () => {
     storeState.items = [makeItem(1)];
     const { rerender } = render(<App />);
