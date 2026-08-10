@@ -1,7 +1,7 @@
 # Klip 交付状态
 
 > 最后更新：2026-08-10（Asia/Shanghai）
-> 已验证功能基线：`main@14e1717d4bc944dd6b3c14e2e4e86eb8c7745a4d`
+> 当前产品基线：`v0.2.0` / `ab89ef7a645f9f8af9a0a113bfad4e2cf6093441`
 
 本文档是当前代码交付状态的唯一摘要入口。详细产品行为、接口和数据结构分别以
 `README.md`、`PRD.md`、`ARCHITECTURE.md`、`API.md` 和 `DATABASE.md` 为准。
@@ -10,7 +10,8 @@
 
 - Foundation 与核心剪贴板工作流已经全部合并到 `main`。
 - 当前没有遗留实现任务或待处理 PR。
-- Windows 本地验证、主分支 CI 和主分支 Desktop E2E 均通过。
+- Windows 本地验证、候选提交 CI 和 Release 构建均通过；Desktop E2E 在合并前的同一产品代码
+  提交上通过。
 - 当前阶段继续保持 Windows-first，优先处理真实使用反馈、核心路径回归和文档准确性。
 - 当前公开版本为 `v0.1.2`；`v0.2.0` 发布候选的版本元数据与 CHANGELOG 已统一。
 
@@ -37,8 +38,9 @@
 
 | Workflow | Run | 结果 |
 |----------|-----|------|
-| `CI` on `main@14e1717` | `31365860754` | 成功：Windows/macOS/Ubuntu 前端及 Windows 后端/RustSec 全绿 |
-| `Desktop E2E` on `main@14e1717` | `31365924522` | 成功：WebView2 `131.0.2903.86` 与 EdgeDriver `131.0.2903.86` 匹配，5 项通过 |
+| `CI` on `main@ab89ef7` | `31379258017` | 成功：Windows/macOS/Ubuntu 前端及 Windows 后端/RustSec 全绿 |
+| `Desktop E2E` on `ae6f4b8` | `31376052225` | 成功：WebView2 `131.0.2903.86` 与 EdgeDriver `131.0.2903.86` 匹配，5 项通过 |
+| `Release` on `v0.2.0` | `31384403404` | 成功：发布前审计、候选校验和 Windows MSI/NSIS 构建全通过，Release 保持 draft |
 
 ## 明确保留的边界
 
