@@ -6,13 +6,22 @@
 本清单仅在明确启动新发布后使用。此前生成的 MSI、NSIS、`target/` 和 E2E 临时目录已经
 清理，旧文件名、大小与哈希不是当前代码的发布证据，必须从干净 checkout 重新生成。
 
-## 已有基线（不是发布批准）
+## 当前候选证据（仍不是发布批准）
 
-- `main@14e1717` 的 CI run `31365860754` 通过。
-- `main@14e1717` 的 Desktop E2E run `31365924522` 通过；WebView2 与 EdgeDriver 均为
-  `131.0.2903.86`，5 项 Selenium 流程通过。
+- `v0.2.0` tag 指向 `main@ab89ef7a645f9f8af9a0a113bfad4e2cf6093441`。
+- 候选提交的 CI run `31379258017` 通过。
+- Release run `31384403404` 通过，已创建 draft GitHub Release 并上传 Windows 安装包。
+- 当前 draft 仍未公开；安装包没有代码签名，干净 Windows 安装与核心工作流验收仍待执行。
 - Foundation、核心工作流和 E2E 稳定性改进已通过 PR #4、#5、#6 合并。
-- 详细证据见 [DELIVERY_STATUS.md](DELIVERY_STATUS.md)。
+
+当前 draft 附件：
+
+| 安装包 | 字节数 | SHA-256 |
+|--------|-------:|---------|
+| `Klip_0.2.0_x64-setup.exe` | 29,026,908 | `dafbdf5c8566b851992a94400af3ad85498b4bcf1d8ebbccb8fb8ac9a7fa2e53` |
+| `Klip_0.2.0_x64_en-US.msi` | 32,546,816 | `4c3d431659b239ac57eb047f36d0c80e5e38d43a0c4c21a18272273612e3955b` |
+
+详细产品状态见 [DELIVERY_STATUS.md](DELIVERY_STATUS.md)。
 
 后续代码变化会使上述基线失效。任何发布候选都必须记录自己的 commit、workflow run、
 安装包哈希和人工验收结果。
@@ -22,25 +31,26 @@
 - [x] 目标版本确定为 `v0.2.0`，范围为 Windows-first 本地剪贴板核心工作流。
 - [x] 统一 `package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` 与
   `CHANGELOG.md` 中的版本。
-- [ ] 确认候选 commit 已合并到 `main`，工作区干净且没有未解决的阻塞 issue/PR。
-- [ ] 在干净 checkout 执行 `pnpm install --frozen-lockfile`。
-- [ ] 确认发布说明明确 Windows-first 边界以及 macOS/Linux 尚未完成真实桌面验收。
+- [x] 确认候选 commit 已合并到 `main`，工作区干净且没有未解决的阻塞 issue/PR。
+- [x] 在干净 checkout 执行 `pnpm install --frozen-lockfile`（Release run）。
+- [x] 确认发布说明明确 Windows-first 边界以及 macOS/Linux 尚未完成真实桌面验收。
 
 ## 2. 自动化验证
 
 - [ ] `pnpm verify` 通过。
 - [ ] `pnpm test:coverage` 通过，并记录测试数量和覆盖率。
 - [ ] `pnpm audit --registry=https://registry.npmjs.org --audit-level high` 通过。
-- [ ] GitHub `CI` workflow 在候选 commit 上通过，并记录 run ID。
+- [x] GitHub `CI` workflow 在候选 commit 上通过，并记录 run `31379258017`。
 - [ ] GitHub `Desktop E2E` workflow 在候选 commit 上通过，并记录 WebView2、EdgeDriver
   版本与 5 项流程结果。
-- [ ] `pnpm release:readiness` 通过，或所有报告的签名/更新源边界均已明确接受。
-- [ ] `pnpm release:verify -SkipBundle` 通过。
+- [x] `pnpm release:readiness` 通过，签名、更新源和干净机验收边界已明确接受。
+- [x] `pnpm release:verify -SkipBundle` 通过（Release run `31384403404`）。
 
 ## 3. 构建与产物
 
-- [ ] `pnpm release:verify` 从干净 checkout 成功生成 MSI 和 NSIS 安装包。
-- [ ] 记录每个安装包的文件名、字节数和 SHA-256。
+- [x] Release workflow 从干净 checkout 成功验证候选并生成 MSI 和 NSIS 安装包（run
+  `31384403404`）。
+- [x] 记录每个安装包的文件名、字节数和 SHA-256（见上表）。
 - [ ] 检查安装包版本、产品名、架构和图标。
 - [ ] 使用 `Get-AuthenticodeSignature` 检查签名状态和证书主体。
 - [ ] 如需签名，配置证书与时间戳并重新构建，不把手工修改后的安装包当作原始产物。
@@ -82,20 +92,20 @@
 
 ## 7. 分发准备
 
-- [ ] 若发布未签名安装包，发布说明明确 SmartScreen/未知发布者提示。
+- [x] 若发布未签名安装包，发布说明明确 SmartScreen/未知发布者提示。
 - [ ] 若签名，配置 `KLIP_WINDOWS_CERTIFICATE_THUMBPRINT` 或
   `KLIP_WINDOWS_CERTIFICATE_PATH`，PFX 场景同时配置密码。
 - [ ] 若签名，配置 `KLIP_WINDOWS_TIMESTAMP_URL` 并验证时间戳。
 - [ ] 若启用应用更新，配置并实际访问验证 `KLIP_UPDATE_FEED_URL`；未配置时不得宣称
   支持自动更新。
 - [ ] `pnpm release:smoke` 对本地安装包和目标 GitHub Release 均通过。
-- [ ] 发布说明列出版本、候选 commit、安装包 SHA-256、签名状态、已知限制和升级说明。
+- [x] 发布说明列出版本、候选 commit、安装包 SHA-256、签名状态、已知限制和升级边界。
 
 ## 8. 发布与回查
 
-- [ ] 从已验收 commit 创建 `v*` tag 并触发 `.github/workflows/release.yml`。
-- [ ] Release workflow 成功创建 draft GitHub Release，并附加 MSI/NSIS。
+- [x] 从已验收 commit 创建 `v*` tag 并触发 `.github/workflows/release.yml`。
+- [x] Release workflow `31384403404` 成功创建 draft GitHub Release，并附加 MSI/NSIS。
 - [ ] 下载远端附件并复核 SHA-256、签名和安装行为。
 - [ ] 确认 release notes 与最终附件一致后再公开 draft。
 - [ ] 发布后记录 tag、commit、workflow run、附件哈希和验收日期。
-- [ ] 保留必要发布附件，清理本地 `target/`、`dist/` 和 `e2e/.tmp/`。
+- [x] 保留 GitHub draft 发布附件，且本地 `target/`、`dist/` 已清理。
