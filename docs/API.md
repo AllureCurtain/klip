@@ -613,7 +613,9 @@ SourceRule[]
 
 #### `create_source_rule` / `update_source_rule`
 
-创建或更新来源忽略规则。Windows 运行时会用前台进程名和窗口标题匹配这些规则；非 Windows 平台当前只应用监听/隐私模式开关，不做来源识别。
+创建或更新来源忽略规则。运行时会匹配当前平台能够提供的应用名和窗口标题：Windows
+提供进程名与窗口标题，macOS 的窗口标题依赖 Accessibility 权限，Linux X11 依赖 EWMH。
+Wayland 或平台接口不可用时来源为空，规则不匹配且捕获继续。
 
 **参数**:
 ```typescript

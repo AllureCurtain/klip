@@ -1,376 +1,155 @@
 # Klip 开发指南
 
+Klip 当前以 Windows 10+ 为主要开发和交付环境。macOS/Linux 可以参与编译和静态验证，
+但尚未完成真实桌面整体验收，不应据此宣称完整跨平台支持。
+
 ## 1. 环境准备
 
-### 1.1 系统要求
+| 工具 | 版本 | 用途 |
+|------|------|------|
+| Node.js | 24.x | 前端工具链 |
+| pnpm | 10.x | 包管理和项目脚本 |
+| Rust | 1.95+ | Tauri 后端 |
+| `tauri-driver` | 当前稳定版 | Windows 桌面 E2E |
+| WebView2 Runtime | 系统已安装版本 | Windows Tauri WebView |
 
-| 工具 | 版本要求 | 说明 |
-|------|----------|------|
-| Node.js | 24.x (LTS) | JavaScript 运行时 |
-| pnpm | 10.x | 包管理器 |
-| Rust | 1.95+ | 后端语言 |
-| Tauri CLI | 2.0 | 桌面框架 |
-
-### 1.2 安装步骤
-
-#### Windows
+安装依赖：
 
 ```powershell
-# 安装 Node.js (推荐使用官方安装包)
-# https://nodejs.org/
-
-# 安装 pnpm
-npm install -g pnpm
-
-# 安装 Rust
-# https://rustup.rs/
-winget install Rustlang.Rustup
-
-# 验证安装
-node --version
-pnpm --version
-rustc --version
+pnpm install --frozen-lockfile
+cargo install tauri-driver --locked
 ```
 
-#### macOS
+`pnpm install` 会通过 `prepare` 安装仓库的 pre-push hook。`pnpm-lock.yaml` 变化后应重新
+执行带 `--frozen-lockfile` 的安装。
 
-```bash
-# 安装 Node.js
-brew install node
+Linux 构建还需要 Tauri 2 的 WebKitGTK、GTK、AppIndicator 等系统依赖；剪贴板和模拟
+粘贴可能依赖 `wl-clipboard`、`xclip`、`xsel`、`xdotool`、`ydotool` 或 `wtype`。Wayland
+合成器可能主动禁止全局快捷键、窗口激活或模拟粘贴。
 
-# 安装 pnpm
-npm install -g pnpm
+## 2. 日常开发
 
-# 安装 Rust
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```powershell
+# Tauri 桌面开发模式
+pnpm tauri:dev
 
-# 验证安装
-node --version
-pnpm --version
-rustc --version
-```
-
-#### Linux
-
-```bash
-# 安装 Node.js
-sudo apt install nodejs npm
-
-# 安装 pnpm
-npm install -g pnpm
-
-# 安装 Rust
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
-# 安装 Tauri 依赖
-sudo apt install libwebkit2gtk-4.1-dev \
-    build-essential \
-    curl \
-    wget \
-    libssl-dev \
-    libgtk-3-dev \
-    libayatana-appindicator3-dev \
-    librsvg2-dev \
-    xclip \
-    xsel \
-    xdotool \
-    wl-clipboard
-
-# Wayland paste automation may also require compositor-compatible tools:
-# sudo apt install wtype ydotool
-
-# 验证安装
-node --version
-pnpm --version
-rustc --version
-```
-
-Linux runtime notes:
-
-- Clipboard text uses `wl-copy`/`wl-paste` on Wayland when available, then `xclip` or `xsel` fallbacks.
-- Paste simulation uses `xdotool` on X11 and tries `ydotool`/`wtype` on Wayland. Some Wayland compositors intentionally block synthetic paste.
-- Global shortcuts depend on desktop environment support. Wayland sessions may not deliver global hotkeys reliably.
-- System tray visibility depends on the desktop shell. KDE/XFCE usually expose tray icons directly; GNOME may require an AppIndicator/status icon extension.
-
----
-
-## 2. 项目结构
-
-```
-klip/
-├── src/                     # React 前端代码
-│   ├── components/          # UI 组件
-│   │   ├── ui/             # Shadcn/ui 基础组件
-│   │   ├── layout/         # 布局组件
-│   │   ├── clipboard/      # 剪贴板相关组件
-│   │   └── settings/       # 设置组件
-│   ├── hooks/              # 自定义 Hooks
-│   ├── stores/             # Zustand 状态管理
-│   ├── lib/                # 工具库
-│   ├── types/              # TypeScript 类型定义
-│   ├── styles/             # 样式文件
-│   ├── App.tsx             # 根组件
-│   └── main.tsx            # 入口文件
-│
-├── src-tauri/              # Rust 后端代码
-│   ├── src/
-│   │   ├── commands/       # Tauri IPC 命令
-│   │   ├── clipboard/      # 剪贴板监听模块
-│   │   ├── database/       # 数据库模块
-│   │   ├── hotkey/         # 快捷键模块
-│   │   ├── tray/           # 系统托盘模块
-│   │   ├── config/         # 配置模块
-│   │   ├── utils/          # 工具函数
-│   │   ├── lib.rs          # 库入口
-│   │   └── main.rs         # 程序入口
-│   ├── icons/              # 应用图标
-│   ├── Cargo.toml          # Rust 依赖配置
-│   └── tauri.conf.json     # Tauri 配置
-│
-├── docs/                   # 文档
-│   ├── PRD.md              # 产品需求文档
-│   ├── ARCHITECTURE.md     # 架构设计
-│   ├── DATABASE.md         # 数据库设计
-│   ├── API.md              # API 文档
-│   └── DEVELOPMENT.md      # 开发指南
-│
-├── tests/                  # 测试文件
-├── e2e/                    # Tauri WebDriver + Selenium 桌面 E2E 测试
-├── scripts/                # 发布验证、E2E runner、Git hooks
-├── package.json            # 前端依赖配置
-├── pnpm-lock.yaml          # 依赖锁定文件
-├── tsconfig.json           # TypeScript 配置
-├── vite.config.ts          # Vite 构建配置
-├── tailwind.config.js      # Tailwind CSS 配置
-├── components.json         # Shadcn/ui 配置
-├── README.md               # 项目说明
-├── LICENSE                 # 许可证
-└── CONTRIBUTING.md         # 贡献指南
-```
-
----
-
-## 3. 开发流程
-
-### 3.1 初始化项目
-
-```bash
-# 克隆项目
-git clone https://github.com/your-repo/klip.git
-cd klip
-
-# 安装前端依赖
-pnpm install
-
-# 初始化 Shadcn/ui
-pnpm dlx shadcn-ui@latest init
-
-# 添加需要的 UI 组件
-pnpm dlx shadcn-ui@latest add button
-pnpm dlx shadcn-ui@latest add input
-pnpm dlx shadcn-ui@latest add scroll-area
-pnpm dlx shadcn-ui@latest add dialog
-```
-
-### 3.2 启动开发服务器
-
-```bash
-# 启动 Tauri 开发模式 (前端 + 后端)
-pnpm tauri dev
-
-# 仅启动前端开发服务器
+# 仅启动 Vite；Tauri IPC 在普通浏览器中不可用
 pnpm dev
 
-# 仅编译后端
-cd src-tauri
-cargo build
-```
+# 前端 lint、测试和构建
+pnpm lint
+pnpm test -- --run
+pnpm build
 
-### 3.3 构建生产版本
-
-```bash
-# 构建所有平台
-pnpm tauri build
-
-# 构建特定平台
-pnpm tauri build --target x86_64-pc-windows-msvc  # Windows
-pnpm tauri build --target universal-apple-darwin  # macOS
-pnpm tauri build --target x86_64-unknown-linux-gnu  # Linux
-```
-
-### 3.4 运行测试
-
-```bash
-# 前端测试
-pnpm test
-
-# Rust 测试
-cd src-tauri
+# Rust 验证
+Push-Location src-tauri
+cargo fmt -- --check
+cargo clippy -- -D warnings
 cargo test
+Pop-Location
+```
 
-# 运行默认本地验证（不含桌面 E2E）
+桌面开发实例应使用独立数据、日志和 HTTP 端口，以免污染日常数据：
+
+```powershell
+$env:KLIP_DATA_DIR = 'C:\tmp\klip-dev\data'
+$env:KLIP_LOG_DIR = 'C:\tmp\klip-dev\logs'
+$env:KLIP_HTTP_PORT = '27718'
+pnpm tauri:dev
+```
+
+| 变量 | 用途 | 默认值 |
+|------|------|--------|
+| `KLIP_DATA_DIR` | SQLite、全文索引和 OCR 模型缓存 | 平台应用数据目录 |
+| `KLIP_LOG_DIR` | 运行日志 | 平台应用日志目录 |
+| `KLIP_HTTP_PORT` | 本地 HTTP API | `27717` |
+
+不要同时运行多个会注册相同全局热键的 Klip 桌面实例。目录和端口隔离无法隔离系统剪贴板、
+全局热键、开机自启或进程内剪贴板抑制。
+
+## 3. 完整验证
+
+默认本地验证：
+
+```powershell
 pnpm verify
+```
 
-# 桌面 E2E：需要 tauri-driver + Microsoft Edge WebDriver
+该命令依次执行 ESLint、Vitest、前端生产构建、Rust 格式检查、Clippy 和 Rust 测试。
+它会重新生成较大的 Cargo `target/`，磁盘空间不足时可以先运行与改动范围对应的检查，
+再依赖 CI 完成全量验证。
+
+Windows 桌面 E2E 需要真实桌面会话、`tauri-driver`，以及与本机 WebView2 Runtime 完全
+匹配的 EdgeDriver。安装脚本会自动识别 WebView2 版本，下载同版本驱动，并校验版本和
+Microsoft Authenticode 签名：
+
+```powershell
+$edgeDriver = ./scripts/install-matching-edgedriver.ps1
+$env:Path = "$(Split-Path $edgeDriver);$env:Path"
 pnpm e2e
 ```
 
-`pnpm e2e` 会启动 `tauri-driver`，使用隔离的 `e2e/.tmp/` 应用数据目录，并覆盖文本复制、搜索、点击条目恢复剪贴板的核心流程。该命令依赖真实桌面会话和系统剪贴板，因此不放进默认 `pnpm verify`。
+`.github/workflows/e2e.yml` 使用同一脚本自动识别 GitHub Windows runner 上的 WebView2，
+不固定浏览器版本。当前 5 项 Selenium 流程覆盖：
 
----
+1. 文本捕获、搜索和点击恢复粘贴。
+2. 筛选后前 9 条可见记录的快捷粘贴。
+3. 自定义标题、备注持久化和活动搜索。
+4. copy、paste 和 plain-text 模式的分离语义。
+5. 含空格及非 ASCII 字符的 Windows 路径打开和定位。
 
-## 4. 代码规范
+E2E 使用 `e2e/.tmp/` 下的隔离数据和日志目录。它依赖真实系统剪贴板和桌面焦点，因此
+不包含在 `pnpm verify` 中。
 
-### 4.1 TypeScript 规范
+## 4. 项目结构
 
-```json
-// .eslintrc.json
-{
-  "extends": [
-    "eslint:recommended",
-    "plugin:@typescript-eslint/recommended",
-    "plugin:react-hooks/recommended"
-  ],
-  "rules": {
-    "no-unused-vars": "error",
-    "prefer-const": "error",
-    "@typescript-eslint/no-explicit-any": "warn"
-  }
-}
+```text
+klip/
+|-- src/                    # React 前端、Zustand stores、typed Tauri wrappers
+|-- src-tauri/src/          # Rust commands、clipboard、database、search、platform adapters
+|-- src-tauri/resources/    # OCR 模型、字典和 ONNX Runtime 资源
+|-- e2e/                    # Selenium 桌面 E2E
+|-- scripts/                # hooks、E2E 和发布验证脚本
+|-- docs/                   # 当前产品和工程文档
+|-- .github/workflows/      # CI、Desktop E2E 和 Release workflows
+|-- package.json
+`-- pnpm-lock.yaml
 ```
 
-**命名规范**:
-- 组件: PascalCase (`ClipboardList.tsx`)
-- 函数/变量: camelCase (`useClipboard`)
-- 常量: UPPER_SNAKE_CASE (`MAX_HISTORY_COUNT`)
-- 文件名: 与组件/函数名一致
+关键入口：
 
-### 4.2 Rust 规范
+- `src/lib/tauri.ts`：前端 IPC 的唯一 typed wrapper 入口。
+- `src-tauri/src/main.rs`：Tauri command 注册和应用启动。
+- `src-tauri/src/database/migrations.rs`：数据库版本迁移；当前 schema 为 v7。
+- `src-tauri/src/config/registry.rs`：运行时配置默认值和校验。
+- `src-tauri/src/clipboard/`：捕获、格式识别、写回、粘贴和抑制。
+- `src-tauri/src/search/`：Tantivy/jieba 索引、健康检查、重建和 SQLite fallback。
 
-```toml
-# Cargo.toml 配置
-[lints.clippy]
-all = "warn"
-pedantic = "warn"
-nursery = "warn"
-```
+## 5. 提交约定
 
-**命名规范**:
-- 结构体/枚举: PascalCase (`ClipboardItem`)
-- 函数/变量: snake_case (`get_clipboard_list`)
-- 常量: UPPER_SNAKE_CASE (`MAX_HISTORY_COUNT`)
-- 模块: snake_case (`clipboard_monitor`)
+提交信息使用 Conventional Commits，例如：
 
-### 4.3 提交规范
-
-使用 Conventional Commits:
-
-```
-<type>: <description>
-
-[optional body]
-```
-
-**类型**:
-- `feat`: 新功能
-- `fix`: Bug 修复
-- `docs`: 文档更新
-- `refactor`: 重构
-- `test`: 测试
-- `chore`: 构建/工具
-
-**示例**:
-```
+```text
 feat: add clipboard history search
-fix: resolve hotkey conflict issue
-docs: update API documentation
+fix: preserve visible items during refresh
+docs: consolidate delivery status
 ```
 
----
+新增 IPC command 时必须同时完成 Rust handler、`main.rs` 注册、`src/lib/tauri.ts` typed
+wrapper 和对应测试。所有保存条目的系统剪贴板写入必须复用 `clipboard/writer.rs`，不要
+在 command 中创建新的 clipboard backend。
 
-## 5. 调试技巧
+## 6. 发布
 
-### 5.1 前端调试
-
-```bash
-# 使用 Chrome DevTools
-# 在 Tauri 开发模式下自动可用
-
-# 添加调试日志
-console.log('Clipboard items:', items);
-
-# 使用 React DevTools
-pnpm add -D react-devtools
-```
-
-### 5.2 后端调试
-
-```rust
-// 使用 tracing 日志
-use tracing::{info, debug, error};
-
-fn handle_clipboard(content: &str) {
-    debug!("Received clipboard content: {}", content);
-    // ...
-    info!("Saved to database");
-}
-
-// 配置日志级别
-tracing_subscriber::fmt()
-    .with_max_level(tracing::Level::DEBUG)
-    .init();
-```
-
-### 5.3 常见问题
-
-| 问题 | 解决方案 |
-|------|----------|
-| 剪贴板监听不工作 | 检查 arboard crate 是否正确安装 |
-| 快捷键冲突 | 检查其他应用是否占用相同快捷键 |
-| 数据库连接失败 | 检查数据目录权限 |
-| 窗口不显示 | 检查 `visible: false` 配置 |
-
----
-
-## 6. 发布流程
-
-### 6.1 版本号规则
-
-使用 Semantic Versioning: `MAJOR.MINOR.PATCH`
-
-- MAJOR: 重大变更
-- MINOR: 新功能
-- PATCH: Bug 修复
-
-### 6.2 发布检查清单
-
-- [ ] 更新版本号 (`package.json`, `Cargo.toml`, `tauri.conf.json`)
-- [ ] 更新 CHANGELOG.md
-- [ ] 运行所有测试
-- [ ] 构建所有平台
-- [ ] 代码签名
-- [ ] 创建 Git tag
-- [ ] 发布到 GitHub Releases
-
-### 6.3 发布命令
-
-```bash
-# 创建 tag
-git tag v0.1.1
-git push origin v0.1.1
-
-# 构建
-pnpm tauri build
-
-# 上传到 GitHub
-gh release create v0.1.1 ./src-tauri/target/release/bundle/*
-```
-
----
+仓库当前没有正在进行的发布，公开版本仍是 `v0.1.2`，代码中的三处构建版本为 `1.0.0`。
+下一版本确定前不要创建 tag 或上传安装包。开始发布时按
+[RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) 从干净 checkout 重新构建和验收；旧构建产物
+已被清理，不能作为当前发布证据。
 
 ## 7. 相关文档
 
-- [产品需求文档](PRD.md)
+- [交付状态](DELIVERY_STATUS.md)
 - [架构设计](ARCHITECTURE.md)
 - [API 文档](API.md)
 - [数据库设计](DATABASE.md)
+- [发布检查清单](RELEASE_CHECKLIST.md)
