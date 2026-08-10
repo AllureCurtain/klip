@@ -1,6 +1,6 @@
 [package]
 name = "klip"
-version = "1.0.0"
+version = "0.2.0"
 description = "A Windows-first local clipboard manager"
 authors = ["Klip Team"]
 edition = "2021"

@@ -1,8 +1,7 @@
 # Klip Windows 发布检查清单
 
-> 当前没有正在进行的发布。公开版本是 `v0.1.2`，`package.json`、
-> `src-tauri/Cargo.toml` 和 `src-tauri/tauri.conf.json` 的构建版本是 `1.0.0`，下一发布
-> 版本尚未决定。
+> 当前发布候选是 `v0.2.0`。这是 `v0.1.2` 之后的功能级 minor release，不代表已经满足
+> `1.0.0` 的签名、升级兼容、跨平台和长期稳定性承诺。
 
 本清单仅在明确启动新发布后使用。此前生成的 MSI、NSIS、`target/` 和 E2E 临时目录已经
 清理，旧文件名、大小与哈希不是当前代码的发布证据，必须从干净 checkout 重新生成。
@@ -20,8 +19,8 @@
 
 ## 1. 启动发布
 
-- [ ] 明确发布负责人、目标版本和发布范围。
-- [ ] 统一 `package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` 与
+- [x] 目标版本确定为 `v0.2.0`，范围为 Windows-first 本地剪贴板核心工作流。
+- [x] 统一 `package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` 与
   `CHANGELOG.md` 中的版本。
 - [ ] 确认候选 commit 已合并到 `main`，工作区干净且没有未解决的阻塞 issue/PR。
 - [ ] 在干净 checkout 执行 `pnpm install --frozen-lockfile`。

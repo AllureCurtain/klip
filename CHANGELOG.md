@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-10
+
 ### Added
 
 - Searchable clipboard annotations with custom titles and notes, inline detail editing, compact list
@@ -91,6 +93,12 @@
 ### Security
 
 - Upgraded Vitest tooling and pinned patched transitive dependencies so `pnpm audit --registry=https://registry.npmjs.org` reports no known vulnerabilities.
+
+### Known Limitations
+
+- Windows installers are not code signed, so Windows may show SmartScreen or unknown publisher warnings.
+- Windows is the only fully validated desktop target; macOS and Linux implementations have not completed real-desktop acceptance.
+- Hosted updates, cloud sync, plugins, accounts, and database encryption migration are not included.
 
 ## [0.1.2] - 2026-05-22
 
