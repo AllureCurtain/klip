@@ -21,15 +21,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - run: pnpm install --frozen-lockfile
       - run: cargo install tauri-driver --locked
-      - name: Add Edge WebDriver to PATH
+      - name: Install EdgeDriver matching WebView2
         shell: pwsh
-        run: |
-          $driver = Get-ChildItem "C:\Program Files (x86)\Microsoft\EdgeWebDriver" -Filter msedgedriver.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $driver) {
-            $driver = Get-ChildItem "C:\SeleniumWebDrivers" -Filter msedgedriver.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-          }
-          if (-not $driver) {
-            throw "msedgedriver.exe was not found on the runner"
-          }
-          $driver.Directory.FullName | Out-File -FilePath $env:GITHUB_PATH -Append
+        run: ./scripts/install-matching-edgedriver.ps1 -AddToGitHubPath
       - run: pnpm e2e

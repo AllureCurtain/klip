@@ -10,7 +10,10 @@ Install the native WebDriver pieces once:
 cargo install tauri-driver --locked
 ```
 
-Install Microsoft Edge WebDriver (`msedgedriver.exe`) and make sure it is available on `PATH`.
+Install the Microsoft Edge WebDriver version matching the installed WebView2 Runtime and make
+sure `msedgedriver.exe` is available on `PATH`. GitHub Actions detects the WebView2 version and
+installs the matching driver with `scripts/install-matching-edgedriver.ps1` instead of relying on
+the runner's bundled Edge browser driver.
 
 ## Linux Setup
 
