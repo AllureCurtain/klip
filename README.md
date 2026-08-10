@@ -192,7 +192,8 @@ Windows 安装资源中，PP-OCRv5 检测/识别模型和字典约 21.5 MB，ONN
 - Node.js 24.x
 - pnpm 10.x
 - Rust 1.95+
-- Windows 上运行桌面 E2E 需要 `tauri-driver` 和 Microsoft Edge WebDriver
+- Windows 上运行桌面 E2E 需要 `tauri-driver`；仓库脚本会安装与 WebView2 匹配且具有
+  有效 Microsoft 签名的 EdgeDriver
 
 常用命令：
 
@@ -242,7 +243,11 @@ pnpm verify
 pnpm e2e
 ```
 
-`pnpm verify` 会执行前端 lint、Vitest、生产构建、Rust 格式检查、Clippy 和 Rust 测试。`pnpm e2e` 会启动 Tauri WebDriver，覆盖复制、搜索、点击条目恢复剪贴板的桌面流程。
+`pnpm verify` 会执行前端 lint、Vitest、生产构建、Rust 格式检查、Clippy 和 Rust 测试。
+运行本地 E2E 前可执行 `scripts/install-matching-edgedriver.ps1`：脚本自动识别 WebView2
+版本，下载同版本 EdgeDriver，并校验版本与 Microsoft Authenticode 签名。Desktop E2E
+workflow 使用同一自动检测流程，不固定 runner 的 WebView2 版本。当前 5 项桌面流程覆盖
+捕获/搜索/粘贴、可见项快捷粘贴、标题备注搜索、copy/paste/plain-text 语义和文件动作。
 
 ## 发布验证
 
@@ -287,6 +292,7 @@ pnpm release:smoke
 | 文档 | 内容 |
 |------|------|
 | [文档索引](docs/INDEX.md) | 推荐阅读顺序和当前项目状态 |
+| [交付状态](docs/DELIVERY_STATUS.md) | 已合并工作、验证证据和明确保留的边界 |
 | [产品需求文档](docs/PRD.md) | MVP 功能范围和验收口径 |
 | [架构设计](docs/ARCHITECTURE.md) | 前端、后端、数据库和 Tauri 模块划分 |
 | [数据库设计](docs/DATABASE.md) | 表结构、迁移和数据恢复策略 |

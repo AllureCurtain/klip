@@ -214,7 +214,9 @@ CREATE INDEX idx_snippets_updated_at ON snippets(updated_at DESC);
 
 ### 2.4 clipboard_source_rules (来源忽略规则表)
 
-存储剪贴板采集来源忽略规则。Windows 运行时会读取前台进程名和窗口标题并匹配规则；非 Windows 平台当前不做来源识别。
+存储剪贴板采集来源忽略规则。Windows 会读取前台进程名和窗口标题；macOS 会读取前台
+应用名，并在 Accessibility 权限允许时读取窗口标题；Linux X11 按 EWMH 信息尽力读取。
+Wayland 或平台接口不可用时来源为空，规则不匹配，也不会阻止正常捕获。
 
 ```sql
 CREATE TABLE clipboard_source_rules (

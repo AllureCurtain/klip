@@ -72,7 +72,7 @@ When a user picks an item, `commands::paste_from_clipboard` delegates to `clipbo
 - `clipboard/format/{text,image,file}.rs` — per-format detection and extraction. `mod.rs` is the format dispatch table.
 - `database/` — `connection.rs` owns the singleton `Database` (a `Mutex<Connection>`) registered as Tauri state. CRUD/query modules are split by domain: `clipboard.rs`, `clipboard_query.rs`, `config.rs`, `productization.rs`, `snippets.rs`, and `data_portability.rs`. Schema is created in `connection.rs::init_schema` with idempotent `CREATE TABLE IF NOT EXISTS` plus migrations gated on `db_version` in `app_config`.
 - `search/` — owns the Tantivy 0.24 index, jieba tokenizer, batched/timed commits, checksum health checks, SQLite rebuilds, and transparent query fallback.
-- `hotkey/manager.rs` — registers `Ctrl+Alt+K` (toggle window) and `Ctrl+1..9` (quick paste) via `tauri-plugin-global-shortcut`. Quick-paste handlers fetch by index from the DB and call into `commands::paste_from_clipboard`.
+- `hotkey/manager.rs` — registers `Ctrl+Alt+K` (toggle window) and `Ctrl+Alt+1..9` (quick paste) via `tauri-plugin-global-shortcut`. Quick-paste handlers resolve IDs from the frontend-synchronized visible-item snapshot, so active search/filter ordering is preserved, and then call into `commands::paste_from_clipboard`.
 - `tray/setup.rs` — system tray icon + menu. Tray clicks toggle the main window.
 - `lib.rs` — exports modules and owns a small piece of cross-cutting state: a **tray-click guard** (`LAST_TRAY_CLICK_MS`, `TRAY_CLICK_GUARD_MS = 300ms`). The window's focus-lost handler in `main.rs` consults this to suppress auto-hide right after a tray click, preventing a race where the click both shows and immediately hides the window. **If you add another mechanism that toggles the window, route it through `notify_tray_click()` or the auto-hide will fight it.**
 
@@ -90,19 +90,21 @@ When a user picks an item, `commands::paste_from_clipboard` delegates to `clipbo
 
 ### Database schema (SQLite, WAL mode)
 
-- `clipboard_items(id, content_type, content, preview, hash UNIQUE, size, metadata, is_favorited, is_sensitive, sensitivity_reason, created_at, last_used_at)` — indexed for recency, content type, favorite, sensitivity, hash, and preview lookups.
+- `clipboard_items(id, content_type, content, preview, hash UNIQUE, size, metadata, is_favorited, is_sensitive, sensitivity_reason, source_application, source_window_title, custom_title, note, created_at, last_used_at)` — the source of truth for saved items, source attribution, and searchable user annotations.
+- `clipboard_formats(item_id, format, content)` — preserves the plain-text, HTML, and RTF representations available for a saved text item.
+- `clipboard_ocr(item_id, status, text, error, updated_at)` — persists offline image OCR state and searchable text.
 - `tags(id, name UNIQUE, color, created_at)` and `clipboard_item_tags(item_id, tag_id)` — many-to-many tagging.
 - `snippets(id, title, content, tag_id, is_favorited, created_at, updated_at)` — reusable text snippets.
 - `clipboard_source_rules(id, match_type, pattern, enabled, created_at, updated_at)` — process/window title capture-ignore rules.
-- `app_config(key PK, value, updated_at)` — defaults seeded from `config/registry.rs` (`db_version=3`, hotkeys, window size, privacy/readiness settings, etc.).
+- `app_config(key PK, value, updated_at)` — defaults seeded from `config/registry.rs` (`db_version=7`, hotkeys, window size, privacy/readiness settings, etc.). Migrations live in `database/migrations.rs`.
 - DB file location: Tauri's `app_data_dir()` + `klip.db` (e.g. `%APPDATA%\klip\klip.db` on Windows).
 - Full-text index location: the same app data directory + `search-index`; SQLite remains the source of truth and can rebuild it.
 
 ### IPC command surface
 
-The full list registered in `main.rs::invoke_handler!`:
+The full list is registered in `src-tauri/src/main.rs:159-213` via `invoke_handler!`:
 
-- Clipboard: `get_clipboard_list`, `get_clipboard_list_filtered`, `search_clipboard`, `search_clipboard_filtered`, `search_clipboard_advanced`, `get_clipboard_by_id`, `delete_clipboard_item`, `delete_clipboard_items`, `toggle_favorite`, `set_favorite_for_items`, `clear_clipboard_history`, `copy_to_clipboard`, `paste_from_clipboard`
+- Clipboard: `get_clipboard_list`, `get_clipboard_list_filtered`, `search_clipboard`, `search_clipboard_filtered`, `search_clipboard_advanced`, `get_clipboard_by_id`, `delete_clipboard_item`, `delete_clipboard_items`, `toggle_favorite`, `update_clipboard_annotations`, `set_favorite_for_items`, `clear_clipboard_history`, `copy_to_clipboard`, `copy_plain_text_to_clipboard`, `paste_from_clipboard`, `paste_plain_text_from_clipboard`, `set_visible_clipboard_items`, `get_clipboard_content_actions`, `execute_clipboard_content_action`
 - Tags/snippets/rules: `list_tags`, `create_tag`, `delete_tag`, `assign_tag_to_item`, `remove_tag_from_item`, `list_snippets`, `search_snippets`, `create_snippet`, `update_snippet`, `delete_snippet`, `list_source_rules`, `create_source_rule`, `update_source_rule`, `set_source_rule_enabled`, `delete_source_rule`
 - Portability/productization: `rescan_sensitive_items`, `export_clipboard_json`, `export_clipboard_csv`, `import_clipboard_json`, `import_clipboard_csv`, `backup_database`, `restore_database`
 - Config: `get_config`, `get_all_config`, `set_config`, `set_config_many`
