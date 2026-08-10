@@ -15,7 +15,7 @@
 <p align="center">
   <a href="https://github.com/AllureCurtain/klip/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/AllureCurtain/klip/actions/workflows/ci.yml/badge.svg"></a>
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
-  <a href="https://github.com/AllureCurtain/klip/releases"><img alt="Version" src="https://img.shields.io/badge/version-0.1.2-2563eb"></a>
+  <a href="https://github.com/AllureCurtain/klip/releases"><img alt="Version" src="https://img.shields.io/badge/version-0.2.0-2563eb"></a>
   <img alt="Platform" src="https://img.shields.io/badge/platform-Windows%20first-0f766e">
   <img alt="Tauri" src="https://img.shields.io/badge/Tauri-2.x-24c8db">
   <img alt="React" src="https://img.shields.io/badge/React-19-61dafb">
@@ -39,6 +39,7 @@ Klip 是一个本地单机剪贴板管理器。系统剪贴板通常只能记住
 | 项目 | 当前状态 |
 |------|----------|
 | 公开版本 | `v0.1.2` |
+| 当前发布候选 | `v0.2.0` |
 | 主要平台 | Windows 10+ |
 | 产品形态 | 本地单机桌面应用 |
 | 默认历史数量 | 100 条，可在设置中调整 |
@@ -131,7 +132,9 @@ Klip 是一个本地单机剪贴板管理器。系统剪贴板通常只能记住
 
 从 [GitHub Releases](https://github.com/AllureCurtain/klip/releases) 下载当前版本的 Windows 安装包。
 
-当前公开版本是 `v0.1.2`。安装包尚未绑定公开代码签名证书，Windows 可能显示 SmartScreen 或未知发布者提示。这是当前发布阶段的已知边界，不代表应用需要联网或登录账号。
+当前公开版本是 `v0.1.2`；`v0.2.0` 已进入发布候选阶段，完成干净 Windows 用户/VM
+安装验收后再公开。安装包尚未绑定公开代码签名证书，Windows 可能显示 SmartScreen 或
+未知发布者提示。这是当前发布阶段的已知边界，不代表应用需要联网或登录账号。
 
 ### macOS / Linux
 

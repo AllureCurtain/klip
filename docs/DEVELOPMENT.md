@@ -141,10 +141,10 @@ wrapper 和对应测试。所有保存条目的系统剪贴板写入必须复用
 
 ## 6. 发布
 
-仓库当前没有正在进行的发布，公开版本仍是 `v0.1.2`，代码中的三处构建版本为 `1.0.0`。
-下一版本确定前不要创建 tag 或上传安装包。开始发布时按
+当前 Windows 发布系列为 `0.2.x`，`package.json`、`src-tauri/Cargo.toml` 和
+`src-tauri/tauri.conf.json` 必须保持一致。开始补丁发布时按
 [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) 从干净 checkout 重新构建和验收；旧构建产物
-已被清理，不能作为当前发布证据。
+不能作为新发布证据。
 
 ## 7. 相关文档
 
