@@ -36,6 +36,8 @@
     },
     "clearHistory": "清空历史",
     "settings": "设置",
+    "shortcutDisabled": "未启用",
+    "openShortcutSettings": "显示或隐藏 Klip 快捷键：{{shortcut}}。打开快捷键设置",
     "selectedCount": "已选择 {{count}} 项",
     "selectItemsHint": "选择要批量处理的条目",
     "favoriteSelected": "收藏已选",

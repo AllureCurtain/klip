@@ -142,7 +142,7 @@ pub struct ImageMedia {
     pub thumbnail_ref: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ShortcutBinding {
     pub action_id: String,

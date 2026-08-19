@@ -127,6 +127,25 @@ function sendWindowsQuickPaste(index) {
   );
 }
 
+async function enableQuickPasteShortcut(driver, index) {
+  const result = await driver.executeAsyncScript(`
+const index = arguments[0];
+const done = arguments[arguments.length - 1];
+const invoke = window.__TAURI_INTERNALS__.invoke;
+invoke('get_shortcut_bindings')
+  .then((bindings) => invoke('set_shortcut_bindings', {
+    bindings: bindings.map((binding) => binding.actionId === 'quick_paste_' + index
+      ? { ...binding, enabled: true }
+      : binding),
+  }))
+  .then(() => done({ ok: true }))
+  .catch((error) => done({ error: String(error) }));
+`, index);
+  if (result.error) {
+    throw new Error(`Failed to enable quick-paste shortcut ${index}: ${result.error}`);
+  }
+}
+
 async function isKlipWindowVisible(driver) {
   const result = await driver.executeAsyncScript(`
 const done = arguments[arguments.length - 1];
@@ -425,6 +444,7 @@ describe('clipboard capture, search, and paste flow', function () {
     if (process.platform !== 'win32') this.skip();
 
     assert.ok(capturedText, 'The capture flow must provide a quick-paste candidate');
+    await enableQuickPasteShortcut(driver, 1);
     const sentinelText = `sentinel-${Date.now()}`;
 
     await showKlipWindow();

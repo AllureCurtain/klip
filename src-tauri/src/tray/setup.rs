@@ -1,7 +1,7 @@
 use tauri::{
     menu::{CheckMenuItem, Menu, MenuItem},
     tray::{TrayIcon, TrayIconBuilder},
-    AppHandle, Manager,
+    AppHandle, Listener, Manager,
 };
 
 use crate::config::registry;
@@ -9,6 +9,7 @@ use crate::AppError;
 
 struct TrayLabels {
     show: &'static str,
+    shortcut_disabled: &'static str,
     autostart: &'static str,
     settings: &'static str,
     about: &'static str,
@@ -18,20 +19,33 @@ struct TrayLabels {
 fn tray_labels(language: &str) -> TrayLabels {
     match language {
         "en-US" => TrayLabels {
-            show: "Show window",
+            show: "Show / hide Klip",
+            shortcut_disabled: "Not enabled",
             autostart: "Launch at startup",
             settings: "Settings",
             about: "About",
             quit: "Quit",
         },
         _ => TrayLabels {
-            show: "显示窗口",
+            show: "显示 / 隐藏 Klip",
+            shortcut_disabled: "未启用",
             autostart: "开机自启",
             settings: "设置",
             about: "关于",
             quit: "退出",
         },
     }
+}
+
+fn show_menu_label(
+    labels: &TrayLabels,
+    binding: Option<&crate::database::ShortcutBinding>,
+) -> String {
+    let shortcut = binding
+        .filter(|binding| binding.enabled)
+        .and_then(|binding| binding.accelerator.as_deref())
+        .unwrap_or(labels.shortcut_disabled);
+    format!("{} ({})", labels.show, shortcut)
 }
 
 pub fn setup_tray(app_handle: &AppHandle) -> Result<TrayIcon, AppError> {
@@ -49,9 +63,19 @@ pub fn setup_tray(app_handle: &AppHandle) -> Result<TrayIcon, AppError> {
         .flatten()
         .unwrap_or_else(|| "zh-CN".to_string());
     let labels = tray_labels(&language);
+    let bindings = crate::database::productization::list_shortcut_bindings(&db).unwrap_or_default();
+    let toggle_binding = bindings
+        .iter()
+        .find(|binding| binding.action_id == "toggle_window");
 
-    let show_item = MenuItem::with_id(app_handle, "show", labels.show, true, None::<&str>)
-        .map_err(|e| AppError::System(format!("Failed to create show item: {}", e)))?;
+    let show_item = MenuItem::with_id(
+        app_handle,
+        "show",
+        show_menu_label(&labels, toggle_binding),
+        true,
+        None::<&str>,
+    )
+    .map_err(|e| AppError::System(format!("Failed to create show item: {}", e)))?;
 
     let autostart_item = CheckMenuItem::with_id(
         app_handle,
@@ -158,6 +182,51 @@ pub fn setup_tray(app_handle: &AppHandle) -> Result<TrayIcon, AppError> {
         .build(app_handle)
         .map_err(|e| AppError::System(format!("Failed to build tray: {}", e)))?;
 
+    let show_item_for_updates = show_item.clone();
+    let language_for_updates = language.clone();
+    app_handle.listen(
+        "shortcut-registration-changed",
+        move |event| match serde_json::from_str::<Vec<crate::database::ShortcutBinding>>(
+            event.payload(),
+        ) {
+            Ok(bindings) => {
+                let labels = tray_labels(&language_for_updates);
+                let toggle = bindings
+                    .iter()
+                    .find(|binding| binding.action_id == "toggle_window");
+                if let Err(error) = show_item_for_updates.set_text(show_menu_label(&labels, toggle))
+                {
+                    tracing::warn!("Failed to refresh tray shortcut label: {}", error);
+                }
+            }
+            Err(error) => tracing::warn!("Failed to parse shortcut update for tray: {}", error),
+        },
+    );
+
     tracing::info!("Tray icon created successfully");
     Ok(tray)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tray_label_shows_enabled_shortcut_or_disabled_state() {
+        let labels = tray_labels("en-US");
+        let enabled = crate::database::ShortcutBinding {
+            action_id: "toggle_window".into(),
+            enabled: true,
+            accelerator: Some("Ctrl+Win+K".into()),
+            updated_at: 0,
+        };
+        assert_eq!(
+            show_menu_label(&labels, Some(&enabled)),
+            "Show / hide Klip (Ctrl+Win+K)"
+        );
+        assert_eq!(
+            show_menu_label(&labels, None),
+            "Show / hide Klip (Not enabled)"
+        );
+    }
 }

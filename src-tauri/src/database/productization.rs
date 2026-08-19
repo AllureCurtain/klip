@@ -110,6 +110,39 @@ pub fn replace_shortcut_bindings(
     Ok(())
 }
 
+#[cfg(test)]
+mod shortcut_tests {
+    use super::*;
+    use rusqlite::Connection;
+
+    fn test_db() -> Database {
+        let db = Database::from_conn(Connection::open_in_memory().unwrap());
+        db.init_schema().unwrap();
+        db
+    }
+
+    #[test]
+    fn shortcut_replacement_rolls_back_the_full_set_on_database_failure() {
+        let db = test_db();
+        let before = list_shortcut_bindings(&db).unwrap();
+        {
+            let conn = db.get_connection().unwrap();
+            conn.execute_batch(
+                "CREATE TRIGGER fail_shortcut_replace
+                 BEFORE INSERT ON shortcut_bindings
+                 WHEN NEW.action_id = 'quick_paste_5'
+                 BEGIN SELECT RAISE(FAIL, 'injected shortcut write failure'); END;",
+            )
+            .unwrap();
+        }
+        let mut changed = before.clone();
+        changed[0].accelerator = Some("Ctrl+Win+K".into());
+
+        assert!(replace_shortcut_bindings(&db, &changed).is_err());
+        assert_eq!(list_shortcut_bindings(&db).unwrap(), before);
+    }
+}
+
 pub fn get_window_state(db: &Database, label: &str) -> Result<Option<WindowState>, AppError> {
     let conn = db.get_connection()?;
     Ok(conn.query_row(

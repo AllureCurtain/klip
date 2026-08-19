@@ -6,6 +6,7 @@ import {
   Filter,
   Image,
   FolderOpen,
+  Keyboard,
 } from 'lucide-react';
 import { Input, Button } from '@/components/ui';
 import {
@@ -21,7 +22,7 @@ import { cn } from '@/lib/utils';
 import { HeaderMoreMenu } from './HeaderMoreMenu';
 import { SelectionToolbar } from './SelectionToolbar';
 import { CaptureStatusBar } from './CaptureStatusBar';
-import type { ClipboardQueryOptions, Tag } from '@/types';
+import type { ClipboardQueryOptions, ShortcutBinding, Tag } from '@/types';
 import { CLIPBOARD_SEARCH_INPUT_ATTRIBUTE } from '@/components/clipboard/clipboardListKeyboard';
 
 export type HeaderAdvancedFilters = Pick<
@@ -44,6 +45,8 @@ interface HeaderProps {
   selectionMode?: boolean;
   onSelectionModeChange?: (enabled: boolean) => void;
   onSettingsOpen: () => void;
+  onShortcutsOpen?: () => void;
+  toggleShortcut?: ShortcutBinding | null;
 }
 
 export function Header({
@@ -66,6 +69,8 @@ export function Header({
   selectionMode = false,
   onSelectionModeChange = () => undefined,
   onSettingsOpen,
+  onShortcutsOpen = onSettingsOpen,
+  toggleShortcut = null,
 }: HeaderProps) {
   const { t } = useTranslation();
   const { resolvedTheme, setTheme } = useThemeStore();
@@ -148,6 +153,24 @@ export function Header({
               className="h-7 pl-8 pr-3 text-xs bg-transparent border-[var(--glass-border)] placeholder:text-muted-foreground/50"
             />
           </div>
+          <button
+            type="button"
+            className="flex h-7 max-w-[156px] min-w-0 shrink items-center gap-1.5 rounded-md border border-[var(--glass-border)] px-2 text-[10px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            onClick={onShortcutsOpen}
+            aria-label={t('header.openShortcutSettings', {
+              shortcut: toggleShortcut?.enabled ? toggleShortcut.accelerator : t('header.shortcutDisabled'),
+            })}
+            title={t('header.openShortcutSettings', {
+              shortcut: toggleShortcut?.enabled ? toggleShortcut.accelerator : t('header.shortcutDisabled'),
+            })}
+          >
+            <Keyboard className="size-3.5 shrink-0" />
+            <span className="truncate font-mono">
+              {toggleShortcut?.enabled && toggleShortcut.accelerator
+                ? toggleShortcut.accelerator
+                : t('header.shortcutDisabled')}
+            </span>
+          </button>
           <Button
             variant={hasActiveAdvancedFilters(advancedFilters) ? 'secondary' : 'ghost'}
             size="icon"

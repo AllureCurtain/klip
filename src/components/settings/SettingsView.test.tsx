@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SettingsView } from './SettingsView';
 import { useConfigStore } from '@/stores/configStore';
+import { useShortcutStore } from '@/stores/shortcutStore';
 
 const apiMocks = vi.hoisted(() => ({
   configGetAll: vi.fn(),
@@ -10,6 +11,8 @@ const apiMocks = vi.hoisted(() => ({
   systemGetDiagnostics: vi.fn(),
   configSet: vi.fn(),
   configSetMany: vi.fn(),
+  shortcutGet: vi.fn(),
+  shortcutSet: vi.fn(),
 }));
 
 const shellMocks = vi.hoisted(() => ({
@@ -30,6 +33,12 @@ vi.mock('@/lib/tauri', () => ({
     getInfo: apiMocks.systemGetInfo,
     getDiagnostics: apiMocks.systemGetDiagnostics,
     setAutoStart: vi.fn(),
+    beginFocusLossSuppression: vi.fn().mockResolvedValue(undefined),
+    endFocusLossSuppression: vi.fn().mockResolvedValue(undefined),
+  },
+  shortcutApi: {
+    getBindings: apiMocks.shortcutGet,
+    setBindings: apiMocks.shortcutSet,
   },
 }));
 
@@ -61,6 +70,22 @@ vi.mock('react-i18next', () => ({
         'settings.shortcuts.toggleWindowHint': 'Supports Ctrl+Alt+A through Ctrl+Alt+Z',
         'settings.shortcuts.quickPastePrefix': 'Quick paste prefix',
         'settings.shortcuts.quickPasteHint': 'Prefix + number key to quick-paste',
+        'settings.shortcuts.independentTitle': 'Independent actions',
+        'settings.shortcuts.independentHint': 'Each action maps to the visible list.',
+        'settings.shortcuts.enabled': 'enabled',
+        'settings.shortcuts.recording': 'Press a key...',
+        'settings.shortcuts.unset': 'Not set',
+        'settings.shortcuts.clear': 'Clear shortcut',
+        'settings.shortcuts.actions.toggle_window': 'Show / hide Klip',
+        'settings.shortcuts.actions.quick_paste_1': 'Paste visible item 1',
+        'settings.shortcuts.actions.quick_paste_2': 'Paste visible item 2',
+        'settings.shortcuts.actions.quick_paste_3': 'Paste visible item 3',
+        'settings.shortcuts.actions.quick_paste_4': 'Paste visible item 4',
+        'settings.shortcuts.actions.quick_paste_5': 'Paste visible item 5',
+        'settings.shortcuts.actions.quick_paste_6': 'Paste visible item 6',
+        'settings.shortcuts.actions.quick_paste_7': 'Paste visible item 7',
+        'settings.shortcuts.actions.quick_paste_8': 'Paste visible item 8',
+        'settings.shortcuts.actions.quick_paste_9': 'Paste visible item 9',
         'settings.general.historyCount': 'History size',
         'settings.general.maxItems': 'Max items',
         'settings.general.windowSize': 'Window size',
@@ -155,6 +180,17 @@ describe('SettingsView', () => {
       hasChanges: false,
     }));
     apiMocks.configGetAll.mockResolvedValue({});
+    apiMocks.shortcutGet.mockResolvedValue([
+      { actionId: 'toggle_window', enabled: true, accelerator: 'Ctrl+Alt+K', updatedAt: 1 },
+      ...Array.from({ length: 9 }, (_, index) => ({
+        actionId: `quick_paste_${index + 1}`,
+        enabled: false,
+        accelerator: `Ctrl+Alt+${index + 1}`,
+        updatedAt: 1,
+      })),
+    ]);
+    apiMocks.shortcutSet.mockResolvedValue(undefined);
+    useShortcutStore.setState({ bindings: [], committed: [], error: null, loading: false, saving: false, captureAction: null, isDirty: false });
     apiMocks.systemGetInfo.mockResolvedValue({
       platform: 'windows',
       version: '10.0',
@@ -203,7 +239,7 @@ describe('SettingsView', () => {
     expect(apiMocks.systemGetDiagnostics).toHaveBeenCalled();
   });
 
-  it('updates hotkey setters when shortcuts inputs change', async () => {
+  it('records an independent shortcut from KeyboardEvent.code', async () => {
     render(<SettingsView onBack={callbacks.onBack} />);
 
     await act(async () => {
@@ -212,15 +248,12 @@ describe('SettingsView', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: 'Shortcuts' }));
 
-    fireEvent.change(screen.getByLabelText('Toggle window'), {
-      target: { value: 'Ctrl+Alt+Z' },
-    });
-    fireEvent.change(screen.getByLabelText('Quick paste prefix'), {
-      target: { value: 'Ctrl+Alt' },
-    });
+    const recorder = screen.getByRole('button', { name: 'Show / hide Klip' });
+    fireEvent.click(recorder);
+    fireEvent.keyDown(recorder, { code: 'KeyZ', key: 'z', ctrlKey: true, altKey: true });
 
-    expect(useConfigStore.getState().config.hotkey_toggle_window).toBe('Ctrl+Alt+Z');
-    expect(useConfigStore.getState().config.hotkey_quick_paste_prefix).toBe('Ctrl+Alt');
+    expect(useShortcutStore.getState().bindings[0].accelerator).toBe('Ctrl+Alt+Z');
+    expect(useShortcutStore.getState().isDirty).toBe(true);
   });
 
   it('saves edits through the store when save is clicked', async () => {
@@ -233,9 +266,9 @@ describe('SettingsView', () => {
     });
 
     fireEvent.click(screen.getByRole('tab', { name: 'Shortcuts' }));
-    fireEvent.change(screen.getByLabelText('Toggle window'), {
-      target: { value: 'Ctrl+Alt+Z' },
-    });
+    const recorder = screen.getByRole('button', { name: 'Show / hide Klip' });
+    fireEvent.click(recorder);
+    fireEvent.keyDown(recorder, { code: 'KeyZ', key: 'z', ctrlKey: true, altKey: true });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     await act(async () => {
@@ -243,18 +276,18 @@ describe('SettingsView', () => {
       await Promise.resolve();
     });
 
-    expect(apiMocks.configSetMany).toHaveBeenCalledWith(
-      expect.arrayContaining([
-        ['hotkey_toggle_window', 'Ctrl+Alt+Z'],
-        ['hotkey_quick_paste_prefix', 'Ctrl+Alt'],
-      ])
+    expect(apiMocks.shortcutSet).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.objectContaining({ actionId: 'toggle_window', accelerator: 'Ctrl+Alt+Z' })])
+    );
+    expect(apiMocks.configSetMany.mock.calls[0][0]).not.toEqual(
+      expect.arrayContaining([expect.arrayContaining(['hotkey_toggle_window'])])
     );
     expect(apiMocks.configSet).not.toHaveBeenCalled();
     expect(callbacks.onBack).toHaveBeenCalled();
   });
 
   it('keeps settings open and shows the save error when saving fails', async () => {
-    apiMocks.configSetMany.mockRejectedValue(new Error('Invalid hotkey'));
+    apiMocks.shortcutSet.mockRejectedValue(new Error('Shortcut is occupied by another program'));
 
     render(<SettingsView onBack={callbacks.onBack} />);
 
@@ -263,9 +296,9 @@ describe('SettingsView', () => {
     });
 
     fireEvent.click(screen.getByRole('tab', { name: 'Shortcuts' }));
-    fireEvent.change(screen.getByLabelText('Toggle window'), {
-      target: { value: 'Ctrl+Alt+?' },
-    });
+    const recorder = screen.getByRole('button', { name: 'Show / hide Klip' });
+    fireEvent.click(recorder);
+    fireEvent.keyDown(recorder, { code: 'KeyZ', key: 'z', ctrlKey: true, altKey: true });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     await act(async () => {
@@ -274,7 +307,7 @@ describe('SettingsView', () => {
     });
 
     expect(callbacks.onBack).not.toHaveBeenCalled();
-    expect(screen.getByText('Invalid hotkey')).toBeTruthy();
+    expect(screen.getByText('Shortcut is occupied by another program')).toBeTruthy();
   });
 
   it('uses the packaged window minimums for size inputs', async () => {
@@ -333,7 +366,7 @@ describe('SettingsView', () => {
     expect(screen.getByRole('switch', { name: 'Close to tray' })).toBeTruthy();
   });
 
-  it('uses constrained shortcut selectors instead of free-form text inputs', async () => {
+  it('uses the ten-action recorder without legacy shortcut selectors', async () => {
     render(<SettingsView onBack={callbacks.onBack} />);
 
     await act(async () => {
@@ -342,12 +375,11 @@ describe('SettingsView', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: 'Shortcuts' }));
 
-    const toggleSelect = screen.getByLabelText('Toggle window');
-    const prefixSelect = screen.getByLabelText('Quick paste prefix');
-
-    expect(toggleSelect.tagName).toBe('SELECT');
-    expect(prefixSelect.tagName).toBe('SELECT');
-    expect(screen.queryByDisplayValue('Ctrl+Shift')).toBeNull();
+    expect(screen.getAllByRole('switch')).toHaveLength(10);
+    expect(screen.getByRole('button', { name: 'Show / hide Klip' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Paste visible item 9' })).toBeTruthy();
+    expect(screen.queryByLabelText('Toggle window')).toBeNull();
+    expect(screen.queryByLabelText('Quick paste prefix')).toBeNull();
   });
 
   it('exposes settings navigation as tabs for assistive technology', async () => {

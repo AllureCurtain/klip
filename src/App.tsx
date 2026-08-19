@@ -24,6 +24,7 @@ import { setLanguage, type SupportedLanguage, SUPPORTED_LANGUAGES } from '@/i18n
 import { CONFIG_KEYS } from '@/stores/configSchema';
 import type { ClipboardItem, ClipboardQueryOptions } from './types';
 import { useThemeStore } from './stores/themeStore';
+import { useShortcutStore } from './stores/shortcutStore';
 
 const DEFAULT_SEARCH_DEBOUNCE_MS = 150;
 
@@ -68,6 +69,9 @@ function App() {
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('general');
   const fetchProductivity = useProductivityStore((state) => state.fetchProductivity);
   const hydrateTheme = useThemeStore((state) => state.hydrate);
+  const shortcutBindings = useShortcutStore((state) => state.bindings);
+  const fetchShortcuts = useShortcutStore((state) => state.fetch);
+  const toggleShortcut = shortcutBindings.find((binding) => binding.actionId === 'toggle_window') ?? null;
   const queryOptions = useMemo<ClipboardQueryOptions>(
     () => ({
       contentType: contentType as 'text' | 'image' | 'file' | null,
@@ -94,6 +98,7 @@ function App() {
     fetchTags();
     fetchProductivity();
     void hydrateTheme();
+    void fetchShortcuts();
 
     configApi.get(CONFIG_KEYS.searchDebounceMs).then((value) => {
       if (value) {
@@ -146,7 +151,7 @@ function App() {
       unlistenSettingsPromise.then((fn) => fn());
       unlistenAboutPromise.then((fn) => fn());
     };
-  }, [fetchItems, fetchProductivity, fetchTags, hydrateTheme, setItems]);
+  }, [fetchItems, fetchProductivity, fetchShortcuts, fetchTags, hydrateTheme, setItems]);
 
   useEffect(() => {
     const visibleIds =
@@ -258,6 +263,11 @@ function App() {
           setSettingsInitialTab('general');
           setView('settings');
         }}
+        onShortcutsOpen={() => {
+          setSettingsInitialTab('shortcuts');
+          setView('settings');
+        }}
+        toggleShortcut={toggleShortcut}
       />
       <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {loading && (

@@ -86,6 +86,27 @@ mod tests {
         assert!(parse_accelerator("Ctrl+F12").is_err());
         assert!(parse_accelerator("K").is_err());
     }
+
+    #[test]
+    fn command_normalization_returns_canonical_storage_strings() {
+        let bindings = crate::database::productization::SHORTCUT_ACTIONS
+            .iter()
+            .map(|action_id| crate::database::ShortcutBinding {
+                action_id: (*action_id).to_string(),
+                enabled: *action_id == "toggle_window",
+                accelerator: (*action_id == "toggle_window")
+                    .then(|| "win+ctrl+pagedown".to_string()),
+                updated_at: 0,
+            })
+            .collect::<Vec<_>>();
+
+        let normalized = normalize_bindings_for_command(&bindings).unwrap();
+
+        assert_eq!(
+            normalized[0].accelerator.as_deref(),
+            Some("Ctrl+Win+PageDown")
+        );
+    }
 }
 
 pub fn register_hotkeys(app_handle: &AppHandle) -> Result<(), AppError> {
@@ -140,10 +161,15 @@ pub fn apply_bindings(
     let mut registered = Vec::new();
     for (action_id, shortcut) in changed_new {
         if let Err(error) = register_action_shortcut(app_handle, &action_id, shortcut) {
+            let mut rollback_errors = Vec::new();
             for (_, registered_shortcut) in &registered {
-                let _ = global.unregister(*registered_shortcut);
+                if let Err(unregister_error) = global.unregister(*registered_shortcut) {
+                    rollback_errors.push(format!(
+                        "new registration {registered_shortcut:?}: {unregister_error}"
+                    ));
+                }
             }
-            let rollback_errors = restore_shortcuts(app_handle, &removed);
+            rollback_errors.extend(restore_shortcuts(app_handle, &removed));
             return Err(AppError::Hotkey(rollback_message(
                 format!("failed to register shortcut for {action_id}: {error}"),
                 rollback_errors,
@@ -169,6 +195,10 @@ fn register_action_shortcut(
         .global_shortcut()
         .on_shortcut(shortcut, move |_app, _shortcut, event| {
             if event.state != ShortcutState::Pressed {
+                return;
+            }
+            if crate::window::controller::is_focus_loss_suppressed() {
+                tracing::debug!("Ignoring owned shortcut during an interactive capture flow");
                 return;
             }
             match action_id.as_str() {
@@ -249,7 +279,9 @@ fn validate_bindings(
                     normalized
                 )));
             }
-            parsed.push((binding.clone(), shortcut));
+            let mut normalized_binding = binding.clone();
+            normalized_binding.accelerator = Some(normalized);
+            parsed.push((normalized_binding, shortcut));
         } else if binding.enabled {
             return Err(AppError::Hotkey(format!(
                 "shortcut {} is enabled without a key",
@@ -260,10 +292,11 @@ fn validate_bindings(
     Ok(parsed)
 }
 
-pub fn validate_bindings_for_command(
+pub fn normalize_bindings_for_command(
     bindings: &[crate::database::types::ShortcutBinding],
-) -> Result<(), AppError> {
-    validate_bindings(bindings).map(|_| ())
+) -> Result<Vec<crate::database::types::ShortcutBinding>, AppError> {
+    validate_bindings(bindings)
+        .map(|parsed| parsed.into_iter().map(|(binding, _)| binding).collect())
 }
 
 pub fn parse_accelerator(raw: &str) -> Result<(String, Shortcut), AppError> {
@@ -357,21 +390,21 @@ fn normalize_key(key: &str) -> Result<String, AppError> {
     if key.eq_ignore_ascii_case("space") {
         return Ok("Space".into());
     }
-    if matches!(
-        key.to_ascii_lowercase().as_str(),
-        "left"
-            | "right"
-            | "up"
-            | "down"
-            | "home"
-            | "end"
-            | "pageup"
-            | "pagedown"
-            | "insert"
-            | "delete"
-    ) {
-        let mut chars = key.chars();
-        return Ok(chars.next().unwrap().to_ascii_uppercase().to_string() + chars.as_str());
+    let named_key = match key.to_ascii_lowercase().as_str() {
+        "left" => Some("Left"),
+        "right" => Some("Right"),
+        "up" => Some("Up"),
+        "down" => Some("Down"),
+        "home" => Some("Home"),
+        "end" => Some("End"),
+        "pageup" => Some("PageUp"),
+        "pagedown" => Some("PageDown"),
+        "insert" => Some("Insert"),
+        "delete" => Some("Delete"),
+        _ => None,
+    };
+    if let Some(named_key) = named_key {
+        return Ok(named_key.into());
     }
     if key.len() >= 2
         && key[..1].eq_ignore_ascii_case("f")

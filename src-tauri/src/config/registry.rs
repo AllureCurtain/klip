@@ -95,13 +95,13 @@ pub const CONFIG_REGISTRY: &[ConfigDescriptor] = &[
         key: KEY_HOTKEY_TOGGLE_WINDOW,
         default_value: DEFAULT_TOGGLE_HOTKEY,
         kind: ConfigValueKind::String,
-        effect: RuntimeEffect::HotkeyReload,
+        effect: RuntimeEffect::None,
     },
     ConfigDescriptor {
         key: KEY_HOTKEY_QUICK_PASTE_PREFIX,
         default_value: DEFAULT_QUICK_PASTE_PREFIX,
         kind: ConfigValueKind::String,
-        effect: RuntimeEffect::HotkeyReload,
+        effect: RuntimeEffect::None,
     },
     ConfigDescriptor {
         key: KEY_AUTO_START,

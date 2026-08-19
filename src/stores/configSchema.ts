@@ -118,8 +118,8 @@ function sensitiveCapturePolicyDescriptor(): ConfigDescriptor {
 
 export const CONFIG_SCHEMA = [
   numberDescriptor(CONFIG_KEYS.maxHistoryCount, MAX_HISTORY_COUNT),
-  stringDescriptor(CONFIG_KEYS.hotkeyToggleWindow, 'Ctrl+Alt+K'),
-  stringDescriptor(CONFIG_KEYS.hotkeyQuickPastePrefix, 'Ctrl+Alt'),
+  stringDescriptor(CONFIG_KEYS.hotkeyToggleWindow, 'Ctrl+Alt+K', false),
+  stringDescriptor(CONFIG_KEYS.hotkeyQuickPastePrefix, 'Ctrl+Alt', false),
   booleanDescriptor(CONFIG_KEYS.autoStart, false),
   booleanDescriptor(CONFIG_KEYS.closeToTray, true),
   booleanDescriptor(CONFIG_KEYS.hideOnFocusLoss, true),

@@ -29,14 +29,18 @@ pub fn set_shortcut_bindings(
     db: State<'_, database::Database>,
     bindings: Vec<database::ShortcutBinding>,
 ) -> Result<(), AppError> {
-    crate::hotkey::manager::validate_bindings_for_command(&bindings)?;
+    let bindings = crate::hotkey::manager::normalize_bindings_for_command(&bindings)?;
     let old = database::productization::list_shortcut_bindings(&db)?;
     crate::hotkey::manager::apply_bindings(&app, &bindings)?;
     if let Err(error) = database::productization::replace_shortcut_bindings(&db, &bindings) {
-        let _ = crate::hotkey::manager::apply_bindings(&app, &old);
+        let rollback = crate::hotkey::manager::apply_bindings(&app, &old);
+        let detail = rollback
+            .err()
+            .map(|rollback_error| format!("; runtime rollback failed: {rollback_error}"))
+            .unwrap_or_default();
         return Err(AppError::Database(format!(
-            "failed to persist shortcut bindings: {}",
-            error
+            "failed to persist shortcut bindings: {}{}",
+            error, detail
         )));
     }
     let _ = app.emit("shortcut-registration-changed", &bindings);

@@ -36,6 +36,8 @@
     },
     "clearHistory": "Clear history",
     "settings": "Settings",
+    "shortcutDisabled": "Not enabled",
+    "openShortcutSettings": "Show or hide Klip shortcut: {{shortcut}}. Open shortcut settings",
     "selectedCount_one": "{{count}} selected",
     "selectedCount_other": "{{count}} selected",
     "selectItemsHint": "Select items to batch edit",

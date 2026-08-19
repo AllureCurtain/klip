@@ -46,11 +46,6 @@ function codeToAcceleratorKey(code: string): string | null {
   return map[code] ?? null;
 }
 
-const TOGGLE_HOTKEY_OPTIONS = Array.from({ length: 26 }, (_value, index) =>
-  `Ctrl+Alt+${String.fromCharCode(65 + index)}`
-);
-const QUICK_PASTE_PREFIX_OPTIONS = ['Ctrl+Alt'];
-
 interface SettingsViewProps {
   onBack: () => void;
   initialTab?: SettingsTab;
@@ -70,8 +65,6 @@ export function SettingsView({ onBack, initialTab = 'general' }: SettingsViewPro
     fetchSystemInfo,
     fetchDiagnosticsInfo,
     setMaxHistoryCount,
-    setHotkeyToggleWindow,
-    setHotkeyQuickPastePrefix,
     setAutoStart,
     setCloseToTray,
     setHideOnFocusLoss,
@@ -112,15 +105,17 @@ export function SettingsView({ onBack, initialTab = 'general' }: SettingsViewPro
 
   const handleSave = async () => {
     const configSaved = await saveChanges();
-    const shortcutsSaved = shortcutState.bindings.length === 0 || await shortcutState.save();
+    const shortcutsSaved = !shortcutState.isDirty || await shortcutState.save();
     if (configSaved && shortcutsSaved) {
       await theme.hydrate();
-      if (shortcutState.bindings.length === 0) onBack();
+      onBack();
     }
   };
 
   const handleCancel = async () => {
     await resetChanges();
+    shortcutState.reset();
+    await theme.hydrate();
     onBack();
   };
 
@@ -325,52 +320,6 @@ export function SettingsView({ onBack, initialTab = 'general' }: SettingsViewPro
                 {shortcutState.error && <p className="text-[10px] text-destructive">{shortcutState.error}</p>}
               </div>
             )}
-            <div className="space-y-2">
-              <Label htmlFor="hotkey-toggle-window" className="text-xs">{t('settings.shortcuts.toggleWindow')}</Label>
-              <select
-                id="hotkey-toggle-window"
-                value={config.hotkey_toggle_window}
-                onChange={(e) => setHotkeyToggleWindow(e.target.value)}
-                className="h-7 w-full rounded-md border border-input bg-card/60 px-3 font-mono text-xs text-foreground"
-              >
-                {TOGGLE_HOTKEY_OPTIONS.map((hotkey) => (
-                  <option key={hotkey} value={hotkey}>
-                    {hotkey}
-                  </option>
-                ))}
-              </select>
-              <p className="text-[10px] text-muted-foreground">
-                {t('settings.shortcuts.toggleWindowHint')}
-              </p>
-            </div>
-
-            <Separator />
-
-            <div className="space-y-2">
-              <Label htmlFor="hotkey-quick-paste-prefix" className="text-xs">{t('settings.shortcuts.quickPastePrefix')}</Label>
-              <select
-                id="hotkey-quick-paste-prefix"
-                value={config.hotkey_quick_paste_prefix}
-                onChange={(e) => setHotkeyQuickPastePrefix(e.target.value)}
-                className="h-7 w-full rounded-md border border-input bg-card/60 px-3 font-mono text-xs text-foreground"
-              >
-                {QUICK_PASTE_PREFIX_OPTIONS.map((prefix) => (
-                  <option key={prefix} value={prefix}>
-                    {prefix}
-                  </option>
-                ))}
-              </select>
-              <p className="text-[10px] text-muted-foreground">
-                {t('settings.shortcuts.quickPasteHint')}
-              </p>
-              <div className="flex flex-wrap gap-1 mt-1.5">
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
-                  <Badge key={n} variant="outline" className="font-mono text-[10px] py-0">
-                    {config.hotkey_quick_paste_prefix}+{n}
-                  </Badge>
-                ))}
-              </div>
-            </div>
           </div>
         )}
 
@@ -532,7 +481,7 @@ export function SettingsView({ onBack, initialTab = 'general' }: SettingsViewPro
         <Button
           size="sm"
           onClick={handleSave}
-          disabled={loading || !hasChanges}
+          disabled={loading || shortcutState.saving || (!hasChanges && !shortcutState.isDirty)}
           className="h-7 text-xs"
         >
           {loading && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
