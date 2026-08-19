@@ -60,6 +60,15 @@ pub fn copy_to_clipboard(
     result
 }
 
+pub fn copy_image_bytes_to_clipboard(bytes: &[u8], content_hash: &str) -> Result<(), AppError> {
+    suppress::arm(content_hash.to_string());
+    let result = backend::write_image(bytes).map_err(AppError::from);
+    if result.is_err() {
+        suppress::disarm();
+    }
+    result
+}
+
 fn write_text(
     content: &str,
     formats: &[ClipboardFormat],

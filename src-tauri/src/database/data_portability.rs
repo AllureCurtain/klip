@@ -6,6 +6,7 @@ use crate::database::types::{
 use crate::{AppError, Database};
 use rusqlite::{Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 
 const SUPPORTED_EXPORT_VERSION: u32 = 1;
@@ -211,6 +212,7 @@ pub fn import_csv(db: &Database, path: &str) -> Result<ImportSummary, AppError> 
                 .collect(),
             created_at: row.created_at,
             last_used_at: row.last_used_at,
+            media: None,
         });
     }
     import_items(db, items)
@@ -426,6 +428,7 @@ struct BackupLayout {
     has_clipboard_ocr: bool,
     has_clipboard_source: bool,
     has_clipboard_annotations: bool,
+    has_productization_v8: bool,
 }
 
 fn validate_backup_database(path: &Path) -> Result<BackupLayout, AppError> {
@@ -571,11 +574,98 @@ fn validate_backup_database(path: &Path) -> Result<BackupLayout, AppError> {
         )?;
     }
 
+    let v8_tables = [
+        "shortcut_bindings",
+        "window_state",
+        "binary_blobs",
+        "clipboard_item_representations",
+    ];
+    let has_productization_v8 = v8_tables.iter().all(|table| {
+        conn.query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?1",
+            [table],
+            |row| row.get::<_, i64>(0),
+        )
+        .unwrap_or(0)
+            != 0
+    });
+    if backup_version >= 8 && !has_productization_v8 {
+        return Err(AppError::InvalidInput(
+            "backup database is missing v8 productization tables".into(),
+        ));
+    }
+    if has_productization_v8 {
+        require_table_columns(
+            &conn,
+            "shortcut_bindings",
+            &["action_id", "enabled", "accelerator", "updated_at"],
+        )?;
+        require_table_columns(
+            &conn,
+            "window_state",
+            &[
+                "window_label",
+                "width_dip",
+                "height_dip",
+                "x",
+                "y",
+                "monitor_id",
+                "scale_factor",
+                "updated_at",
+            ],
+        )?;
+        require_table_columns(
+            &conn,
+            "binary_blobs",
+            &["sha256", "byte_length", "content", "created_at"],
+        )?;
+        require_table_columns(
+            &conn,
+            "clipboard_item_representations",
+            &[
+                "item_id",
+                "blob_sha256",
+                "role",
+                "format_name",
+                "mime_type",
+                "width",
+                "height",
+                "byte_length",
+                "priority",
+                "metadata",
+            ],
+        )?;
+        let mut stmt = conn
+            .prepare("SELECT sha256, byte_length, content FROM binary_blobs")
+            .map_err(|e| AppError::InvalidInput(format!("invalid backup database: {}", e)))?;
+        let blobs = stmt
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, Vec<u8>>(2)?,
+                ))
+            })
+            .map_err(|e| AppError::InvalidInput(format!("invalid backup database: {}", e)))?;
+        for blob in blobs {
+            let (expected, length, content) = blob
+                .map_err(|e| AppError::InvalidInput(format!("invalid backup database: {}", e)))?;
+            let actual = format!("{:x}", Sha256::digest(&content));
+            if expected != actual || length != content.len() as i64 {
+                return Err(AppError::InvalidInput(format!(
+                    "backup BLOB integrity check failed for {}",
+                    expected
+                )));
+            }
+        }
+    }
+
     Ok(BackupLayout {
         has_clipboard_formats,
         has_clipboard_ocr,
         has_clipboard_source: has_source_application && has_source_window_title,
         has_clipboard_annotations: has_custom_title && has_note,
+        has_productization_v8,
     })
 }
 
@@ -662,9 +752,23 @@ fn restore_from_attached_database(
     } else {
         "NULL, NULL"
     };
+    let v8_restore_sql = if layout.has_productization_v8 {
+        "INSERT INTO binary_blobs (sha256, byte_length, content, created_at) SELECT sha256, byte_length, content, created_at FROM restore_db.binary_blobs;
+         INSERT INTO clipboard_item_representations (item_id, blob_sha256, role, format_name, mime_type, width, height, byte_length, priority, metadata)
+         SELECT item_id, blob_sha256, role, format_name, mime_type, width, height, byte_length, priority, metadata FROM restore_db.clipboard_item_representations;
+         INSERT INTO shortcut_bindings (action_id, enabled, accelerator, updated_at) SELECT action_id, enabled, accelerator, updated_at FROM restore_db.shortcut_bindings;
+         INSERT INTO window_state (window_label, width_dip, height_dip, x, y, monitor_id, scale_factor, updated_at)
+         SELECT window_label, width_dip, height_dip, x, y, monitor_id, scale_factor, updated_at FROM restore_db.window_state;"
+    } else {
+        ""
+    };
     let result = conn.execute_batch(&format!(
         "BEGIN IMMEDIATE;
          DELETE FROM clipboard_item_tags;
+         DELETE FROM clipboard_item_representations;
+         DELETE FROM binary_blobs;
+         DELETE FROM shortcut_bindings;
+         DELETE FROM window_state;
          DELETE FROM tags;
          DELETE FROM clipboard_formats;
          DELETE FROM clipboard_ocr;
@@ -689,6 +793,8 @@ fn restore_from_attached_database(
          {format_restore_sql}
 
          {ocr_restore_sql}
+
+         {v8_restore_sql}
 
          INSERT INTO app_config (key, value, updated_at)
          SELECT key, value, updated_at FROM restore_db.app_config;
@@ -783,12 +889,13 @@ mod tests {
     }
 
     fn insert_image(db: &Database, hash: &str) -> ClipboardItem {
+        let data = include_bytes!("../../tests/fixtures/ocr/chinese-text.png").to_vec();
         let item = NewClipboardItem {
             content_type: ContentType::Image,
-            data: vec![1, 2, 3],
+            size: data.len() as i64,
+            data,
             preview: Some("image fixture".into()),
             hash: hash.into(),
-            size: 3,
             metadata: None,
             formats: Vec::new(),
         };
@@ -1145,7 +1252,7 @@ mod tests {
         let version = crate::database::config::get(&current, "db_version")
             .unwrap()
             .unwrap();
-        assert_eq!(version, "7");
+        assert_eq!(version, "8");
     }
 
     #[test]

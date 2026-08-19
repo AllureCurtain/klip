@@ -23,6 +23,7 @@ import { clipboardItemMatchesNonSearchFilters } from '@/lib/clipboardFilters';
 import { setLanguage, type SupportedLanguage, SUPPORTED_LANGUAGES } from '@/i18n';
 import { CONFIG_KEYS } from '@/stores/configSchema';
 import type { ClipboardItem, ClipboardQueryOptions } from './types';
+import { useThemeStore } from './stores/themeStore';
 
 const DEFAULT_SEARCH_DEBOUNCE_MS = 150;
 
@@ -66,6 +67,7 @@ function App() {
   const [view, setView] = useState<AppView>('clipboard');
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('general');
   const fetchProductivity = useProductivityStore((state) => state.fetchProductivity);
+  const hydrateTheme = useThemeStore((state) => state.hydrate);
   const queryOptions = useMemo<ClipboardQueryOptions>(
     () => ({
       contentType: contentType as 'text' | 'image' | 'file' | null,
@@ -91,6 +93,7 @@ function App() {
     fetchItems();
     fetchTags();
     fetchProductivity();
+    void hydrateTheme();
 
     configApi.get(CONFIG_KEYS.searchDebounceMs).then((value) => {
       if (value) {
@@ -143,7 +146,7 @@ function App() {
       unlistenSettingsPromise.then((fn) => fn());
       unlistenAboutPromise.then((fn) => fn());
     };
-  }, [fetchItems, fetchProductivity, fetchTags, setItems]);
+  }, [fetchItems, fetchProductivity, fetchTags, hydrateTheme, setItems]);
 
   useEffect(() => {
     const visibleIds =

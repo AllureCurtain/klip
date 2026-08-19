@@ -93,13 +93,29 @@ fn copy_loaded_item(
     item: &ClipboardItem,
     mode: ClipboardWriteMode,
 ) -> Result<(), AppError> {
-    crate::clipboard::copy_to_clipboard(
-        &item.content,
-        &item.content_type,
-        item.metadata.as_deref(),
-        &item.formats,
-        mode,
-    )?;
+    if item.content_type == crate::database::ContentType::Image {
+        match crate::database::productization::get_image_representation(db, item.id, None) {
+            Ok(bytes) => {
+                crate::clipboard::writer::copy_image_bytes_to_clipboard(&bytes, &item.hash)?
+            }
+            Err(AppError::NotFound(_)) => crate::clipboard::copy_to_clipboard(
+                &item.content,
+                &item.content_type,
+                item.metadata.as_deref(),
+                &item.formats,
+                mode,
+            )?,
+            Err(error) => return Err(error),
+        }
+    } else {
+        crate::clipboard::copy_to_clipboard(
+            &item.content,
+            &item.content_type,
+            item.metadata.as_deref(),
+            &item.formats,
+            mode,
+        )?;
+    }
     let _ = database::clipboard::touch_last_used(db, item.id);
     Ok(())
 }

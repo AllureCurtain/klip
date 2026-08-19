@@ -16,6 +16,9 @@ import type {
   SourceRuleInput,
   SystemInfo,
   Tag,
+  ShortcutBinding,
+  WindowState,
+  StorageUsage,
 } from '@/types';
 
 // 剪贴板 API
@@ -218,6 +221,18 @@ export const systemApi = {
   getInfo: () => invoke<SystemInfo>('get_system_info'),
 
   getDiagnostics: () => invoke<DiagnosticsInfo>('get_diagnostics_info'),
+  getWindowState: (windowLabel = 'main') => invoke<WindowState | null>('get_window_state', { windowLabel }),
+  resetWindowState: (windowLabel = 'main') => invoke<WindowState>('reset_window_state', { windowLabel }),
+  getStorageUsage: () => invoke<StorageUsage>('get_storage_usage'),
+  getImageRepresentation: (itemId: number, format?: string) => invoke<number[]>('get_image_representation', { itemId, format }),
+  getImageThumbnail: (itemId: number) => invoke<number[]>('get_image_thumbnail', { itemId }),
+  beginFocusLossSuppression: () => invoke<void>('begin_focus_loss_suppression'),
+  endFocusLossSuppression: () => invoke<void>('end_focus_loss_suppression'),
+};
+
+export const shortcutApi = {
+  getBindings: () => invoke<ShortcutBinding[]>('get_shortcut_bindings'),
+  setBindings: (bindings: ShortcutBinding[]) => invoke<void>('set_shortcut_bindings', { bindings }),
 };
 
 // 事件监听
@@ -243,3 +258,9 @@ export const onOpenSettings = (callback: () => void) =>
 
 export const onOpenAbout = (callback: () => void) =>
   listen('open-about', () => callback());
+
+export const onWindowStateChanged = (callback: (state: WindowState) => void) =>
+  listen('window-state-changed', (event) => callback(event.payload as WindowState));
+
+export const onShortcutRegistrationChanged = (callback: (bindings: ShortcutBinding[]) => void) =>
+  listen('shortcut-registration-changed', (event) => callback(event.payload as ShortcutBinding[]));

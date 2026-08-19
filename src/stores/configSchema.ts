@@ -26,6 +26,10 @@ export const CONFIG_KEYS = {
   hotkeyQuickPastePrefix: 'hotkey_quick_paste_prefix',
   autoStart: 'auto_start',
   closeToTray: 'close_to_tray',
+  hideOnFocusLoss: 'hide_on_focus_loss',
+  hideAfterPaste: 'hide_after_paste',
+  showWindowOnStartup: 'show_window_on_startup',
+  alwaysOnTop: 'always_on_top',
   windowWidth: 'window_width',
   windowHeight: 'window_height',
   searchDebounceMs: 'search_debounce_ms',
@@ -40,6 +44,9 @@ export const CONFIG_KEYS = {
   encryptionStatus: 'encryption_status',
   syncFolder: 'sync_folder',
   pluginFolder: 'plugin_folder',
+  themeFamily: 'theme_family',
+  themeMode: 'theme_mode',
+  imageBudgetBytes: 'image_budget_bytes',
 } as const satisfies Record<string, ConfigKey>;
 
 function parseBoolean(value: string | null | undefined, defaultValue: boolean): boolean {
@@ -115,6 +122,10 @@ export const CONFIG_SCHEMA = [
   stringDescriptor(CONFIG_KEYS.hotkeyQuickPastePrefix, 'Ctrl+Alt'),
   booleanDescriptor(CONFIG_KEYS.autoStart, false),
   booleanDescriptor(CONFIG_KEYS.closeToTray, true),
+  booleanDescriptor(CONFIG_KEYS.hideOnFocusLoss, true),
+  booleanDescriptor(CONFIG_KEYS.hideAfterPaste, true),
+  booleanDescriptor(CONFIG_KEYS.showWindowOnStartup, false),
+  booleanDescriptor(CONFIG_KEYS.alwaysOnTop, true),
   numberDescriptor(CONFIG_KEYS.windowWidth, DEFAULT_WINDOW_WIDTH, clampWindowWidth),
   numberDescriptor(CONFIG_KEYS.windowHeight, DEFAULT_WINDOW_HEIGHT, clampWindowHeight),
   numberDescriptor(CONFIG_KEYS.searchDebounceMs, SEARCH_DEBOUNCE_MS),
@@ -129,6 +140,9 @@ export const CONFIG_SCHEMA = [
   stringDescriptor(CONFIG_KEYS.encryptionStatus, 'off'),
   stringDescriptor(CONFIG_KEYS.syncFolder, ''),
   stringDescriptor(CONFIG_KEYS.pluginFolder, ''),
+  stringDescriptor(CONFIG_KEYS.themeFamily, 'brick'),
+  stringDescriptor(CONFIG_KEYS.themeMode, 'system'),
+  numberDescriptor(CONFIG_KEYS.imageBudgetBytes, 2 * 1024 * 1024 * 1024),
 ] as const satisfies readonly ConfigDescriptor[];
 
 export const DEFAULT_CONFIG = CONFIG_SCHEMA.reduce(

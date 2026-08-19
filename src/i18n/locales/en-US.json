@@ -154,6 +154,7 @@
     "back": "Back",
     "tabs": {
       "general": "General",
+      "appearance": "Appearance",
       "shortcuts": "Shortcuts",
       "behavior": "Behavior",
       "data": "Data",
@@ -172,13 +173,49 @@
       "toggleWindow": "Toggle window",
       "toggleWindowHint": "Supports Ctrl+Alt+A through Ctrl+Alt+Z",
       "quickPastePrefix": "Quick paste prefix",
-      "quickPasteHint": "Prefix + number key to quick-paste"
+      "quickPasteHint": "Prefix + number key to quick-paste",
+      "independentTitle": "Independent actions",
+      "independentHint": "Each action is registered separately and maps to the current visible list.",
+      "enabled": "enabled",
+      "recording": "Press a key...",
+      "unset": "Not set",
+      "clear": "Clear shortcut",
+      "actions": {
+        "toggle_window": "Show / hide Klip",
+        "quick_paste_1": "Paste visible item 1",
+        "quick_paste_2": "Paste visible item 2",
+        "quick_paste_3": "Paste visible item 3",
+        "quick_paste_4": "Paste visible item 4",
+        "quick_paste_5": "Paste visible item 5",
+        "quick_paste_6": "Paste visible item 6",
+        "quick_paste_7": "Paste visible item 7",
+        "quick_paste_8": "Paste visible item 8",
+        "quick_paste_9": "Paste visible item 9"
+      }
+    },
+    "appearance": {
+      "family": "Color family",
+      "mode": "Theme mode",
+      "system": "Follow system",
+      "light": "Light",
+      "dark": "Dark",
+      "previewHint": "Theme changes preview immediately and are written only when you save.",
+      "families": { "ember": "Dark amber", "graphite": "Graphite lime", "brick": "Warm brick", "rose": "Rose paper" },
+      "familyHints": { "ember": "Warm, focused", "graphite": "Dense, technical", "brick": "Default", "rose": "Soft, editorial" }
     },
     "behavior": {
       "autoStart": "Launch at startup",
       "autoStartDesc": "Run automatically when the system starts",
       "closeToTray": "Close to tray",
       "closeToTrayDesc": "Hide instead of quitting on close"
+      ,"hideOnFocusLoss": "Hide when focus is lost",
+      "hideOnFocusLossDesc": "Hide Klip after you click another application.",
+      "hideAfterPaste": "Hide after paste",
+      "hideAfterPasteDesc": "Return focus to the previous application after pasting.",
+      "showWindowOnStartup": "Show window on startup",
+      "showWindowOnStartupDesc": "Open Klip when the application starts.",
+      "alwaysOnTop": "Keep window on top",
+      "alwaysOnTopDesc": "Keep the desktop tool above other windows."
     },
     "data": {
       "tags": "Tags and groups",

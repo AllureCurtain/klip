@@ -766,6 +766,12 @@ fn apply_config_values(state: &AppState, entries: Vec<(String, String)>) -> Resu
     {
         apply_runtime_effect(state, RuntimeEffect::HotkeyReload)?;
     }
+    if normalized
+        .iter()
+        .any(|(effect, _, _)| *effect == RuntimeEffect::AlwaysOnTop)
+    {
+        apply_runtime_effect(state, RuntimeEffect::AlwaysOnTop)?;
+    }
     for (_, key, value) in normalized {
         emit_config_changed(state, &key, &value);
     }
@@ -779,6 +785,13 @@ fn apply_runtime_effect(state: &AppState, effect: RuntimeEffect) -> Result<(), A
             #[cfg(not(test))]
             if let Some(app) = &state.app {
                 crate::window::controller::apply_configured_size(app, &state.db)?;
+            }
+            Ok(())
+        }
+        RuntimeEffect::AlwaysOnTop => {
+            #[cfg(not(test))]
+            if let Some(app) = &state.app {
+                crate::window::controller::apply_always_on_top(app, &state.db)?;
             }
             Ok(())
         }

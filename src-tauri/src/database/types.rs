@@ -124,6 +124,53 @@ pub struct ClipboardItem {
     pub tags: Vec<Tag>,
     pub created_at: i64,
     pub last_used_at: i64,
+    #[serde(default)]
+    pub media: Option<ImageMedia>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ImageMedia {
+    pub width: i64,
+    pub height: i64,
+    #[serde(rename = "sizeBytes")]
+    pub size_bytes: i64,
+    #[serde(rename = "originalAvailable")]
+    pub original_available: bool,
+    #[serde(rename = "sourceFormats")]
+    pub source_formats: Vec<String>,
+    #[serde(rename = "thumbnailRef")]
+    pub thumbnail_ref: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ShortcutBinding {
+    pub action_id: String,
+    pub enabled: bool,
+    pub accelerator: Option<String>,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowState {
+    pub window_label: String,
+    pub width_dip: i64,
+    pub height_dip: i64,
+    pub x: Option<i64>,
+    pub y: Option<i64>,
+    pub monitor_id: Option<String>,
+    pub scale_factor: Option<f64>,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StorageUsage {
+    pub used_bytes: i64,
+    pub budget_bytes: Option<i64>,
+    pub image_bytes: i64,
+    pub blob_count: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -1,8 +1,12 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use klip::commands;
-use std::sync::atomic::Ordering;
-use tauri::Manager;
+use std::sync::{
+    atomic::{AtomicU64, Ordering},
+    Arc,
+};
+use std::time::Duration;
+use tauri::{Emitter, Manager};
 use tracing_appender::non_blocking::WorkerGuard;
 
 /// Wrapper so we can `app.manage()` the WorkerGuard. Tauri state requires
@@ -77,7 +81,9 @@ fn main() {
             if let Some(window) = app.get_webview_window("main") {
                 let db = app.state::<klip::database::Database>();
 
-                if let Err(e) = klip::window::controller::apply_configured_size(app.handle(), &db) {
+                if let Err(e) =
+                    klip::window::controller::apply_saved_window_state(app.handle(), &db)
+                {
                     tracing::warn!("Failed to set window size from config: {}", e);
                 } else if let Ok((window_width, window_height)) =
                     klip::window::controller::configured_window_size(&db)
@@ -95,6 +101,9 @@ fn main() {
                 let app_handle = app.handle().clone();
                 let guard_ts = tray_click_guard.clone();
                 let guard_duration = guard_ms;
+                let state_window = window.clone();
+                let state_generation = Arc::new(AtomicU64::new(0));
+                let state_generation_for_event = state_generation.clone();
                 window.on_window_event(move |event| {
                     if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                         let db = app_handle.state::<klip::database::Database>();
@@ -113,14 +122,50 @@ fn main() {
                             );
                             app_handle.exit(0);
                         }
+                    } else if matches!(
+                        event,
+                        tauri::WindowEvent::Resized(_)
+                            | tauri::WindowEvent::Moved(_)
+                            | tauri::WindowEvent::ScaleFactorChanged { .. }
+                    ) {
+                        let generation = state_generation_for_event
+                            .fetch_add(1, Ordering::AcqRel)
+                            .saturating_add(1);
+                        let pending_generation = state_generation_for_event.clone();
+                        let pending_app = app_handle.clone();
+                        let pending_window = state_window.clone();
+                        tauri::async_runtime::spawn(async move {
+                            tokio::time::sleep(Duration::from_millis(500)).await;
+                            if pending_generation.load(Ordering::Acquire) != generation {
+                                return;
+                            }
+                            let db = pending_app.state::<klip::database::Database>();
+                            match klip::window::controller::persist_current_window_state(
+                                &pending_window,
+                                &db,
+                            ) {
+                                Ok(state) => {
+                                    let _ = pending_app.emit("window-state-changed", state);
+                                }
+                                Err(error) => tracing::warn!(
+                                    "Failed to persist debounced window state: {}",
+                                    error
+                                ),
+                            }
+                        });
                     } else if let tauri::WindowEvent::Focused(false) = event {
+                        if klip::window::controller::is_focus_loss_suppressed() {
+                            tracing::debug!("Window focus loss is temporarily suppressed");
+                            return;
+                        }
                         let db = app_handle.state::<klip::database::Database>();
-                        let close_to_tray =
-                            klip::window::controller::close_to_tray_enabled(&db).unwrap_or(true);
+                        let hide_on_focus_loss =
+                            klip::window::controller::hide_on_focus_loss_enabled(&db)
+                                .unwrap_or(true);
 
                         // 如果 close_to_tray 为 false，不自动隐藏窗口
-                        if !close_to_tray {
-                            tracing::debug!("close_to_tray is false, skipping auto-hide");
+                        if !hide_on_focus_loss {
+                            tracing::debug!("hide_on_focus_loss is false, skipping auto-hide");
                             return;
                         }
 
@@ -138,6 +183,22 @@ fn main() {
                     }
                 });
                 tracing::info!("Window focus handler registered");
+
+                let show_on_startup = klip::database::config::get(
+                    &db,
+                    klip::config::registry::KEY_SHOW_WINDOW_ON_STARTUP,
+                )
+                .ok()
+                .flatten()
+                .is_some_and(|value| value == "true");
+                if show_on_startup {
+                    tracing::info!("Showing main window because show_window_on_startup is enabled");
+                    if let Err(error) =
+                        klip::window::controller::show_main_window_and_focus(app.handle())
+                    {
+                        tracing::warn!("Failed to show startup window: {}", error);
+                    }
+                }
 
                 if should_show_window_for_e2e(std::env::var_os("KLIP_E2E_SHOW_WINDOW").as_deref()) {
                     tracing::info!("KLIP_E2E_SHOW_WINDOW is set, showing main window for E2E");
@@ -210,6 +271,15 @@ fn main() {
             commands::is_auto_start_enabled,
             commands::get_system_info,
             commands::get_diagnostics_info,
+            commands::get_shortcut_bindings,
+            commands::set_shortcut_bindings,
+            commands::get_window_state,
+            commands::reset_window_state,
+            commands::get_storage_usage,
+            commands::get_image_representation,
+            commands::get_image_thumbnail,
+            commands::begin_focus_loss_suppression,
+            commands::end_focus_loss_suppression,
         ])
         .run(tauri::generate_context!());
 

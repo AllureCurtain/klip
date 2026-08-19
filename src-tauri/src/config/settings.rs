@@ -1,6 +1,6 @@
 pub const MAX_HISTORY_COUNT: i64 = 100;
-pub const DEFAULT_WINDOW_WIDTH: u32 = 560;
-pub const DEFAULT_WINDOW_HEIGHT: u32 = 760;
+pub const DEFAULT_WINDOW_WIDTH: u32 = 680;
+pub const DEFAULT_WINDOW_HEIGHT: u32 = 720;
 pub const MIN_WINDOW_WIDTH: u32 = 360;
 pub const MIN_WINDOW_HEIGHT: u32 = 480;
 pub const SEARCH_DEBOUNCE_MS: u64 = 150;
@@ -20,8 +20,8 @@ mod tests {
 
     #[test]
     fn window_size_constants_match_packaged_window_bounds() {
-        assert_eq!(DEFAULT_WINDOW_WIDTH, 560);
-        assert_eq!(DEFAULT_WINDOW_HEIGHT, 760);
+        assert_eq!(DEFAULT_WINDOW_WIDTH, 680);
+        assert_eq!(DEFAULT_WINDOW_HEIGHT, 720);
         assert_eq!(MIN_WINDOW_WIDTH, 360);
         assert_eq!(MIN_WINDOW_HEIGHT, 480);
     }

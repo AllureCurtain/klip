@@ -155,6 +155,7 @@ pub fn set_config(
 
     match descriptor.effect {
         RuntimeEffect::WindowSize => apply_window_size_from_config(&app, &db)?,
+        RuntimeEffect::AlwaysOnTop => crate::window::controller::apply_always_on_top(&app, &db)?,
         RuntimeEffect::HotkeyReload => {
             if let Err(err) = crate::hotkey::manager::reload_hotkeys(&app) {
                 rollback_hotkey_config(&app, &db, descriptor, previous_value)?;
@@ -194,6 +195,9 @@ pub fn set_config_many(
     let has_hotkey_effect = normalized
         .iter()
         .any(|(descriptor, _)| descriptor.effect == RuntimeEffect::HotkeyReload);
+    let has_always_on_top_effect = normalized
+        .iter()
+        .any(|(descriptor, _)| descriptor.effect == RuntimeEffect::AlwaysOnTop);
     let persisted_entries = normalized
         .iter()
         .map(|(descriptor, value)| (descriptor.key.to_string(), value.clone()))
@@ -203,6 +207,10 @@ pub fn set_config_many(
 
     if has_window_size_effect {
         apply_window_size_from_config(&app, &db)?;
+    }
+
+    if has_always_on_top_effect {
+        crate::window::controller::apply_always_on_top(&app, &db)?;
     }
 
     if has_hotkey_effect {

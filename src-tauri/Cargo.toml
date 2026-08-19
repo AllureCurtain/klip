@@ -19,7 +19,7 @@ tauri-plugin-autostart = "2"
 tauri-plugin-shell = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-rusqlite = { version = "0.31", features = ["bundled"] }
+rusqlite = { version = "0.31", features = ["bundled", "backup"] }
 # Single clipboard library for every platform and every content type.
 # The `wayland` feature keeps Linux parity with the previous wl-copy path;
 # without it clipboard-rs is X11-only. See src/clipboard/backend.rs.

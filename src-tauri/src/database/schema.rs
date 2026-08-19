@@ -8,7 +8,57 @@ pub fn initialize_base_schema(conn: &Connection, now: i64) -> Result<(), AppErro
     create_snippet_tables(conn)?;
     create_source_rule_tables(conn)?;
     create_config_table(conn)?;
+    create_productization_tables(conn)?;
     seed_config_defaults(conn, now)?;
+    Ok(())
+}
+
+pub(crate) fn create_productization_tables(conn: &Connection) -> Result<(), AppError> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS shortcut_bindings (
+            action_id TEXT PRIMARY KEY,
+            enabled INTEGER NOT NULL CHECK (enabled IN (0, 1)),
+            accelerator TEXT,
+            updated_at INTEGER NOT NULL,
+            CHECK (enabled = 0 OR accelerator IS NOT NULL)
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_shortcut_enabled_accelerator
+            ON shortcut_bindings(accelerator)
+            WHERE enabled = 1 AND accelerator IS NOT NULL;
+        CREATE TABLE IF NOT EXISTS window_state (
+            window_label TEXT PRIMARY KEY,
+            width_dip INTEGER NOT NULL,
+            height_dip INTEGER NOT NULL,
+            x INTEGER,
+            y INTEGER,
+            monitor_id TEXT,
+            scale_factor REAL,
+            updated_at INTEGER NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS binary_blobs (
+            sha256 TEXT PRIMARY KEY,
+            byte_length INTEGER NOT NULL,
+            content BLOB NOT NULL,
+            created_at INTEGER NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS clipboard_item_representations (
+            item_id INTEGER NOT NULL,
+            blob_sha256 TEXT NOT NULL,
+            role TEXT NOT NULL CHECK (role IN ('source', 'canonical', 'thumbnail')),
+            format_name TEXT NOT NULL,
+            mime_type TEXT,
+            width INTEGER,
+            height INTEGER,
+            byte_length INTEGER NOT NULL,
+            priority INTEGER NOT NULL DEFAULT 0,
+            metadata TEXT,
+            PRIMARY KEY (item_id, role, format_name),
+            FOREIGN KEY (item_id) REFERENCES clipboard_items(id) ON DELETE CASCADE,
+            FOREIGN KEY (blob_sha256) REFERENCES binary_blobs(sha256)
+        );
+        CREATE INDEX IF NOT EXISTS idx_clipboard_item_representations_item
+            ON clipboard_item_representations(item_id, role, priority);",
+    )?;
     Ok(())
 }
 

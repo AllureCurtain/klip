@@ -149,6 +149,7 @@
     "back": "返回",
     "tabs": {
       "general": "通用",
+      "appearance": "外观",
       "shortcuts": "快捷键",
       "behavior": "行为",
       "data": "数据",
@@ -167,13 +168,49 @@
       "toggleWindow": "切换窗口",
       "toggleWindowHint": "支持 Ctrl+Alt+A 到 Ctrl+Alt+Z",
       "quickPastePrefix": "快速粘贴前缀",
-      "quickPasteHint": "前缀 + 数字键快速粘贴"
+      "quickPasteHint": "前缀 + 数字键快速粘贴",
+      "independentTitle": "独立动作",
+      "independentHint": "每个动作单独注册，索引始终对应当前可见列表。",
+      "enabled": "启用",
+      "recording": "请按下快捷键...",
+      "unset": "未设置",
+      "clear": "清除快捷键",
+      "actions": {
+        "toggle_window": "显示 / 隐藏 Klip",
+        "quick_paste_1": "粘贴当前列表第 1 项",
+        "quick_paste_2": "粘贴当前列表第 2 项",
+        "quick_paste_3": "粘贴当前列表第 3 项",
+        "quick_paste_4": "粘贴当前列表第 4 项",
+        "quick_paste_5": "粘贴当前列表第 5 项",
+        "quick_paste_6": "粘贴当前列表第 6 项",
+        "quick_paste_7": "粘贴当前列表第 7 项",
+        "quick_paste_8": "粘贴当前列表第 8 项",
+        "quick_paste_9": "粘贴当前列表第 9 项"
+      }
+    },
+    "appearance": {
+      "family": "配色家族",
+      "mode": "主题模式",
+      "system": "跟随系统",
+      "light": "浅色",
+      "dark": "深色",
+      "previewHint": "主题切换会即时预览，只有点击保存后才写入配置。",
+      "families": { "ember": "暗琥珀", "graphite": "炭黑酸橙", "brick": "暖砖", "rose": "玫瑰纸" },
+      "familyHints": { "ember": "温暖、专注", "graphite": "紧凑、技术", "brick": "默认配色", "rose": "柔和、编辑感" }
     },
     "behavior": {
       "autoStart": "开机自启动",
       "autoStartDesc": "系统启动时自动运行",
       "closeToTray": "关闭到托盘",
       "closeToTrayDesc": "关闭时隐藏而非退出"
+      ,"hideOnFocusLoss": "失去焦点时隐藏",
+      "hideOnFocusLossDesc": "点击其他软件后隐藏 Klip。",
+      "hideAfterPaste": "粘贴后隐藏",
+      "hideAfterPasteDesc": "粘贴完成后返回之前使用的软件。",
+      "showWindowOnStartup": "启动时显示窗口",
+      "showWindowOnStartupDesc": "应用启动时打开 Klip 窗口。",
+      "alwaysOnTop": "窗口保持置顶",
+      "alwaysOnTopDesc": "让桌面工具保持在其他窗口上方。"
     },
     "data": {
       "tags": "标签/分组",

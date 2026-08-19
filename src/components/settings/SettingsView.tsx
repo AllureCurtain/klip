@@ -8,6 +8,8 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useConfigStore } from '@/stores/configStore';
+import { useShortcutStore } from '@/stores/shortcutStore';
+import { useThemeStore } from '@/stores/themeStore';
 import {
   ArrowLeft,
   Settings,
@@ -30,7 +32,19 @@ import {
   MIN_WINDOW_WIDTH,
 } from '@/lib/constants';
 
-export type SettingsTab = 'general' | 'shortcuts' | 'behavior' | 'data' | 'about';
+export type SettingsTab = 'general' | 'appearance' | 'shortcuts' | 'behavior' | 'data' | 'about';
+
+function codeToAcceleratorKey(code: string): string | null {
+  if (/^Key[A-Z]$/.test(code)) return code.slice(3);
+  if (/^Digit[0-9]$/.test(code)) return code.slice(5);
+  if (/^F([1-9]|1[01])$/.test(code)) return code;
+  const map: Record<string, string> = {
+    ArrowLeft: 'Left', ArrowRight: 'Right', ArrowUp: 'Up', ArrowDown: 'Down',
+    Home: 'Home', End: 'End', PageUp: 'PageUp', PageDown: 'PageDown',
+    Insert: 'Insert', Delete: 'Delete', Space: 'Space',
+  };
+  return map[code] ?? null;
+}
 
 const TOGGLE_HOTKEY_OPTIONS = Array.from({ length: 26 }, (_value, index) =>
   `Ctrl+Alt+${String.fromCharCode(65 + index)}`
@@ -60,6 +74,12 @@ export function SettingsView({ onBack, initialTab = 'general' }: SettingsViewPro
     setHotkeyQuickPastePrefix,
     setAutoStart,
     setCloseToTray,
+    setHideOnFocusLoss,
+    setHideAfterPaste,
+    setShowWindowOnStartup,
+    setAlwaysOnTop,
+    setThemeFamily,
+    setThemeMode,
     setWindowWidth,
     setWindowHeight,
     setSearchDebounceMs,
@@ -67,9 +87,12 @@ export function SettingsView({ onBack, initialTab = 'general' }: SettingsViewPro
     saveChanges,
     resetChanges,
   } = useConfigStore();
+  const shortcutState = useShortcutStore();
+  const theme = useThemeStore();
 
   const tabItems: { value: SettingsTab; label: string; icon: React.ReactNode }[] = [
     { value: 'general', label: t('settings.tabs.general'), icon: <Sliders className="h-3.5 w-3.5" /> },
+    { value: 'appearance', label: t('settings.tabs.appearance'), icon: <Monitor className="h-3.5 w-3.5" /> },
     { value: 'shortcuts', label: t('settings.tabs.shortcuts'), icon: <Keyboard className="h-3.5 w-3.5" /> },
     { value: 'behavior', label: t('settings.tabs.behavior'), icon: <Monitor className="h-3.5 w-3.5" /> },
     { value: 'data', label: t('settings.tabs.data'), icon: <Database className="h-3.5 w-3.5" /> },
@@ -80,6 +103,7 @@ export function SettingsView({ onBack, initialTab = 'general' }: SettingsViewPro
     fetchConfig();
     fetchSystemInfo();
     fetchDiagnosticsInfo();
+    void shortcutState.fetch();
   }, [fetchConfig, fetchSystemInfo, fetchDiagnosticsInfo]);
 
   useEffect(() => {
@@ -87,9 +111,11 @@ export function SettingsView({ onBack, initialTab = 'general' }: SettingsViewPro
   }, [initialTab]);
 
   const handleSave = async () => {
-    const saved = await saveChanges();
-    if (saved) {
-      onBack();
+    const configSaved = await saveChanges();
+    const shortcutsSaved = shortcutState.bindings.length === 0 || await shortcutState.save();
+    if (configSaved && shortcutsSaved) {
+      await theme.hydrate();
+      if (shortcutState.bindings.length === 0) onBack();
     }
   };
 
@@ -255,6 +281,50 @@ export function SettingsView({ onBack, initialTab = 'general' }: SettingsViewPro
 
         {activeTab === 'shortcuts' && (
           <div className="space-y-4">
+            {shortcutState.bindings.length > 0 && (
+              <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-xs font-semibold">{t('settings.shortcuts.independentTitle')}</h3>
+                    <p className="text-[10px] text-muted-foreground">{t('settings.shortcuts.independentHint')}</p>
+                  </div>
+                  <Badge variant="outline" className="text-[10px]">{shortcutState.bindings.filter((binding) => binding.enabled).length}/10</Badge>
+                </div>
+                <div className="space-y-1">
+                  {shortcutState.bindings.map((binding) => (
+                    <div key={binding.actionId} className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/50">
+                      <Switch
+                        aria-label={`${t(`settings.shortcuts.actions.${binding.actionId}`)} ${t('settings.shortcuts.enabled')}`}
+                        checked={binding.enabled}
+                        onCheckedChange={(enabled) => shortcutState.setEnabled(binding.actionId, enabled)}
+                      />
+                      <span className="min-w-0 flex-1 text-[11px]">{t(`settings.shortcuts.actions.${binding.actionId}`)}</span>
+                      <button
+                        type="button"
+                        className={cn('min-w-[116px] rounded-md border px-2 py-1 text-left font-mono text-[10px]', shortcutState.captureAction === binding.actionId ? 'border-primary bg-accent' : 'border-input bg-card/60', !binding.enabled && 'opacity-60')}
+                        aria-label={t(`settings.shortcuts.actions.${binding.actionId}`)}
+                        onClick={() => shortcutState.beginCapture(binding.actionId)}
+                        onKeyDown={(event) => {
+                          if (shortcutState.captureAction !== binding.actionId) return;
+                          event.preventDefault();
+                          if (event.code === 'Escape') { shortcutState.cancelCapture(); return; }
+                          if (['Control', 'Alt', 'Shift', 'Meta'].includes(event.key)) return;
+                          const key = codeToAcceleratorKey(event.code);
+                          if (!key) return;
+                          const parts = [event.ctrlKey && 'Ctrl', event.altKey && 'Alt', event.shiftKey && 'Shift', event.metaKey && 'Win', key].filter(Boolean).join('+');
+                          shortcutState.setAccelerator(binding.actionId, parts);
+                          shortcutState.cancelCapture();
+                        }}
+                      >
+                        {shortcutState.captureAction === binding.actionId ? t('settings.shortcuts.recording') : binding.accelerator ?? t('settings.shortcuts.unset')}
+                      </button>
+                      <button type="button" className="rounded-md px-1.5 text-[10px] text-muted-foreground hover:bg-muted" aria-label={t('settings.shortcuts.clear')} onClick={() => { shortcutState.setAccelerator(binding.actionId, null); shortcutState.setEnabled(binding.actionId, false); }}>×</button>
+                    </div>
+                  ))}
+                </div>
+                {shortcutState.error && <p className="text-[10px] text-destructive">{shortcutState.error}</p>}
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="hotkey-toggle-window" className="text-xs">{t('settings.shortcuts.toggleWindow')}</Label>
               <select
@@ -304,6 +374,39 @@ export function SettingsView({ onBack, initialTab = 'general' }: SettingsViewPro
           </div>
         )}
 
+        {activeTab === 'appearance' && (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-xs">{t('settings.appearance.family')}</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {(['ember', 'graphite', 'brick', 'rose'] as const).map((family) => (
+                  <button
+                    key={family}
+                    type="button"
+                    aria-pressed={config.theme_family === family}
+                    className={cn('rounded-lg border px-3 py-2 text-left text-xs transition-colors', config.theme_family === family ? 'border-primary bg-accent text-accent-foreground' : 'border-border hover:bg-muted')}
+                    onClick={() => { setThemeFamily(family); void theme.setThemeFamily(family, false); }}
+                  >
+                    <span className="font-medium">{t(`settings.appearance.families.${family}`)}</span>
+                    <span className="mt-1 block text-[10px] text-muted-foreground">{t(`settings.appearance.familyHints.${family}`)}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="theme-mode" className="text-xs">{t('settings.appearance.mode')}</Label>
+              <select id="theme-mode" value={config.theme_mode ?? 'system'} onChange={(event) => { const value = event.target.value as 'light' | 'dark' | 'system'; setThemeMode(value); void theme.setThemeMode(value, false); }} className="h-8 w-full rounded-md border border-input bg-card/60 px-3 text-xs">
+                <option value="system">{t('settings.appearance.system')}</option>
+                <option value="light">{t('settings.appearance.light')}</option>
+                <option value="dark">{t('settings.appearance.dark')}</option>
+              </select>
+            </div>
+            <div className="rounded-lg border border-border bg-muted/30 p-3 text-[11px] text-muted-foreground">
+              {t('settings.appearance.previewHint')}
+            </div>
+          </div>
+        )}
+
         {activeTab === 'behavior' && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -319,6 +422,15 @@ export function SettingsView({ onBack, initialTab = 'general' }: SettingsViewPro
                 onCheckedChange={setAutoStart}
               />
             </div>
+
+            <Separator />
+            <SettingToggle label={t('settings.behavior.hideOnFocusLoss')} description={t('settings.behavior.hideOnFocusLossDesc')} checked={config.hide_on_focus_loss ?? true} onChange={setHideOnFocusLoss} />
+            <Separator />
+            <SettingToggle label={t('settings.behavior.hideAfterPaste')} description={t('settings.behavior.hideAfterPasteDesc')} checked={config.hide_after_paste ?? true} onChange={setHideAfterPaste} />
+            <Separator />
+            <SettingToggle label={t('settings.behavior.showWindowOnStartup')} description={t('settings.behavior.showWindowOnStartupDesc')} checked={config.show_window_on_startup ?? false} onChange={setShowWindowOnStartup} />
+            <Separator />
+            <SettingToggle label={t('settings.behavior.alwaysOnTop')} description={t('settings.behavior.alwaysOnTopDesc')} checked={config.always_on_top ?? true} onChange={setAlwaysOnTop} />
 
             <Separator />
 
@@ -465,6 +577,28 @@ function DiagnosticsPathRow({ label, value, copyLabel, openLabel }: DiagnosticsP
           <ExternalLink className="h-3 w-3" />
         </Button>
       </span>
+    </div>
+  );
+}
+
+function SettingToggle({
+  label,
+  description,
+  checked,
+  onChange,
+}: {
+  label: string;
+  description: string;
+  checked: boolean;
+  onChange: (value: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <div className="space-y-0.5">
+        <Label className="text-xs">{label}</Label>
+        <p className="text-[10px] text-muted-foreground">{description}</p>
+      </div>
+      <Switch aria-label={label} checked={checked} onCheckedChange={onChange} />
     </div>
   );
 }

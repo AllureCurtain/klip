@@ -1,4 +1,6 @@
 use base64::Engine;
+use sha2::{Digest, Sha256};
+use std::io::Cursor;
 
 use crate::config::registry;
 use crate::database::clipboard_query::{self, ClipboardQuerySpec};
@@ -9,6 +11,27 @@ use super::types::ClipboardItem;
 
 pub const MAX_CUSTOM_TITLE_CHARS: usize = 200;
 pub const MAX_NOTE_CHARS: usize = 10_000;
+const MAX_IMAGE_REPRESENTATION_BYTES: usize = 128 * 1024 * 1024;
+
+struct PreparedImageAssets {
+    source_format: &'static str,
+    source_mime: &'static str,
+    source_hash: String,
+    canonical_hash: String,
+    canonical_bytes: Option<Vec<u8>>,
+    thumbnail_hash: String,
+    thumbnail_bytes: Vec<u8>,
+    width: i64,
+    height: i64,
+    thumbnail_width: i64,
+    thumbnail_height: i64,
+}
+
+impl PreparedImageAssets {
+    fn canonical_bytes<'a>(&'a self, source: &'a [u8]) -> &'a [u8] {
+        self.canonical_bytes.as_deref().unwrap_or(source)
+    }
+}
 
 pub fn get_stats(db: &Database) -> Result<StatsResponse, AppError> {
     let conn = db.get_connection()?;
@@ -416,11 +439,21 @@ pub(crate) fn insert_with_source(
         crate::database::config::get(db, registry::KEY_SENSITIVE_CAPTURE_POLICY)?
             .unwrap_or_else(|| "flag".to_string());
 
+    let image_assets = if item.content_type == ContentType::Image {
+        Some(prepare_image_assets(&item.data)?)
+    } else {
+        None
+    };
     let content_str = match item.content_type {
         ContentType::Text => String::from_utf8_lossy(&item.data).to_string(),
         ContentType::Image => format!(
             "data:image/png;base64,{}",
-            base64::engine::general_purpose::STANDARD.encode(&item.data)
+            base64::engine::general_purpose::STANDARD.encode(
+                image_assets
+                    .as_ref()
+                    .expect("image assets")
+                    .canonical_bytes(&item.data)
+            )
         ),
         ContentType::File => String::from_utf8_lossy(&item.data).to_string(),
     };
@@ -433,8 +466,73 @@ pub(crate) fn insert_with_source(
         ));
     }
 
+    let image_budget = if image_assets.is_some() {
+        crate::database::config::get(db, registry::KEY_IMAGE_BUDGET_BYTES)?
+            .and_then(|value| value.parse::<i64>().ok())
+            .unwrap_or(2 * 1024 * 1024 * 1024)
+    } else {
+        0
+    };
+
     let mut conn = db.get_connection()?;
     let transaction = conn.transaction()?;
+
+    if let Some(assets) = image_assets.as_ref() {
+        let used: i64 = transaction.query_row(
+            "SELECT COALESCE(SUM(byte_length), 0) FROM binary_blobs",
+            [],
+            |row| row.get(0),
+        )?;
+        let canonical_bytes = assets.canonical_bytes(&item.data);
+        let candidates = [
+            (assets.source_hash.as_str(), item.data.len()),
+            (assets.canonical_hash.as_str(), canonical_bytes.len()),
+            (assets.thumbnail_hash.as_str(), assets.thumbnail_bytes.len()),
+        ];
+        let mut unique_hashes = std::collections::HashSet::new();
+        let mut required = 0i64;
+        for (hash, byte_length) in candidates {
+            if unique_hashes.insert(hash)
+                && transaction.query_row(
+                    "SELECT NOT EXISTS(SELECT 1 FROM binary_blobs WHERE sha256 = ?1)",
+                    [hash],
+                    |row| row.get::<_, bool>(0),
+                )?
+            {
+                required = required.saturating_add(byte_length as i64);
+            }
+        }
+        if image_budget >= 0 && used.saturating_add(required) > image_budget {
+            return Err(AppError::Database(
+                "image storage budget reached; clean up old items or increase the budget".into(),
+            ));
+        }
+        transaction.execute(
+            "INSERT OR IGNORE INTO binary_blobs (sha256, byte_length, content, created_at)
+             VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params![assets.source_hash, item.data.len() as i64, item.data, now],
+        )?;
+        transaction.execute(
+            "INSERT OR IGNORE INTO binary_blobs (sha256, byte_length, content, created_at)
+             VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params![
+                assets.canonical_hash,
+                canonical_bytes.len() as i64,
+                canonical_bytes,
+                now
+            ],
+        )?;
+        transaction.execute(
+            "INSERT OR IGNORE INTO binary_blobs (sha256, byte_length, content, created_at)
+             VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params![
+                assets.thumbnail_hash,
+                assets.thumbnail_bytes.len() as i64,
+                assets.thumbnail_bytes,
+                now
+            ],
+        )?;
+    }
 
     transaction.execute(
         "INSERT INTO clipboard_items
@@ -484,6 +582,27 @@ pub(crate) fn insert_with_source(
         &item.formats,
     )?;
     crate::database::ocr::ensure_for_image(&transaction, saved_id, item.content_type, now)?;
+    if let Some(assets) = image_assets.as_ref() {
+        let canonical_bytes = assets.canonical_bytes(&item.data);
+        transaction.execute(
+            "INSERT OR REPLACE INTO clipboard_item_representations
+             (item_id, blob_sha256, role, format_name, mime_type, width, height, byte_length, priority, metadata)
+             VALUES (?1, ?2, 'source', ?3, ?4, ?5, ?6, ?7, 10, ?8)",
+            rusqlite::params![saved_id, assets.source_hash, assets.source_format, assets.source_mime, assets.width, assets.height, item.data.len() as i64, item.metadata],
+        )?;
+        transaction.execute(
+            "INSERT OR REPLACE INTO clipboard_item_representations
+             (item_id, blob_sha256, role, format_name, mime_type, width, height, byte_length, priority, metadata)
+             VALUES (?1, ?2, 'canonical', 'png', 'image/png', ?3, ?4, ?5, 0, ?6)",
+            rusqlite::params![saved_id, assets.canonical_hash, assets.width, assets.height, canonical_bytes.len() as i64, item.metadata],
+        )?;
+        transaction.execute(
+            "INSERT OR REPLACE INTO clipboard_item_representations
+             (item_id, blob_sha256, role, format_name, mime_type, width, height, byte_length, priority, metadata)
+             VALUES (?1, ?2, 'thumbnail', 'png', 'image/png', ?3, ?4, ?5, 0, '{\"generated\":true}')",
+            rusqlite::params![saved_id, assets.thumbnail_hash, assets.thumbnail_width, assets.thumbnail_height, assets.thumbnail_bytes.len() as i64],
+        )?;
+    }
     transaction.commit()?;
 
     let saved = clipboard_query::fetch_item_by_hash_locked(&conn, &item.hash)?;
@@ -496,6 +615,68 @@ pub(crate) fn insert_with_source(
         );
     }
     Ok(saved)
+}
+
+fn prepare_image_assets(data: &[u8]) -> Result<PreparedImageAssets, AppError> {
+    if data.len() > MAX_IMAGE_REPRESENTATION_BYTES {
+        return Err(AppError::InvalidInput(
+            "image representation exceeds the 128 MiB safety limit".into(),
+        ));
+    }
+    let image_format = image::guess_format(data)
+        .map_err(|error| AppError::Clipboard(format!("image format detection failed: {error}")))?;
+    let (source_format, source_mime) = match image_format {
+        image::ImageFormat::Png => ("png", "image/png"),
+        image::ImageFormat::Jpeg => ("jpeg", "image/jpeg"),
+        image::ImageFormat::WebP => ("webp", "image/webp"),
+        image::ImageFormat::Gif => ("gif", "image/gif"),
+        _ => {
+            return Err(AppError::Clipboard(format!(
+                "unsupported image representation format: {image_format:?}"
+            )))
+        }
+    };
+    let decoded = image::load_from_memory_with_format(data, image_format)
+        .map_err(|error| AppError::Clipboard(format!("image decode failed: {error}")))?;
+    let (width, height) = (decoded.width() as i64, decoded.height() as i64);
+    let canonical_bytes = if image_format == image::ImageFormat::Png {
+        None
+    } else {
+        let mut png = Vec::new();
+        decoded
+            .write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png)
+            .map_err(|error| {
+                AppError::Clipboard(format!("canonical PNG generation failed: {error}"))
+            })?;
+        Some(png)
+    };
+    let canonical_hash = format!(
+        "{:x}",
+        Sha256::digest(canonical_bytes.as_deref().unwrap_or(data))
+    );
+    let thumbnail = decoded.thumbnail(192, 192);
+    let (thumbnail_width, thumbnail_height) = (thumbnail.width() as i64, thumbnail.height() as i64);
+    let mut thumbnail_bytes = Vec::new();
+    thumbnail
+        .write_to(
+            &mut Cursor::new(&mut thumbnail_bytes),
+            image::ImageFormat::Png,
+        )
+        .map_err(|error| AppError::Clipboard(format!("thumbnail generation failed: {error}")))?;
+
+    Ok(PreparedImageAssets {
+        source_format,
+        source_mime,
+        source_hash: format!("{:x}", Sha256::digest(data)),
+        canonical_hash,
+        canonical_bytes,
+        thumbnail_hash: format!("{:x}", Sha256::digest(&thumbnail_bytes)),
+        thumbnail_bytes,
+        width,
+        height,
+        thumbnail_width,
+        thumbnail_height,
+    })
 }
 
 pub fn update_annotations(
@@ -552,6 +733,7 @@ fn normalize_annotation(
 pub fn delete(db: &Database, id: i64) -> Result<(), AppError> {
     let conn = db.get_connection()?;
     let deleted = conn.execute("DELETE FROM clipboard_items WHERE id = ?1", [id])?;
+    crate::database::productization::cleanup_unreferenced_blobs_locked(&conn)?;
     drop(conn);
     if deleted > 0 {
         if let Err(error) = crate::search::delete_items(db, &[id]) {
@@ -564,6 +746,7 @@ pub fn delete(db: &Database, id: i64) -> Result<(), AppError> {
 pub fn clear(db: &Database) -> Result<(), AppError> {
     let conn = db.get_connection()?;
     conn.execute("DELETE FROM clipboard_items", [])?;
+    crate::database::productization::cleanup_unreferenced_blobs_locked(&conn)?;
     drop(conn);
     if let Err(error) = crate::search::clear(db) {
         tracing::warn!("Failed to clear full-text search index: {error}");
@@ -600,6 +783,7 @@ pub fn cleanup_old_records(db: &Database, max_count: i64) -> Result<(), AppError
            )",
         [max_count],
     )?;
+    crate::database::productization::cleanup_unreferenced_blobs_locked(&conn)?;
     drop(conn);
     if let Err(error) = crate::search::delete_items(db, &deleted_ids) {
         tracing::warn!("Failed to remove expired items from full-text search: {error}");

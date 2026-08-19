@@ -56,6 +56,10 @@ const tauriMocks = vi.hoisted(() => ({
     return Promise.resolve(vi.fn());
   }),
   configGet: vi.fn(() => Promise.resolve(null)),
+  configGetAll: vi.fn(() => Promise.resolve({
+    theme_family: 'brick',
+    theme_mode: 'system',
+  })),
   setVisibleItems: vi.fn(() => Promise.resolve()),
 }));
 
@@ -110,6 +114,7 @@ vi.mock('@tauri-apps/api/event', () => ({
 vi.mock('@/lib/tauri', () => ({
   configApi: {
     get: tauriMocks.configGet,
+    getAll: tauriMocks.configGetAll,
   },
   clipboardApi: {
     setVisibleItems: tauriMocks.setVisibleItems,

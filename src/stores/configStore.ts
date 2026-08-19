@@ -6,6 +6,7 @@ import { DEFAULT_CONFIG, clampWindowHeight, clampWindowWidth, parseConfig, seria
 
 interface ConfigState {
   config: AppConfig;
+  committedConfig: AppConfig;
   systemInfo: SystemInfo | null;
   diagnosticsInfo: DiagnosticsInfo | null;
   loading: boolean;
@@ -20,6 +21,10 @@ interface ConfigState {
   setHotkeyQuickPastePrefix: (value: string) => void;
   setAutoStart: (value: boolean) => Promise<void>;
   setCloseToTray: (value: boolean) => void;
+  setHideOnFocusLoss: (value: boolean) => void;
+  setHideAfterPaste: (value: boolean) => void;
+  setShowWindowOnStartup: (value: boolean) => void;
+  setAlwaysOnTop: (value: boolean) => void;
   setWindowWidth: (value: number) => void;
   setWindowHeight: (value: number) => void;
   setSearchDebounceMs: (value: number) => void;
@@ -33,12 +38,16 @@ interface ConfigState {
   setEncryptionEnabled: (value: boolean) => void;
   setSyncFolder: (value: string) => void;
   setPluginFolder: (value: string) => void;
+  setThemeFamily: (value: AppConfig['theme_family']) => void;
+  setThemeMode: (value: AppConfig['theme_mode']) => void;
+  setImageBudgetBytes: (value: number) => void;
   saveChanges: () => Promise<boolean>;
   resetChanges: () => Promise<void>;
 }
 
 export const useConfigStore = create<ConfigState>((set, get) => ({
   config: DEFAULT_CONFIG,
+  committedConfig: DEFAULT_CONFIG,
   systemInfo: null,
   diagnosticsInfo: null,
   loading: false,
@@ -50,7 +59,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     try {
       const allConfig = await configApi.getAll();
       const config = parseConfig(allConfig);
-      set({ config, loading: false, hasChanges: false });
+      set({ config, committedConfig: config, loading: false, hasChanges: false });
     } catch (error) {
       set({ error: getErrorMessage(error), loading: false });
     }
@@ -112,6 +121,11 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
       hasChanges: true,
     }));
   },
+
+  setHideOnFocusLoss: (value) => set((state) => ({ config: { ...state.config, hide_on_focus_loss: value }, hasChanges: true })),
+  setHideAfterPaste: (value) => set((state) => ({ config: { ...state.config, hide_after_paste: value }, hasChanges: true })),
+  setShowWindowOnStartup: (value) => set((state) => ({ config: { ...state.config, show_window_on_startup: value }, hasChanges: true })),
+  setAlwaysOnTop: (value) => set((state) => ({ config: { ...state.config, always_on_top: value }, hasChanges: true })),
 
   setWindowWidth: (value) => {
     set((state) => ({
@@ -208,6 +222,10 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     }));
   },
 
+  setThemeFamily: (value) => set((state) => ({ config: { ...state.config, theme_family: value }, hasChanges: true })),
+  setThemeMode: (value) => set((state) => ({ config: { ...state.config, theme_mode: value }, hasChanges: true })),
+  setImageBudgetBytes: (value) => set((state) => ({ config: { ...state.config, image_budget_bytes: value }, hasChanges: true })),
+
   saveChanges: async () => {
     const { config } = get();
     set({ loading: true, error: null });
@@ -215,7 +233,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
       await configApi.setMany(
         serializeConfig(config).filter(([key]) => key !== 'auto_start')
       );
-      set({ loading: false, hasChanges: false });
+      set({ committedConfig: config, loading: false, hasChanges: false });
       return true;
     } catch (error) {
       set({ error: getErrorMessage(error), loading: false });
@@ -224,6 +242,6 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
   },
 
   resetChanges: async () => {
-    await get().fetchConfig();
+    set((state) => ({ config: state.committedConfig, hasChanges: false, error: null }));
   },
 }));

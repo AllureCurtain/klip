@@ -234,6 +234,7 @@ mod tests {
             tags: Vec::new(),
             created_at: 0,
             last_used_at: 0,
+            media: None,
         }
     }
 

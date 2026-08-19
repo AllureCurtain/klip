@@ -717,12 +717,13 @@ mod tests {
     }
 
     fn insert_image(db: &Database, hash: &str) -> ClipboardItem {
+        let data = include_bytes!("../../tests/fixtures/ocr/chinese-text.png").to_vec();
         let item = NewClipboardItem {
             content_type: ContentType::Image,
-            data: vec![1, 2, 3],
+            size: data.len() as i64,
+            data,
             preview: Some("image fixture".into()),
             hash: hash.into(),
-            size: 3,
             metadata: None,
             formats: Vec::new(),
         };

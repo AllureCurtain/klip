@@ -64,8 +64,8 @@ describe('configStore', () => {
 
     await useConfigStore.getState().fetchConfig();
 
-    expect(useConfigStore.getState().config.window_width).toBe(560);
-    expect(useConfigStore.getState().config.window_height).toBe(760);
+    expect(useConfigStore.getState().config.window_width).toBe(680);
+    expect(useConfigStore.getState().config.window_height).toBe(720);
   });
 
   it('clamps window size edits to the packaged minimums', () => {
