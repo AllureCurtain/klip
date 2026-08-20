@@ -22,6 +22,9 @@ use clipboard_rs::{
     common::RustImage, Clipboard, ClipboardContent, ClipboardContext, ContentFormat, RustImageData,
 };
 
+const MAX_IMAGE_REPRESENTATION_BYTES: usize = 128 * 1024 * 1024;
+pub const KLIP_PRIVATE_MARKER: &str = "Klip Clipboard Owner v1";
+
 /// How many times to retry a contended clipboard operation.
 const MAX_ATTEMPTS: u32 = 10;
 
@@ -55,11 +58,29 @@ pub enum ClipboardError {
     ImageDecode(String),
 }
 
-/// An image lifted off the clipboard, already flattened to RGBA8.
+/// An image lifted off the clipboard with both its pixels and every validated
+/// source representation that Windows exposed.
 pub struct ClipboardImage {
     pub rgba: Vec<u8>,
     pub width: u32,
     pub height: u32,
+    pub sources: Vec<ClipboardImageSource>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClipboardImageSource {
+    pub format_name: String,
+    pub mime_type: Option<String>,
+    pub clipboard_format: Option<String>,
+    pub data: Vec<u8>,
+    pub metadata: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ImageWriteRepresentation<'a> {
+    pub format_name: &'a str,
+    pub clipboard_format: Option<&'a str>,
+    pub data: &'a [u8],
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -151,6 +172,19 @@ pub fn available_formats() -> Vec<String> {
         .unwrap_or_default()
 }
 
+pub fn is_klip_owned() -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        super::windows_image::has_private_marker(KLIP_PRIVATE_MARKER)
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        context()
+            .map(|ctx| ctx.has(ContentFormat::Other(KLIP_PRIVATE_MARKER.into())))
+            .unwrap_or(false)
+    }
+}
+
 // --- Reads -------------------------------------------------------------
 
 pub fn read_text() -> Result<String, ClipboardError> {
@@ -187,16 +221,115 @@ fn collect_text_formats(contents: Vec<ClipboardContent>) -> Result<ClipboardText
 }
 
 pub fn read_image() -> Result<ClipboardImage, ClipboardError> {
-    let image = with_retry(|ctx| ctx.get_image().map_err(|e| e.to_string())).map_err(read_err)?;
-    let (width, height) = image.get_size();
-    let rgba = image
-        .to_rgba8()
-        .map_err(|e| ClipboardError::ImageDecode(e.to_string()))?;
+    let mut sources = read_encoded_image_sources()?;
+    let decoded_source = sources
+        .iter()
+        .find(|source| matches!(source.format_name.as_str(), "png" | "jpeg" | "webp" | "gif"));
+    #[cfg(target_os = "windows")]
+    let mut bitmap_sources =
+        super::windows_image::read_bitmap_sources(MAX_IMAGE_REPRESENTATION_BYTES)?;
+
+    let (rgba, width, height) = if let Some(source) = decoded_source {
+        let decoded = image::load_from_memory(&source.data)
+            .map_err(|error| ClipboardError::ImageDecode(error.to_string()))?
+            .to_rgba8();
+        let (width, height) = decoded.dimensions();
+        (decoded.into_raw(), width, height)
+    } else {
+        #[cfg(target_os = "windows")]
+        if let Some(source) = bitmap_sources.first() {
+            let decoded = super::windows_image::decode_bitmap_source(source)?;
+            (decoded.0, decoded.1, decoded.2)
+        } else {
+            let image =
+                with_retry(|ctx| ctx.get_image().map_err(|e| e.to_string())).map_err(read_err)?;
+            let (width, height) = image.get_size();
+            let rgba = image
+                .to_rgba8()
+                .map_err(|e| ClipboardError::ImageDecode(e.to_string()))?;
+            (rgba.into_raw(), width, height)
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let image =
+                with_retry(|ctx| ctx.get_image().map_err(|e| e.to_string())).map_err(read_err)?;
+            let (width, height) = image.get_size();
+            let rgba = image
+                .to_rgba8()
+                .map_err(|e| ClipboardError::ImageDecode(e.to_string()))?;
+            (rgba.into_raw(), width, height)
+        }
+    };
+
+    #[cfg(target_os = "windows")]
+    {
+        sources.append(&mut bitmap_sources);
+    }
+
     Ok(ClipboardImage {
-        rgba: rgba.into_raw(),
+        rgba,
         width,
         height,
+        sources,
     })
+}
+
+fn read_encoded_image_sources() -> Result<Vec<ClipboardImageSource>, ClipboardError> {
+    with_retry(|ctx| {
+        let available = ctx.available_formats().map_err(|error| error.to_string())?;
+        let mut sources: Vec<(u8, ClipboardImageSource)> = Vec::new();
+        for clipboard_format in available {
+            let lower = clipboard_format.to_ascii_lowercase();
+            if !matches!(
+                lower.as_str(),
+                "png" | "image/png" | "jfif" | "jpeg" | "image/jpeg" | "gif" | "image/gif" | "webp" | "image/webp"
+            ) {
+                continue;
+            }
+            let Ok(data) = ctx.get_buffer(&clipboard_format) else {
+                continue;
+            };
+            if data.len() > MAX_IMAGE_REPRESENTATION_BYTES {
+                return Err(format!(
+                    "clipboard image representation {clipboard_format} is {} bytes, above the {} byte limit",
+                    data.len(), MAX_IMAGE_REPRESENTATION_BYTES
+                ));
+            }
+            let Ok(format) = image::guess_format(&data) else {
+                continue;
+            };
+            let (format_name, mime_type, priority) = match format {
+                image::ImageFormat::Png => ("png", "image/png", 0),
+                image::ImageFormat::Jpeg => ("jpeg", "image/jpeg", 1),
+                image::ImageFormat::WebP => ("webp", "image/webp", 2),
+                image::ImageFormat::Gif => ("gif", "image/gif", 3),
+                _ => continue,
+            };
+            if image::load_from_memory_with_format(&data, format).is_err() {
+                continue;
+            }
+            if sources.iter().any(|(_, source)| {
+                source.format_name == format_name && source.data == data
+            }) {
+                continue;
+            }
+            sources.push((
+                priority,
+                ClipboardImageSource {
+                    format_name: format_name.into(),
+                    mime_type: Some(mime_type.into()),
+                    clipboard_format: Some(clipboard_format.clone()),
+                    data,
+                    metadata: Some(
+                        serde_json::json!({ "clipboardFormat": clipboard_format }).to_string(),
+                    ),
+                },
+            ));
+        }
+        sources.sort_by_key(|(priority, _)| *priority);
+        Ok(sources.into_iter().map(|(_, source)| source).collect())
+    })
+    .map_err(read_err)
 }
 
 /// File paths from the clipboard, normalized to plain filesystem paths.
@@ -303,7 +436,10 @@ pub fn write_text_formats(
     rtf: Option<&str>,
 ) -> Result<(), ClipboardError> {
     let contents = || {
-        let mut contents = vec![ClipboardContent::Text(text.to_string())];
+        let mut contents = vec![
+            ClipboardContent::Text(text.to_string()),
+            ClipboardContent::Other(KLIP_PRIVATE_MARKER.into(), vec![1]),
+        ];
         if let Some(html) = html.filter(|value| !value.is_empty()) {
             contents.push(ClipboardContent::Html(html.to_string()));
         }
@@ -335,6 +471,40 @@ pub fn write_image(png: &[u8]) -> Result<(), ClipboardError> {
     .map_err(write_err)
 }
 
+pub fn write_image_representations(
+    canonical_png: &[u8],
+    sources: &[ImageWriteRepresentation<'_>],
+    marker_value: &[u8],
+) -> Result<(), ClipboardError> {
+    if canonical_png.len() > MAX_IMAGE_REPRESENTATION_BYTES {
+        return Err(ClipboardError::ImageDecode(format!(
+            "canonical PNG exceeds the {MAX_IMAGE_REPRESENTATION_BYTES} byte limit"
+        )));
+    }
+    let decoded = image::load_from_memory_with_format(canonical_png, image::ImageFormat::Png)
+        .map_err(|error| ClipboardError::ImageDecode(error.to_string()))?
+        .to_rgba8();
+    let (width, height) = decoded.dimensions();
+
+    #[cfg(target_os = "windows")]
+    {
+        super::windows_image::write_representations(
+            canonical_png,
+            decoded.as_raw(),
+            width,
+            height,
+            sources,
+            KLIP_PRIVATE_MARKER,
+            marker_value,
+        )
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = (sources, marker_value, width, height);
+        write_image(canonical_png)
+    }
+}
+
 /// Write a file list as plain paths, plus `Preferred DropEffect` so the
 /// receiving file manager treats the paste as a copy rather than a move.
 ///
@@ -357,6 +527,7 @@ pub fn write_files(paths: &[&str]) -> Result<(), ClipboardError> {
                 PREFERRED_DROP_EFFECT.to_string(),
                 DROP_EFFECT_COPY.to_le_bytes().to_vec(),
             ),
+            ClipboardContent::Other(KLIP_PRIVATE_MARKER.into(), vec![1]),
         ])
         .map_err(|e| e.to_string())
     })

@@ -279,6 +279,11 @@ fn handle_clipboard_change(app_handle: &AppHandle) {
         return;
     }
 
+    if crate::clipboard::backend::is_klip_owned() {
+        tracing::info!("Self-copy suppressed (Klip clipboard marker present)");
+        return;
+    }
+
     let extracted = match extract_clipboard_content_with_retry() {
         Some(extracted) => extracted,
         None => return,
@@ -344,6 +349,7 @@ fn process_extracted_content(extracted: ExtractedContent) -> Option<NewClipboard
         size: extracted.size,
         metadata: extracted.metadata,
         formats: extracted.formats,
+        image_sources: extracted.image_sources,
     })
 }
 
@@ -356,9 +362,21 @@ fn save_clipboard_item(
     tracing::info!("Saving clipboard item to database...");
     let db = app_handle.state::<database::Database>();
 
-    match insert_from_monitor(&db, item, process_name, window_title) {
-        Ok(Some(saved_item)) => {
+    let outcome =
+        database::clipboard::insert_with_source_outcome(&db, item, process_name, window_title);
+
+    match outcome {
+        Ok(outcome) => {
+            let saved_item = outcome.item;
             tracing::info!("Clipboard item saved, id: {}", saved_item.id);
+            if !outcome.evicted_image_ids.is_empty() {
+                let payload = serde_json::json!({
+                    "code": "capacity_cleanup",
+                    "message": "Oldest unfavorited images were removed to stay within the image storage budget.",
+                    "itemIds": outcome.evicted_image_ids,
+                });
+                let _ = app_handle.emit("image-storage-warning", payload);
+            }
             if let Err(e) = app_handle.emit("clipboard-updated", &saved_item) {
                 tracing::warn!("Failed to emit clipboard-updated event: {}", e);
             } else {
@@ -393,11 +411,22 @@ fn save_clipboard_item(
                 }
             }
         }
-        Ok(None) => {
-            tracing::info!("Clipboard item skipped by capture gate");
-        }
         Err(e) => {
             tracing::error!("Failed to save clipboard item: {}", e);
+            if item.content_type == database::ContentType::Image {
+                let message = e.to_string();
+                let code = if message.contains("capacity exceeded") {
+                    "capacity_exceeded"
+                } else if message.contains("128 MiB") || message.contains("above the") {
+                    "representation_too_large"
+                } else {
+                    "capture_failed"
+                };
+                let _ = app_handle.emit(
+                    "image-storage-warning",
+                    serde_json::json!({ "code": code, "message": message, "itemIds": [] }),
+                );
+            }
         }
     }
 }
@@ -500,6 +529,7 @@ mod tests {
             size: content.len() as i64,
             metadata: None,
             formats: Vec::new(),
+            image_sources: Vec::new(),
         }
     }
 

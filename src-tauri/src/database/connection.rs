@@ -300,6 +300,7 @@ pub fn init(app_handle: tauri::AppHandle) -> Result<(), AppError> {
 mod tests {
     use super::Database;
     use crate::AppError;
+    use base64::Engine as _;
     use std::path::PathBuf;
 
     fn temp_dir(name: &str) -> PathBuf {
@@ -825,6 +826,71 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!((state.width_dip, state.height_dip), (640, 760));
+    }
+
+    #[test]
+    fn v7_png_data_url_migrates_to_canonical_blob_and_isolated_thumbnail() {
+        let conn = v7_connection();
+        let png = include_bytes!("../../tests/fixtures/ocr/chinese-text.png");
+        let data_url = format!(
+            "data:image/png;base64,{}",
+            base64::engine::general_purpose::STANDARD.encode(png)
+        );
+        conn.execute(
+            "INSERT INTO clipboard_items
+             (content_type, content, preview, hash, size, created_at, last_used_at)
+             VALUES ('image', ?1, 'legacy image', 'legacy-image-v7', ?2, 1, 1)",
+            rusqlite::params![data_url, png.len() as i64],
+        )
+        .unwrap();
+        let item_id = conn.last_insert_rowid();
+        let db = Database::from_conn(conn);
+
+        db.init_schema().unwrap();
+
+        let conn = db.get_connection().unwrap();
+        let (canonical, width, height, metadata): (Vec<u8>, i64, i64, String) = conn
+            .query_row(
+                "SELECT b.content, r.width, r.height, r.metadata
+                 FROM clipboard_item_representations r
+                 JOIN binary_blobs b ON b.sha256 = r.blob_sha256
+                 WHERE r.item_id = ?1 AND r.role = 'canonical'",
+                [item_id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .unwrap();
+        let decoded = image::load_from_memory(png).unwrap();
+        assert_eq!(canonical, png);
+        assert_eq!(
+            (width, height),
+            (decoded.width() as i64, decoded.height() as i64)
+        );
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&metadata).unwrap()["legacyReencoded"],
+            true
+        );
+
+        let (thumbnail, thumb_width, thumb_height): (Vec<u8>, i64, i64) = conn
+            .query_row(
+                "SELECT b.content, r.width, r.height
+                 FROM clipboard_item_representations r
+                 JOIN binary_blobs b ON b.sha256 = r.blob_sha256
+                 WHERE r.item_id = ?1 AND r.role = 'thumbnail'",
+                [item_id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert!(thumb_width <= 192 && thumb_height <= 192);
+        assert!(image::load_from_memory(&thumbnail).is_ok());
+        assert_eq!(
+            conn.query_row(
+                "SELECT COUNT(*) FROM clipboard_item_representations WHERE item_id = ?1",
+                [item_id],
+                |row| row.get::<_, i64>(0),
+            )
+            .unwrap(),
+            2
+        );
     }
 
     #[test]

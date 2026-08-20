@@ -8,6 +8,13 @@
     "back": "返回"
   },
   "app": {
+    "dismiss": "关闭",
+    "imageStorage": {
+      "capacity_cleanup": "Klip 已清理最旧的未收藏图片，以保持在存储上限内。",
+      "capacity_exceeded": "收藏图片已占满图片存储上限，本次图片未保存。",
+      "representation_too_large": "某个图片表示超过 128 MiB 安全上限，本次图片未保存。",
+      "capture_failed": "此图片无法保存。可在诊断中查看已记录的错误。"
+    },
     "loading": "加载中...",
     "errorLabel": "错误"
   },
@@ -102,6 +109,8 @@
       "resetZoom": "重置缩放",
       "downloadImage": "下载图片",
       "imageAlt": "剪贴板图片",
+      "loadingImage": "正在加载无损预览...",
+      "imageUnavailable": "此图片表示缺失或已损坏。",
       "ocrText": "识别文字",
       "source": "来源",
       "capturedAt": "捕获时间",

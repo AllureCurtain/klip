@@ -5,6 +5,8 @@ pub mod hash;
 pub mod monitor;
 pub mod paste;
 pub mod suppress;
+#[cfg(target_os = "windows")]
+mod windows_image;
 pub mod writer;
 
 pub use monitor::start_monitor;

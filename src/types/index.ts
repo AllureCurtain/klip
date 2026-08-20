@@ -59,6 +59,12 @@ export interface StorageUsage {
   blobCount: number;
 }
 
+export interface ImageStorageWarning {
+  code: 'capacity_cleanup' | 'capacity_exceeded' | 'representation_too_large' | 'capture_failed';
+  message: string;
+  itemIds: number[];
+}
+
 export interface ClipboardAnnotationInput {
   customTitle: string | null;
   note: string | null;

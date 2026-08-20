@@ -189,6 +189,16 @@ pub struct NewClipboardItem {
     pub size: i64,
     pub metadata: Option<String>,
     pub formats: Vec<ClipboardFormat>,
+    pub image_sources: Vec<NewImageRepresentation>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NewImageRepresentation {
+    pub format_name: String,
+    pub mime_type: Option<String>,
+    pub clipboard_format: Option<String>,
+    pub data: Vec<u8>,
+    pub metadata: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

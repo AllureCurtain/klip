@@ -94,9 +94,9 @@ fn copy_loaded_item(
     mode: ClipboardWriteMode,
 ) -> Result<(), AppError> {
     if item.content_type == crate::database::ContentType::Image {
-        match crate::database::productization::get_image_representation(db, item.id, None) {
-            Ok(bytes) => {
-                crate::clipboard::writer::copy_image_bytes_to_clipboard(&bytes, &item.hash)?
+        match crate::database::productization::get_image_write_bundle(db, item.id) {
+            Ok(bundle) => {
+                crate::clipboard::writer::copy_image_bundle_to_clipboard(&bundle, &item.hash)?
             }
             Err(AppError::NotFound(_)) => crate::clipboard::copy_to_clipboard(
                 &item.content,
@@ -183,6 +183,7 @@ mod tests {
             size: content.len() as i64,
             metadata: None,
             formats: Vec::new(),
+            image_sources: Vec::new(),
         };
         let saved = database::clipboard::insert(db, &item).unwrap();
         let conn = db.get_connection().unwrap();

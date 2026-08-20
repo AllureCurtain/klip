@@ -3,6 +3,7 @@ use crate::AppError;
 use base64::Engine;
 use rusqlite::{Connection, OptionalExtension};
 use sha2::{Digest, Sha256};
+use std::io::Cursor;
 
 pub fn run_pending_migrations(
     conn: &Connection,
@@ -286,13 +287,44 @@ fn migrate_legacy_image_data(conn: &rusqlite::Transaction<'_>, now: i64) -> Resu
         if bytes.len() > 128 * 1024 * 1024 {
             continue;
         }
+        let Ok(decoded) = image::load_from_memory_with_format(&bytes, image::ImageFormat::Png)
+        else {
+            tracing::warn!(
+                "Legacy image {item_id} is not a valid PNG and was left for diagnostics"
+            );
+            continue;
+        };
+        let (width, height) = (decoded.width() as i64, decoded.height() as i64);
         let hash = format!("{:x}", Sha256::digest(&bytes));
         conn.execute("INSERT OR IGNORE INTO binary_blobs (sha256, byte_length, content, created_at) VALUES (?1, ?2, ?3, ?4)", rusqlite::params![hash, bytes.len() as i64, bytes, now])?;
         let mime = header
             .strip_prefix("data:")
             .and_then(|v| v.split(';').next())
             .unwrap_or("image/png");
-        conn.execute("INSERT OR IGNORE INTO clipboard_item_representations (item_id, blob_sha256, role, format_name, mime_type, byte_length, priority, metadata) VALUES (?1, ?2, 'canonical', ?3, ?4, ?5, 0, ?6)", rusqlite::params![item_id, hash, "legacy_reencoded", mime, bytes.len() as i64, metadata])?;
+        let mut representation_metadata = metadata
+            .as_deref()
+            .and_then(|value| serde_json::from_str::<serde_json::Value>(value).ok())
+            .unwrap_or_else(|| serde_json::json!({}));
+        if let Some(object) = representation_metadata.as_object_mut() {
+            object.insert("legacyReencoded".into(), serde_json::Value::Bool(true));
+        }
+        conn.execute("INSERT OR IGNORE INTO clipboard_item_representations (item_id, blob_sha256, role, format_name, mime_type, width, height, byte_length, priority, metadata) VALUES (?1, ?2, 'canonical', 'png', ?3, ?4, ?5, ?6, 0, ?7)", rusqlite::params![item_id, hash, mime, width, height, bytes.len() as i64, representation_metadata.to_string()])?;
+
+        let thumbnail = decoded.thumbnail(192, 192);
+        let (thumbnail_width, thumbnail_height) =
+            (thumbnail.width() as i64, thumbnail.height() as i64);
+        let mut thumbnail_bytes = Vec::new();
+        thumbnail
+            .write_to(
+                &mut Cursor::new(&mut thumbnail_bytes),
+                image::ImageFormat::Png,
+            )
+            .map_err(|error| {
+                AppError::Database(format!("legacy thumbnail generation failed: {error}"))
+            })?;
+        let thumbnail_hash = format!("{:x}", Sha256::digest(&thumbnail_bytes));
+        conn.execute("INSERT OR IGNORE INTO binary_blobs (sha256, byte_length, content, created_at) VALUES (?1, ?2, ?3, ?4)", rusqlite::params![thumbnail_hash, thumbnail_bytes.len() as i64, thumbnail_bytes, now])?;
+        conn.execute("INSERT OR IGNORE INTO clipboard_item_representations (item_id, blob_sha256, role, format_name, mime_type, width, height, byte_length, priority, metadata) VALUES (?1, ?2, 'thumbnail', 'png', 'image/png', ?3, ?4, ?5, 0, '{\"generated\":true,\"legacy\":true}')", rusqlite::params![item_id, thumbnail_hash, thumbnail_width, thumbnail_height, thumbnail_bytes.len() as i64])?;
     }
     Ok(())
 }

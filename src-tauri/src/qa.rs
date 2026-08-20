@@ -194,6 +194,7 @@ mod tests {
             hash,
             metadata: None,
             formats: Vec::new(),
+            image_sources: Vec::new(),
         };
         crate::database::clipboard::insert(db, &item).unwrap();
     }

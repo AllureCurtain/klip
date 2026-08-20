@@ -712,6 +712,7 @@ mod tests {
             size: content.len() as i64,
             metadata: None,
             formats: Vec::new(),
+            image_sources: Vec::new(),
         };
         crate::database::clipboard::insert(db, &item).expect("insert searchable text")
     }
@@ -726,6 +727,7 @@ mod tests {
             hash: hash.into(),
             metadata: None,
             formats: Vec::new(),
+            image_sources: Vec::new(),
         };
         crate::database::clipboard::insert(db, &item).expect("insert searchable image")
     }

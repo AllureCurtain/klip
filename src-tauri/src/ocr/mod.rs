@@ -3,6 +3,7 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 
+#[cfg(test)]
 use base64::Engine;
 use oar_ocr::oarocr::{OAROCRBuilder, OAROCR};
 use sha2::{Digest, Sha256};
@@ -136,7 +137,13 @@ fn process_item(
         return Ok(());
     }
 
-    match worker.recognize_data_url(&item.content) {
+    let canonical =
+        crate::database::productization::get_image_representation(&db, item_id, Some("canonical"));
+    let recognition = canonical
+        .map_err(|error| OcrError::Image(error.to_string()))
+        .and_then(|bytes| worker.recognize_png(&bytes));
+
+    match recognition {
         Ok(text) => {
             if crate::database::ocr::complete(&db, item_id, &text)? {
                 emit_updated_item(app_handle, &db, item_id, true)?;
@@ -190,6 +197,7 @@ impl OcrWorker {
         }
     }
 
+    #[cfg(test)]
     fn recognize_data_url(&mut self, content: &str) -> Result<String, OcrError> {
         let encoded = content
             .strip_prefix("data:image/png;base64,")
@@ -197,7 +205,14 @@ impl OcrWorker {
         let bytes = base64::engine::general_purpose::STANDARD
             .decode(encoded)
             .map_err(|error| OcrError::Image(format!("invalid base64 image: {error}")))?;
-        let image = image::load_from_memory(&bytes)
+        self.recognize_png(&bytes)
+    }
+
+    fn recognize_png(&mut self, bytes: &[u8]) -> Result<String, OcrError> {
+        if image::guess_format(bytes).ok() != Some(image::ImageFormat::Png) {
+            return Err(OcrError::Image("expected canonical PNG bytes".into()));
+        }
+        let image = image::load_from_memory_with_format(bytes, image::ImageFormat::Png)
             .map_err(|error| OcrError::Image(format!("invalid encoded image: {error}")))?
             .to_rgb8();
         let results = self

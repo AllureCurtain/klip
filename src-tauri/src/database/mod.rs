@@ -17,7 +17,7 @@ pub use connection::{app_data_dir, get_db_path, init, Database};
 pub use types::{
     AdvancedSearchQuery, BackupSummary, ClipboardAnnotationInput, ClipboardFormat,
     ClipboardFormatType, ClipboardItem, ClipboardOcr, ConfigEntry, ContentType, DiagnosticsInfo,
-    ImageMedia, ImportSummary, NewClipboardItem, OcrStatus, RestoreSummary, ShortcutBinding,
-    Snippet, SnippetInput, SourceRule, SourceRuleInput, StatsResponse, StorageUsage, SystemInfo,
-    Tag, WindowState,
+    ImageMedia, ImportSummary, NewClipboardItem, NewImageRepresentation, OcrStatus, RestoreSummary,
+    ShortcutBinding, Snippet, SnippetInput, SourceRule, SourceRuleInput, StatsResponse,
+    StorageUsage, SystemInfo, Tag, WindowState,
 };

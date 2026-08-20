@@ -22,7 +22,7 @@ function requireLinuxClipboard() {
 }
 
 function runPowerShell(command, env = {}) {
-  const result = spawnSync('powershell', ['-NoProfile', '-Command', command], {
+  const result = spawnSync('powershell', ['-NoProfile', '-Sta', '-Command', command], {
     encoding: 'utf8',
     env: { ...process.env, ...env },
   });
@@ -125,6 +125,78 @@ function sendWindowsQuickPaste(index) {
   runPowerShell(
     `Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('^%${index}')`,
   );
+}
+
+function setClipboardBitmap() {
+  requireWindowsClipboard();
+  runPowerShell(`
+    Add-Type -AssemblyName System.Windows.Forms
+    Add-Type -AssemblyName System.Drawing
+    $bitmap = [System.Drawing.Bitmap]::new(3, 2, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+    $bitmap.SetPixel(0, 0, [System.Drawing.Color]::FromArgb(255, 12, 34, 56))
+    $bitmap.SetPixel(1, 0, [System.Drawing.Color]::FromArgb(255, 78, 90, 123))
+    $bitmap.SetPixel(2, 0, [System.Drawing.Color]::FromArgb(255, 140, 150, 160))
+    $bitmap.SetPixel(0, 1, [System.Drawing.Color]::FromArgb(255, 200, 10, 20))
+    $bitmap.SetPixel(1, 1, [System.Drawing.Color]::FromArgb(255, 30, 210, 40))
+    $bitmap.SetPixel(2, 1, [System.Drawing.Color]::FromArgb(255, 50, 60, 220))
+    [System.Windows.Forms.Clipboard]::SetImage($bitmap)
+    $bitmap.Dispose()
+  `);
+}
+
+function getClipboardBitmapSnapshot() {
+  requireWindowsClipboard();
+  const output = runPowerShell(`
+    Add-Type -AssemblyName System.Windows.Forms
+    Add-Type -AssemblyName System.Drawing
+    $image = [System.Windows.Forms.Clipboard]::GetImage()
+    if ($null -eq $image) { throw 'Clipboard does not contain an image' }
+    $bitmap = [System.Drawing.Bitmap]::new($image)
+    $pixel = $bitmap.GetPixel(1, 1)
+    $result = [ordered]@{
+      width = $bitmap.Width
+      height = $bitmap.Height
+      red = $pixel.R
+      green = $pixel.G
+      blue = $pixel.B
+      alpha = $pixel.A
+    }
+    $bitmap.Dispose()
+    $image.Dispose()
+    $result | ConvertTo-Json -Compress
+  `);
+  return JSON.parse(output.trim());
+}
+
+async function getStoredImagePixel(driver, itemId, x, y) {
+  const result = await driver.executeAsyncScript(`
+const [itemId, x, y] = arguments;
+const done = arguments[arguments.length - 1];
+window.__TAURI_INTERNALS__.invoke('get_image_representation', {
+  itemId,
+  format: 'canonical',
+}).then((bytes) => {
+  const url = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: 'image/png' }));
+  const image = new Image();
+  image.onload = () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = image.naturalWidth;
+    canvas.height = image.naturalHeight;
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    context.drawImage(image, 0, 0);
+    const pixel = [...context.getImageData(x, y, 1, 1).data];
+    URL.revokeObjectURL(url);
+    done({ width: image.naturalWidth, height: image.naturalHeight, pixel });
+  };
+  image.onerror = () => {
+    URL.revokeObjectURL(url);
+    done({ error: 'Stored canonical PNG could not be decoded' });
+  };
+  image.src = url;
+}).catch((error) => done({ error: String(error) }));
+`, itemId, x, y);
+  if (result.error) throw new Error(result.error);
+  return result;
 }
 
 async function enableQuickPasteShortcut(driver, index) {
@@ -350,6 +422,25 @@ async function waitForClipboardItem(driver, content, label) {
   );
 }
 
+async function waitForImageClipboardItem(driver, previousIds) {
+  return driver.wait(
+    async () => {
+      const items = await listClipboardItems();
+      return (
+        items.find(
+          (item) =>
+            item.content_type === 'image' &&
+            !previousIds.has(item.id) &&
+            item.media?.width === 3 &&
+            item.media?.height === 2,
+        ) ?? false
+      );
+    },
+    15000,
+    'Timed out waiting for the deterministic DIB clipboard image',
+  );
+}
+
 describe('clipboard capture, search, and paste flow', function () {
   let driver;
   let originalClipboardText;
@@ -438,6 +529,39 @@ describe('clipboard capture, search, and paste flow', function () {
       'Timed out waiting for clipboard to be restored by paste_from_clipboard',
     );
     capturedText = uniqueText;
+  });
+
+  it('captures a Windows bitmap and writes back the same dimensions and pixels', async function () {
+    if (process.platform !== 'win32') this.skip();
+
+    const previousIds = new Set((await listClipboardItems()).map((item) => item.id));
+    setClipboardBitmap();
+    const item = await waitForImageClipboardItem(driver, previousIds);
+
+    assert.equal(item.content, '', 'Image list IPC must not contain the full image payload');
+    assert.ok(
+      item.media.sourceFormats.some((format) => format === 'dib' || format === 'dibv5'),
+      `Expected a raw Windows bitmap source, got: ${item.media.sourceFormats.join(', ')}`,
+    );
+    assert.deepEqual(await getStoredImagePixel(driver, item.id, 1, 1), {
+      width: 3,
+      height: 2,
+      pixel: [30, 210, 40, 255],
+    });
+
+    const response = await fetch(`http://127.0.0.1:${httpPort}/api/clipboard/${item.id}/copy`, {
+      method: 'POST',
+    });
+    assert.equal(response.ok, true, `Image copy failed with HTTP ${response.status}`);
+    const snapshot = getClipboardBitmapSnapshot();
+    assert.deepEqual(snapshot, {
+      width: 3,
+      height: 2,
+      red: 30,
+      green: 210,
+      blue: 40,
+      alpha: 255,
+    });
   });
 
   it('quick-pastes the first filtered visible item instead of the newest database item', async function () {

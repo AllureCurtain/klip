@@ -19,6 +19,7 @@ import type {
   ShortcutBinding,
   WindowState,
   StorageUsage,
+  ImageStorageWarning,
 } from '@/types';
 
 // 剪贴板 API
@@ -264,3 +265,6 @@ export const onWindowStateChanged = (callback: (state: WindowState) => void) =>
 
 export const onShortcutRegistrationChanged = (callback: (bindings: ShortcutBinding[]) => void) =>
   listen('shortcut-registration-changed', (event) => callback(event.payload as ShortcutBinding[]));
+
+export const onImageStorageWarning = (callback: (warning: ImageStorageWarning) => void) =>
+  listen('image-storage-warning', (event) => callback(event.payload as ImageStorageWarning));

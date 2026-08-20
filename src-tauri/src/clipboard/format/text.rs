@@ -54,6 +54,7 @@ impl ClipboardFormatStrategy for TextStrategy {
             size,
             metadata: None,
             formats,
+            image_sources: Vec::new(),
         })
     }
 }

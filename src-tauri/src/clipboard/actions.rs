@@ -432,6 +432,7 @@ mod tests {
             size: content.len() as i64,
             metadata: None,
             formats: Vec::new(),
+            image_sources: Vec::new(),
         };
         database::clipboard::insert(db, &inserted).unwrap()
     }
