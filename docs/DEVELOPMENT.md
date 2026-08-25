@@ -1,7 +1,8 @@
 # Klip 开发指南
 
-Klip 当前以 Windows 10+ 为主要开发和交付环境。macOS/Linux 可以参与编译和静态验证，
-但尚未完成真实桌面整体验收，不应据此宣称完整跨平台支持。
+Klip 当前以 Windows 10+ 为主要开发和交付环境；Linux X11 会话已完整支持并通过真实桌面验收
+（Ubuntu 22.04/24.04）。macOS 可以参与编译和静态验证，但尚未完成真实桌面整体验收，
+不应据此宣称完整跨平台支持。
 
 ## 1. 环境准备
 
@@ -9,9 +10,10 @@ Klip 当前以 Windows 10+ 为主要开发和交付环境。macOS/Linux 可以�
 |------|------|------|
 | Node.js | 24.x | 前端工具链 |
 | pnpm | 10.x | 包管理和项目脚本 |
-| Rust | 1.95+ | Tauri 后端 |
-| `tauri-driver` | 当前稳定版 | Windows 桌面 E2E |
+| Rust | 1.95+（验证用 1.97.0） | Tauri 后端 |
+| `tauri-driver` | 当前稳定版 | 桌面 E2E（Windows 用 EdgeDriver，Linux 用 WebKitWebDriver） |
 | WebView2 Runtime | 系统已安装版本 | Windows Tauri WebView |
+| WebKitWebDriver | webkit2gtk-driver 包 | Linux Tauri WebView E2E |
 
 安装依赖：
 
@@ -23,9 +25,27 @@ cargo install tauri-driver --locked
 `pnpm install` 会通过 `prepare` 安装仓库的 pre-push hook。`pnpm-lock.yaml` 变化后应重新
 执行带 `--frozen-lockfile` 的安装。
 
-Linux 构建还需要 Tauri 2 的 WebKitGTK、GTK、AppIndicator 等系统依赖；剪贴板和模拟
-粘贴可能依赖 `wl-clipboard`、`xclip`、`xsel`、`xdotool`、`ydotool` 或 `wtype`。Wayland
-合成器可能主动禁止全局快捷键、窗口激活或模拟粘贴。
+Linux 构建还需要 Tauri 2 的系统依赖（Ubuntu/Debian）：
+
+```bash
+sudo apt-get install -y \
+  libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libsoup-3.0-dev \
+  libjavascriptcoregtk-4.1-dev libayatana-appindicator3-dev \
+  build-essential curl wget file libxdo-dev libssl-dev pkg-config \
+  xdotool xclip xsel
+```
+
+`libwebkit2gtk-4.1-dev` 在 Ubuntu 22.04 (jammy-updates) 与 24.04 源中均可用。剪贴板读写走
+clipboard-rs（X11 自带，Wayland 需 `wl-clipboard`）；模拟粘贴在 X11 用 `xdotool`，Wayland
+用 `ydotool` 或 `wtype`。Wayland 合成器可能主动禁止全局快捷键、窗口激活或模拟粘贴。
+
+Linux 桌面 E2E 需要一个 X11 会话和 `WebKitWebDriver`（`webkit2gtk-driver` 包）：
+
+```bash
+cargo install tauri-driver --locked
+sudo apt-get install -y webkit2gtk-driver
+SKIP_BUILD=1 DISPLAY=:0 bash scripts/run-e2e-linux.sh
+```
 
 ## 2. 日常开发
 

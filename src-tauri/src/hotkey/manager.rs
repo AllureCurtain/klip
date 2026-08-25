@@ -4,52 +4,6 @@ use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut,
 use crate::config::registry;
 use crate::AppError;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn parses_supported_toggle_hotkey() {
-        let parsed = parse_toggle_shortcut("Ctrl+Alt+K").unwrap();
-        assert_eq!(
-            parsed,
-            Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::KeyK)
-        );
-    }
-
-    #[test]
-    fn rejects_unsupported_toggle_hotkey_shape() {
-        assert!(parse_toggle_shortcut("Ctrl+Shift+K").is_err());
-        assert!(parse_toggle_shortcut("Alt+K").is_err());
-    }
-
-    #[test]
-    fn parses_supported_quick_paste_prefix() {
-        let parsed = parse_quick_paste_prefix("Ctrl+Alt").unwrap();
-        assert_eq!(parsed, Modifiers::CONTROL | Modifiers::ALT);
-    }
-
-    #[test]
-    fn rejects_unsupported_quick_paste_prefix() {
-        assert!(parse_quick_paste_prefix("Ctrl+Shift").is_err());
-        assert!(parse_quick_paste_prefix("Alt").is_err());
-    }
-
-    #[test]
-    fn validates_runtime_consumed_hotkey_values() {
-        assert!(validate_config_value(registry::KEY_HOTKEY_TOGGLE_WINDOW, "Ctrl+Alt+K").is_ok());
-        assert!(validate_config_value(registry::KEY_HOTKEY_QUICK_PASTE_PREFIX, "Ctrl+Alt").is_ok());
-        assert!(validate_config_value(registry::KEY_CLOSE_TO_TRAY, "true").is_ok());
-    }
-
-    #[test]
-    fn rejects_invalid_runtime_consumed_hotkey_values() {
-        assert!(validate_config_value(registry::KEY_HOTKEY_TOGGLE_WINDOW, "Ctrl+Shift+K").is_err());
-        assert!(
-            validate_config_value(registry::KEY_HOTKEY_QUICK_PASTE_PREFIX, "Ctrl+Shift").is_err()
-        );
-    }
-}
 
 pub fn register_hotkeys(app_handle: &AppHandle) -> Result<(), AppError> {
     let (toggle_raw, quick_paste_prefix_raw) = read_hotkey_config(app_handle)?;
@@ -282,5 +236,51 @@ fn quick_paste(app_handle: &AppHandle, index: i64) {
         Ok(true) => tracing::info!("Quick paste: pasted item at position {}", index),
         Ok(false) => tracing::warn!("Quick paste: no item at position {}", index),
         Err(error) => tracing::error!("Quick paste failed: {}", error),
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_supported_toggle_hotkey() {
+        let parsed = parse_toggle_shortcut("Ctrl+Alt+K").unwrap();
+        assert_eq!(
+            parsed,
+            Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::KeyK)
+        );
+    }
+
+    #[test]
+    fn rejects_unsupported_toggle_hotkey_shape() {
+        assert!(parse_toggle_shortcut("Ctrl+Shift+K").is_err());
+        assert!(parse_toggle_shortcut("Alt+K").is_err());
+    }
+
+    #[test]
+    fn parses_supported_quick_paste_prefix() {
+        let parsed = parse_quick_paste_prefix("Ctrl+Alt").unwrap();
+        assert_eq!(parsed, Modifiers::CONTROL | Modifiers::ALT);
+    }
+
+    #[test]
+    fn rejects_unsupported_quick_paste_prefix() {
+        assert!(parse_quick_paste_prefix("Ctrl+Shift").is_err());
+        assert!(parse_quick_paste_prefix("Alt").is_err());
+    }
+
+    #[test]
+    fn validates_runtime_consumed_hotkey_values() {
+        assert!(validate_config_value(registry::KEY_HOTKEY_TOGGLE_WINDOW, "Ctrl+Alt+K").is_ok());
+        assert!(validate_config_value(registry::KEY_HOTKEY_QUICK_PASTE_PREFIX, "Ctrl+Alt").is_ok());
+        assert!(validate_config_value(registry::KEY_CLOSE_TO_TRAY, "true").is_ok());
+    }
+
+    #[test]
+    fn rejects_invalid_runtime_consumed_hotkey_values() {
+        assert!(validate_config_value(registry::KEY_HOTKEY_TOGGLE_WINDOW, "Ctrl+Shift+K").is_err());
+        assert!(
+            validate_config_value(registry::KEY_HOTKEY_QUICK_PASTE_PREFIX, "Ctrl+Shift").is_err()
+        );
     }
 }

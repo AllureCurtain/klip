@@ -58,6 +58,15 @@ tower = { version = "0.5", features = ["util"] }
 [target.'cfg(target_os = "linux")'.dependencies]
 dirs = "6"
 x11rb = { version = "0.13", default-features = false }
+# Same ONNX Runtime integration as Windows: load the bundled
+# libonnxruntime.so dynamically (resources/onnxruntime/linux-x86_64, see
+# src/ocr/mod.rs). `api-24` pins the generated bindings to ORT 1.24's API
+# table (matching the bundled 1.24.2); `load-dynamic` is the only strategy
+# that can obtain the runtime on Linux without a system package.
+ort = { version = "=2.0.0-rc.12", default-features = false, features = [
+    "api-24",
+    "load-dynamic",
+] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 core-foundation = "0.10"

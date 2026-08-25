@@ -136,9 +136,15 @@ Klip 是一个本地单机剪贴板管理器。系统剪贴板通常只能记住
 安装验收后再公开。安装包尚未绑定公开代码签名证书，Windows 可能显示 SmartScreen 或
 未知发布者提示。这是当前发布阶段的已知边界，不代表应用需要联网或登录账号。
 
-### macOS / Linux
+### Linux
 
-暂不作为当前 MVP 交付平台。仓库已实现 macOS 和 Linux X11 的粘贴目标焦点恢复，并为 Wayland 提供无错误降级，但尚未在真实 macOS/Linux 桌面完成整体验收；README、发布包和验收口径仍以 Windows-first 为准。
+Linux X11 会话已完整支持并通过真实桌面验收（Ubuntu 22.04/24.04，X11 会话）。剪贴板监听（文本/图片/文件）、SQLite 历史、Tantivy+jieba 中文搜索、标签/片段、OCR（内置 ONNX Runtime + PP-OCRv5）、xdotool 模拟粘贴、X11 来源追踪、全局快捷键、托盘常驻、XDG 开机自启、设置持久化、JSON/CSV 导入导出与备份恢复、隐私开关、HTTP API 与 web-klip 仪表盘均可真实使用。Wayland 会话为降级支持（见[已知限制](#已知限制)）。
+
+从源码构建运行见[在 Linux 上构建](#在-linux-上构建)。macOS 暂不作为当前 MVP 交付平台：仓库已实现 macOS 焦点恢复并为未支持平台提供无错误降级，但尚未在真实 macOS 桌面完成整体验收。
+
+### macOS
+
+暂不作为当前 MVP 交付平台。仓库已实现 macOS 焦点恢复，并为未支持平台提供无错误降级，但尚未在真实 macOS 桌面完成整体验收；OCR 在 macOS 上无内置 ONNX Runtime，会优雅降级（不影响其他功能）。
 
 ## 使用方式
 
@@ -167,8 +173,10 @@ Windows 安装资源中，PP-OCRv5 检测/识别模型和字典约 21.5 MB，ONN
 | 平台 | 数据库位置 |
 |------|------------|
 | Windows | `%APPDATA%\com.klip.app\klip.db` |
+| Linux | `$XDG_DATA_HOME/klip/klip.db`（默认 `~/.local/share/klip/klip.db`） |
 | macOS | 后续阶段 |
-| Linux | 后续阶段 |
+
+Linux 上全文索引位于同目录下的 `search-index/`，OCR 模型缓存位于 `ocr-models/`，日志位于 `logs/`。可用 `KLIP_DATA_DIR` 环境变量覆盖数据目录（便于测试）。
 
 当前隐私设计偏实用：默认遮罩敏感预览，允许跳过新捕获的敏感文本，也允许临时暂停监听。它还不是完整的数据库加密产品，密钥管理和真实加密迁移属于 MVP 之后的工作。
 
@@ -178,7 +186,9 @@ Windows 安装资源中，PP-OCRv5 检测/识别模型和字典约 21.5 MB，ONN
 
 | 能力 | 当前状态 |
 |------|----------|
-| macOS / Linux 完整体验 | 后续阶段 |
+| Linux 完整体验（X11 会话） | 已支持并验收 |
+| Wayland 会话 | 降级支持（见[已知限制](#已知限制)） |
+| macOS 完整体验 | 后续阶段 |
 | 云同步服务 | 不包含 |
 | 插件运行时和插件市场 | 不包含 |
 | 托管更新源和应用内自动更新 | 不包含 |
@@ -251,6 +261,49 @@ pnpm e2e
 版本，下载同版本 EdgeDriver，并校验版本与 Microsoft Authenticode 签名。Desktop E2E
 workflow 使用同一自动检测流程，不固定 runner 的 WebView2 版本。当前 5 项桌面流程覆盖
 捕获/搜索/粘贴、可见项快捷粘贴、标题备注搜索、copy/paste/plain-text 语义和文件动作。
+
+### 在 Linux 上构建
+
+系统依赖（Ubuntu/Debian，Tauri 2 的 webkit2gtk-4.1 是 webview 后端，appindicator3 是托盘）：
+
+```bash
+sudo apt-get update
+sudo apt-get install -y \
+  libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libsoup-3.0-dev \
+  libjavascriptcoregtk-4.1-dev libayatana-appindicator3-dev \
+  build-essential curl wget file libxdo-dev libssl-dev pkg-config \
+  xdotool xclip xsel
+```
+
+> `libwebkit2gtk-4.1-dev` 在 Ubuntu 22.04 (jammy-updates) 和 24.04 源中均可用，无需第三方 PPA。
+> 粘贴模拟需要 `xdotool`（X11）；Wayland 下可另装 `ydotool` 或 `wtype`。
+
+构建运行：
+
+```bash
+pnpm install --frozen-lockfile
+pnpm build
+cd src-tauri
+cargo build
+# 直接运行 debug 二进制（OCR 模型/ONNX Runtime 通过 CARGO_MANIFEST_DIR 回退加载）
+KLIP_DATA_DIR=$HOME/.local/share/klip KLIP_LOG_DIR=$HOME/.local/share/klip/logs \
+  DISPLAY=:0 ./target/debug/klip
+```
+
+打包（生成 deb/AppImage 等，`tauri.linux.conf.json` 会自动并入，把 Linux ONNX Runtime 纳入 bundle）：
+
+```bash
+pnpm tauri:build
+```
+
+Linux 桌面 E2E（需要一个 X11 会话；headless 环境用 Xvfb 或 Xvnc）：
+
+```bash
+cargo install tauri-driver --locked   # 已在 PATH 中
+SKIP_BUILD=1 DISPLAY=:0 bash scripts/run-e2e-linux.sh
+```
+
+Rust 工具链：当前用 1.97.0/1.98.0 stable 验证通过。注意 rustc 1.98.0 在某些环境下编译 `quote 1.0.x` 会触发 ICE（`no type-dependent def for method call`），如遇到请改用 1.97.0。
 
 ## 发布验证
 

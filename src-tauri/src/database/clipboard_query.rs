@@ -109,6 +109,9 @@ pub(crate) fn fetch_item_by_id_locked(
     if let Some(item) = item.as_mut() {
         crate::database::formats::hydrate(conn, std::slice::from_mut(item))?;
         crate::database::ocr::hydrate(conn, std::slice::from_mut(item))?;
+        // Mirror the list path so a single-item fetch reports tags too
+        // (the settings/editor UIs read the item through this path).
+        hydrate_tags(conn, std::slice::from_mut(item))?;
     }
     Ok(item)
 }
