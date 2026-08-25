@@ -160,7 +160,8 @@ README 中出现配置、接口或代码基础，不等于对应能力已经成�
 | 能力 | 当前状态 |
 |---|---|
 | Windows 10+ 桌面核心工作流 | 当前重点，已完成自动化验证 |
-| macOS / Linux 完整体验 | 有部分代码基础，尚未完成真实桌面验收 |
+| Linux 完整体验（X11 会话） | 已支持并通过真实桌面验收（Ubuntu 22.04/24.04）；Wayland 会话为降级支持 |
+| macOS 完整体验 | 有部分代码基础（焦点恢复、无错误降级），尚未完成真实桌面验收 |
 | 云同步、账号与团队共享 | 不包含 |
 | 插件运行时与插件市场 | 不包含 |
 | 托管更新源与应用内自动更新 | 不包含 |
@@ -172,6 +173,15 @@ README 中出现配置、接口或代码基础，不等于对应能力已经成�
 ## 开发者看板与 API
 
 Klip 在 `127.0.0.1:27717` 提供本地 HTTP API、SSE 事件流和 OpenAPI 3.1 描述。仓库中的 [`web-klip`](web-klip/README.md) 是独立的浏览器开发者看板，可用于检查历史、搜索、标签、片段、来源规则、统计、事件和 API 行为；它不是当前桌面安装包的一部分。
+
+HTTP 服务仅监听回环地址，不启动桌面界面也能用 curl/脚本操作（`src-tauri/src/bin/klip_http_check.rs` 提供无桌面的独立服务用于验证）：
+
+- 剪贴板列表/搜索/详情，图片条目按需加载原图与缩略图（列表不再传 base64；缩略图带磁盘缓存与 `ETag`/`If-None-Match` 304）。
+- 图片 OCR：查看状态、手动触发、失败返回明确错误（桌面 worker 不可用时 503）。
+- 流式问答（SSE）：答案逐帧到达，引用可点击跳回原条目；失败/超时有明确帧。
+- 自诊断面板：SQLite 完整性、搜索索引一致性、数据目录占用，可导出 JSON 报告。
+- 主窗口只读状态（位置/尺寸/可见性）。
+- 可选访问令牌（`http_access_token` 配置）：开启后全路由含 SSE 需 `Bearer` 头或 `?access_token=` 查询参数，缺失/错误一律 401；默认关闭，行为不变。
 
 ```powershell
 # 先运行 Klip 桌面端
@@ -221,6 +231,82 @@ pnpm tauri:dev
 ```
 
 安装依赖时会配置仓库的 pre-push hook；推送前自动执行 `pnpm verify`。更完整的环境、调试和 E2E 说明见 [开发指南](docs/DEVELOPMENT.md)。
+
+Windows 上可选用 `sccache` 加速重建依赖。它不是项目依赖，不需要修改仓库内 Cargo 配置：
+
+```powershell
+scoop install sccache
+$env:RUSTC_WRAPPER = 'sccache'
+sccache --show-stats
+```
+
+`sccache` 主要帮助 target 缓存未命中或 worktree 重建后的依赖编译；日常修改项目代码仍主要依靠 Cargo incremental。
+
+### 在 Linux 上构建
+
+系统依赖（Ubuntu/Debian，Tauri 2 的 webkit2gtk-4.1 是 webview 后端，appindicator3 是托盘）：
+
+```bash
+sudo apt-get update
+sudo apt-get install -y \
+  libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libsoup-3.0-dev \
+  libjavascriptcoregtk-4.1-dev libayatana-appindicator3-dev \
+  build-essential curl wget file libxdo-dev libssl-dev pkg-config \
+  xdotool xclip xsel
+```
+
+> `libwebkit2gtk-4.1-dev` 在 Ubuntu 22.04 (jammy-updates) 和 24.04 源中均可用，无需第三方 PPA。
+> 粘贴模拟需要 `xdotool`（X11）；Wayland 下可另装 `ydotool` 或 `wtype`。
+
+构建运行：
+
+```bash
+pnpm install --frozen-lockfile
+pnpm build
+cd src-tauri
+cargo build
+# 直接运行 debug 二进制（OCR 模型/ONNX Runtime 通过 CARGO_MANIFEST_DIR 回退加载）
+KLIP_DATA_DIR=$HOME/.local/share/klip KLIP_LOG_DIR=$HOME/.local/share/klip/logs \
+  DISPLAY=:0 ./target/debug/klip
+```
+
+打包（生成 deb/AppImage 等，`tauri.linux.conf.json` 会自动并入，把 Linux ONNX Runtime 纳入 bundle）：
+
+```bash
+pnpm tauri:build
+```
+
+Linux 桌面 E2E（需要一个 X11 会话；headless 环境用 Xvfb 或 Xvnc）：
+
+```bash
+cargo install tauri-driver --locked   # 已在 PATH 中
+SKIP_BUILD=1 DISPLAY=:0 bash scripts/run-e2e-linux.sh
+```
+
+Rust 工具链：当前用 1.97.0/1.98.0 stable 验证通过。注意 rustc 1.98.0 在某些环境下编译 `quote 1.0.x` 会触发 ICE（`no type-dependent def for method call`），如遇到请改用 1.97.0。
+
+## 发布验证
+
+Windows 发布前常用命令：
+
+```powershell
+pnpm release:readiness
+pnpm release:verify -SkipBundle
+pnpm release:verify
+pnpm release:smoke
+```
+
+`pnpm release:readiness` 只检查签名和更新源配置是否存在，不验证真实证书，也不会访问托管更新源。
+
+可用的发布环境变量：
+
+| 变量 | 用途 |
+|------|------|
+| `KLIP_WINDOWS_CERTIFICATE_THUMBPRINT` | 使用系统证书存储中的代码签名证书 |
+| `KLIP_WINDOWS_CERTIFICATE_PATH` | 使用本地 PFX 证书文件 |
+| `KLIP_WINDOWS_CERTIFICATE_PASSWORD` | PFX 证书密码 |
+| `KLIP_WINDOWS_TIMESTAMP_URL` | 签名时间戳服务 |
+| `KLIP_UPDATE_FEED_URL` | 后续更新源配置 |
 
 ## 技术栈
 

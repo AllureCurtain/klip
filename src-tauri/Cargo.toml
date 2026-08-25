@@ -40,8 +40,9 @@ axum = { version = "0.7", features = ["macros"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "sync", "time"] }
 tower-http = { version = "0.5", features = ["cors"] }
 futures-util = "0.3"
+async-stream = "0.3"
 async-trait = "0.1"
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
 tantivy = "=0.24.2"
 # 0.16 is the release compatible with Tantivy 0.24's tokenizer API 0.5.
 tantivy-jieba = "=0.16.0"
@@ -58,6 +59,15 @@ tower = { version = "0.5", features = ["util"] }
 [target.'cfg(target_os = "linux")'.dependencies]
 dirs = "6"
 x11rb = { version = "0.13", default-features = false }
+# Same ONNX Runtime integration as Windows: load the bundled
+# libonnxruntime.so dynamically (resources/onnxruntime/linux-x86_64, see
+# src/ocr/mod.rs). `api-24` pins the generated bindings to ORT 1.24's API
+# table (matching the bundled 1.24.2); `load-dynamic` is the only strategy
+# that can obtain the runtime on Linux without a system package.
+ort = { version = "=2.0.0-rc.12", default-features = false, features = [
+    "api-24",
+    "load-dynamic",
+] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 core-foundation = "0.10"

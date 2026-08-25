@@ -20,15 +20,20 @@ pnpm preview
 
 Then open http://localhost:5173 in your browser.
 
-### Configure API URL
+### Configure API URL and access token
 
-The dashboard connects to `http://127.0.0.1:27717` by default. To change the API endpoint:
+The dashboard connects to `http://127.0.0.1:27717` by default. To change the API endpoint and (optionally) the access token:
 
 1. Click the gear icon in the top-right corner
 2. Enter the Klip HTTP API base URL (e.g. `http://127.0.0.1:27717`)
-3. Click "Test" to verify connectivity, then "Connect"
+3. If the server has `http_access_token` configured, paste the same token (leave empty when authentication is disabled)
+4. Click "Test" to verify connectivity (a wrong token is reported as 401), then "Connect"
 
-The URL is persisted in `localStorage`.
+Both the URL and the token are persisted in `localStorage`. The token is sent as
+`Authorization: Bearer <token>` on every request, and appended as `?access_token=`
+on `<img>` and `EventSource` URLs (which cannot set headers). When the server
+rejects the token (401), the app shows an "Access token required" screen instead
+of silently failing.
 
 You can also set a custom port for the Klip backend via environment variable:
 ```bash
@@ -39,17 +44,18 @@ KLIP_HTTP_PORT=30000 cargo run  # in src-tauri/
 
 | Page | Description |
 |------|-------------|
-| **Clipboard** | Infinite-scroll history list with content type filters, favorites filter, detail panel showing full content, metadata, and tags; copy-to-OS-clipboard and delete actions |
-| **Search** | Backend-powered advanced search with content type and favorites filters |
-| **Tags** | Create and delete color-coded tags |
-| **Snippets** | Full CRUD for reusable text snippets with inline editing |
+| **Clipboard** | Infinite-scroll history list with content type / favorites / tag filters, multi-select batch favorite & delete, thumbnails for image items, detail panel with OCR state + re-run, tag assignment, and copy-to-OS-clipboard |
+| **Search** | Backend-powered advanced search with content type, tag, favorites, sensitive, exact-match, and time-range filters |
+| **Tags** | Create and delete color-coded tags (deletion is confirmed) |
+| **Snippets** | Full CRUD for reusable text snippets with inline editing, tag picker, and favorite flag |
 | **Source Rules** | Manage ignore rules for process names and window titles with toggle switches |
 | **Statistics** | Aggregate counts (by type, favorites, sensitive), storage breakdown |
-| **QA Assistant** | Ask questions about clipboard history using the LLM integration; works out of the box with FakeProvider |
-| **Event Stream** | Live SSE connection status indicator + log of all real-time events (clipboard-updated, clipboard-cleared, config-changed) |
-| **Configuration** | Edit all Klip config keys with appropriate input types (boolean toggles, numbers, text); batch-save |
-| **System** | System/diagnostics info, JSON/CSV export, backup, restore, sensitive rescan, history clear |
-| **API Spec** | Browse the live OpenAPI 3.1 specification served by `/openapi.json` and `/api/openapi.json` |
+| **QA Assistant** | Streaming SSE answers with a stop button, clickable references that jump to the source item, and explicit error/timeout states |
+| **Event Stream** | Live SSE connection status + token indicator, log of all real-time events (including `clipboard-item-updated`) |
+| **Configuration** | Edit all Klip config keys with appropriate input types; includes the `http_access_token` field |
+| **Diagnostics** | Read-only self-checks (SQLite integrity, search-index consistency, disk usage) with a one-click JSON report export |
+| **System** | System/diagnostics info, main-window status, JSON/CSV export, backup, restore, sensitive rescan, history clear |
+| **API Spec** | Browse the live OpenAPI 3.1 specification served by `/openapi.json` |
 
 ## Architecture
 

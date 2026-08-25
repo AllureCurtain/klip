@@ -8,7 +8,13 @@ const BROADCAST_CAPACITY: usize = 256;
 pub enum ServerEvent {
     ClipboardUpdated(serde_json::Value),
     ClipboardCleared,
-    ConfigChanged { key: String, value: String },
+    ConfigChanged {
+        key: String,
+        value: String,
+    },
+    /// An existing item changed (e.g. OCR finished) — the payload is the
+    /// refreshed `ClipboardItem`.
+    ClipboardItemUpdated(serde_json::Value),
 }
 
 impl ServerEvent {
@@ -17,6 +23,7 @@ impl ServerEvent {
             Self::ClipboardUpdated(_) => "clipboard-updated",
             Self::ClipboardCleared => "clipboard-cleared",
             Self::ConfigChanged { .. } => "config-changed",
+            Self::ClipboardItemUpdated(_) => "clipboard-item-updated",
         }
     }
 }

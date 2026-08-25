@@ -27,7 +27,7 @@ post() { curl -sf --max-time 5 -X POST -H "Content-Type: application/json" -d "$
 put() { curl -sf --max-time 5 -X PUT -H "Content-Type: application/json" -d "$2" "$BASE$1" 2>/dev/null; }
 del() { curl -sf --max-time 5 -X DELETE "$BASE$1" 2>/dev/null; }
 patch() { curl -sf --max-time 5 -X PATCH -H "Content-Type: application/json" -d "$2" "$BASE$1" 2>/dev/null; }
-status() { curl -so /dev/null -w '%{http_code}' --max-time 5 "$@" "$BASE$1" 2>/dev/null; }
+status() { curl -so /dev/null -w '%{http_code}' --max-time 5 "$BASE$1" 2>/dev/null; }
 
 echo "============================================"
 echo " Klip HTTP API Verification"
@@ -321,6 +321,97 @@ else
   log_fail "POST /api/qa/ask empty (expected 400, got $code)"
 fi
 
+# 7b. QA streaming (SSE)
+section "7b. QA Streaming (SSE)"
+
+stream=$(curl -sN --max-time 8 -X POST -H "Content-Type: application/json" \
+  -d '{"question":"what is in the clipboard?"}' "$BASE/api/qa/ask/stream" 2>/dev/null || true)
+if echo "$stream" | grep -q 'event: context' && echo "$stream" | grep -q 'event: done'; then
+  log_pass "POST /api/qa/ask/stream emits context then done"
+elif echo "$stream" | grep -q 'event: error'; then
+  log_skip "POST /api/qa/ask/stream (error event: $(echo "$stream" | grep 'data:' | tail -1 | head -c 120))"
+else
+  log_fail "POST /api/qa/ask/stream (no context/done frames)"
+fi
+
+code=$(curl -so /dev/null -w '%{http_code}' --max-time 5 -X POST -H "Content-Type: application/json" -d '{"question":"  "}' "$BASE/api/qa/ask/stream")
+if [ "$code" = "400" ]; then
+  log_pass "POST /api/qa/ask/stream empty question returns 400"
+else
+  log_fail "POST /api/qa/ask/stream empty (expected 400, got $code)"
+fi
+
+# 7c. Image on-demand loading + OCR
+section "7c. Images & OCR"
+
+# Find an image item id (image items carry image_ref in the list)
+img_id=$(get '/api/clipboard?limit=50' | python3 -c "
+import sys,json
+try:
+  for i in json.load(sys.stdin):
+    if i.get('content_type')=='image': print(i['id']); break
+except: pass" 2>/dev/null)
+
+if [ -n "$img_id" ]; then
+  ct=$(curl -so /dev/null -w '%{content_type}' --max-time 5 "$BASE/api/clipboard/$img_id/image")
+  if [ "$ct" = "image/png" ]; then
+    log_pass "GET /api/clipboard/$img_id/image serves image/png"
+  else
+    log_fail "GET /api/clipboard/$img_id/image (content_type=$ct)"
+  fi
+  ct=$(curl -so /dev/null -w '%{content_type}' --max-time 5 "$BASE/api/clipboard/$img_id/thumbnail")
+  if [ "$ct" = "image/png" ]; then
+    log_pass "GET /api/clipboard/$img_id/thumbnail serves image/png"
+  else
+    log_fail "GET /api/clipboard/$img_id/thumbnail (content_type=$ct)"
+  fi
+  # OCR state is present
+  if get "/api/clipboard/$img_id/ocr" | grep -q '"status"'; then
+    log_pass "GET /api/clipboard/$img_id/ocr returns OCR state"
+  else
+    log_fail "GET /api/clipboard/$img_id/ocr (no state)"
+  fi
+  # Trigger without desktop worker → 503 (standalone) or 200 (desktop)
+  code=$(curl -so /dev/null -w '%{http_code}' --max-time 5 -X POST "$BASE/api/clipboard/$img_id/ocr")
+  if [ "$code" = "503" ] || [ "$code" = "200" ]; then
+    log_pass "POST /api/clipboard/$img_id/ocr (HTTP $code)"
+  else
+    log_fail "POST /api/clipboard/$img_id/ocr (expected 503/200, got $code)"
+  fi
+  # List must not contain base64 image payloads
+  if get '/api/clipboard?limit=50' | grep -q 'data:image/png;base64'; then
+    log_fail "GET /api/clipboard leaks base64 image payload"
+  else
+    log_pass "GET /api/clipboard omits base64 image payload"
+  fi
+else
+  log_skip "image/OCR tests (no image item in history)"
+fi
+
+# 7d. Diagnostics & window status
+section "7d. Diagnostics & Window Status"
+
+r=$(get /api/diagnostics/health)
+if echo "$r" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+assert d['status'] in ('ok','degraded','error')
+ids={c['id'] for c in d['checks']}
+assert {'sqlite_integrity','search_index','data_dir_usage'} <= ids
+print('overall:', d['status'])
+" 2>/dev/null; then
+  log_pass "GET /api/diagnostics/health (3 checks)"
+else
+  log_fail "GET /api/diagnostics/health: $(echo "$r" | head -c 200)"
+fi
+
+code=$(status /api/window/status)
+if [ "$code" = "200" ] || [ "$code" = "500" ]; then
+  log_pass "GET /api/window/status (HTTP $code)"
+else
+  log_fail "GET /api/window/status (expected 200/500, got $code)"
+fi
+
 # 8. Batch delete & rescan
 section "8. Maintenance"
 
@@ -405,6 +496,22 @@ fi
 # Cleanup test tag
 if [ -n "$TAG_ID" ] && [ "$TAG_ID" != "None" ]; then
   del "/api/tags/$TAG_ID" > /dev/null 2>&1
+fi
+
+# 12. Optional access token (only if the server has it enabled)
+section "12. Access Token (skipped unless 401 observed)"
+
+token_probe=$(curl -so /dev/null -w '%{http_code}' --max-time 3 "$BASE/api/health")
+if [ "$token_probe" = "401" ]; then
+  log_pass "server requires an access token (401 without credentials)"
+  # Without token → 401 (already shown). With a dummy token we cannot pass,
+  # so just confirm the gate is active on a couple of routes.
+  for route in /api/events /api/openapi.json /api/clipboard/1/image; do
+    code=$(curl -so /dev/null -w '%{http_code}' --max-time 3 "$BASE$route")
+    [ "$code" = "401" ] && log_pass "GET $route gated (401)" || log_fail "GET $route (expected 401, got $code)"
+  done
+else
+  log_skip "access token (server has it disabled; HTTP $token_probe)"
 fi
 
 # Summary

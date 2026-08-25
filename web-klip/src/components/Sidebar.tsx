@@ -1,11 +1,11 @@
 import {
   ClipboardText, MagnifyingGlass, Tag, NoteBlank, ShieldWarning, Gear,
-  ChartPie, ChatCircle, Pulse, Database, Code, ArrowClockwise,
+  ChartPie, ChatCircle, Pulse, Database, Code, ArrowClockwise, Heartbeat,
 } from '@phosphor-icons/react';
 
 export type View =
   | 'clipboard' | 'search' | 'tags' | 'snippets' | 'rules'
-  | 'stats' | 'qa' | 'events' | 'config' | 'system' | 'openapi';
+  | 'stats' | 'qa' | 'events' | 'config' | 'diagnostics' | 'system' | 'openapi';
 
 interface Props {
   current: View;
@@ -13,18 +13,19 @@ interface Props {
   onRefresh: () => void;
 }
 
-const navItems: { id: View; label: string; icon: React.ElementType }[] = [
-  { id: 'clipboard', label: 'Clipboard', icon: ClipboardText },
-  { id: 'search', label: 'Search', icon: MagnifyingGlass },
-  { id: 'tags', label: 'Tags', icon: Tag },
-  { id: 'snippets', label: 'Snippets', icon: NoteBlank },
-  { id: 'rules', label: 'Source Rules', icon: ShieldWarning },
-  { id: 'stats', label: 'Statistics', icon: ChartPie },
-  { id: 'qa', label: 'QA Assistant', icon: ChatCircle },
-  { id: 'events', label: 'Event Stream', icon: Pulse },
-  { id: 'config', label: 'Configuration', icon: Gear },
-  { id: 'system', label: 'System', icon: Database },
-  { id: 'openapi', label: 'API Spec', icon: Code },
+const navItems: { id: View; label: string; icon: React.ElementType; title: string }[] = [
+  { id: 'clipboard', label: 'Clipboard', icon: ClipboardText, title: 'Browse clipboard history' },
+  { id: 'search', label: 'Search', icon: MagnifyingGlass, title: 'Advanced search' },
+  { id: 'tags', label: 'Tags', icon: Tag, title: 'Manage tags' },
+  { id: 'snippets', label: 'Snippets', icon: NoteBlank, title: 'Reusable text snippets' },
+  { id: 'rules', label: 'Source Rules', icon: ShieldWarning, title: 'Ignore clipboard sources' },
+  { id: 'stats', label: 'Statistics', icon: ChartPie, title: 'Usage statistics' },
+  { id: 'qa', label: 'QA Assistant', icon: ChatCircle, title: 'Ask about clipboard history' },
+  { id: 'events', label: 'Event Stream', icon: Pulse, title: 'Live SSE events' },
+  { id: 'config', label: 'Configuration', icon: Gear, title: 'App configuration' },
+  { id: 'diagnostics', label: 'Diagnostics', icon: Heartbeat, title: 'Self-checks and health report' },
+  { id: 'system', label: 'System', icon: Database, title: 'System, data, and maintenance' },
+  { id: 'openapi', label: 'API Spec', icon: Code, title: 'OpenAPI specification' },
 ];
 
 export function Sidebar({ current, onNavigate, onRefresh }: Props) {
@@ -50,6 +51,9 @@ export function Sidebar({ current, onNavigate, onRefresh }: Props) {
             <button
               key={item.id}
               onClick={() => onNavigate(item.id)}
+              title={item.title}
+              aria-label={item.title}
+              aria-current={active ? 'page' : undefined}
               className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-left text-xs transition-colors
                 ${active
                   ? 'bg-ink-800 text-white'
@@ -66,6 +70,8 @@ export function Sidebar({ current, onNavigate, onRefresh }: Props) {
       <div className="p-2 border-t border-ink-800">
         <button
           onClick={onRefresh}
+          title="Reload all data"
+          aria-label="Reload all data"
           className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-ink-400 hover:bg-ink-800/50 hover:text-ink-200 text-xs transition-colors"
         >
           <ArrowClockwise size={16} />

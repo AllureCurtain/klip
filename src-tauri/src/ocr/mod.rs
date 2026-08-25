@@ -23,6 +23,12 @@ const ONNX_RUNTIME_RESOURCE_PATH: &str = "resources/onnxruntime/windows-x86_64/o
 const ONNX_RUNTIME_SHA256: &str =
     "114947d633e6844ce3c4b51ef6678f776628571d08a5763859c61642c8dcca9c";
 
+#[cfg(target_os = "linux")]
+const ONNX_RUNTIME_RESOURCE_PATH: &str = "resources/onnxruntime/linux-x86_64/libonnxruntime.so";
+#[cfg(target_os = "linux")]
+const ONNX_RUNTIME_SHA256: &str =
+    "ffc84d48e845cf0b562ba4ea5ca32aaafc0d4069019fef4f63095b307d0270ad";
+
 const MODEL_SPECS: &[ModelSpec] = &[
     ModelSpec {
         name: "pp-ocrv5_mobile_det.onnx",
@@ -68,6 +74,16 @@ impl OcrService {
         let resource_root = app_handle.path().resource_dir().map_err(|error| {
             AppError::System(format!("failed to resolve resource directory: {error}"))
         })?;
+        // Dev fallback: a raw debug/test binary run outside `tauri dev` resolves
+        // resource_dir() to the system install prefix (e.g. /usr/lib/Klip), where
+        // the bundled OCR models do not exist. The crate source tree this binary
+        // was built from still has them, so use it when the primary resource dir
+        // does not look populated.
+        let resource_root = if resource_root.join(RESOURCE_SUBDIRECTORY).is_dir() {
+            resource_root
+        } else {
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        };
         let resource_dir = resource_root.join(RESOURCE_SUBDIRECTORY);
         let runtime_path = runtime_resource_path(&resource_root);
         let cache_dir =
@@ -233,7 +249,7 @@ impl OcrWorker {
 }
 
 fn initialize_runtime(runtime_path: Option<&Path>) -> Result<(), OcrError> {
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
     {
         let path = runtime_path.ok_or_else(|| {
             OcrError::Resource("bundled ONNX Runtime path was not configured".into())
@@ -257,15 +273,33 @@ fn initialize_runtime(runtime_path: Option<&Path>) -> Result<(), OcrError> {
             .with_telemetry(false)
             .commit();
     }
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
     let _ = runtime_path;
     Ok(())
 }
 
 fn runtime_resource_path(resource_root: &Path) -> Option<PathBuf> {
-    #[cfg(target_os = "windows")]
-    return Some(resource_root.join(ONNX_RUNTIME_RESOURCE_PATH));
-    #[cfg(not(target_os = "windows"))]
+    // Windows and Linux bundle a platform-specific ONNX Runtime shared library
+    // next to the OCR models. macOS has no bundled runtime yet, so OCR stays
+    // unavailable there and the worker degrades gracefully.
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
+    {
+        let bundled = resource_root.join(ONNX_RUNTIME_RESOURCE_PATH);
+        if bundled.is_file() {
+            return Some(bundled);
+        }
+        // Dev-mode fallback: `cargo build`/`cargo test` run the binary directly,
+        // without Tauri copying bundle resources beside it. The crate source
+        // tree the binary was built from still has the file, so try it before
+        // reporting the bundled path as missing.
+        let manifest = Path::new(env!("CARGO_MANIFEST_DIR")).join(ONNX_RUNTIME_RESOURCE_PATH);
+        if manifest.is_file() {
+            return Some(manifest);
+        }
+        // Keep the bundled path so the caller reports a precise "missing" error.
+        Some(bundled)
+    }
+    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
     {
         let _ = resource_root;
         None

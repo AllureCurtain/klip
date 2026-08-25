@@ -25,6 +25,12 @@ pub enum AppError {
 
     #[error("{0}")]
     System(String),
+
+    /// A capability needs the running desktop runtime (tray app, window,
+    /// OCR worker) but it is absent — e.g. HTTP-only use or `cargo test`.
+    /// Maps to HTTP 503.
+    #[error("{0}")]
+    Unavailable(String),
 }
 
 impl Serialize for AppError {
@@ -51,6 +57,7 @@ impl AppError {
             Self::Window(_) => "window",
             Self::Llm(_) => "llm",
             Self::System(_) => "system",
+            Self::Unavailable(_) => "unavailable",
         }
     }
 }

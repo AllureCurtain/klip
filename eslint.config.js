@@ -16,6 +16,9 @@ export default tseslint.config(
       '软件著作权申请资料/**',
       '软著补正重做/**',
       'web-klip/**',
+      // Vendored design-tool working files (GSAP examples, detect.mjs). Not
+      // app code, not part of the build; linting them as app sources fails.
+      'finesse-ui/**',
       '*.tsbuildinfo',
       'vite.config.js',
       'vite.config.d.ts',

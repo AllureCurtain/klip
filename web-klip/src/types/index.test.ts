@@ -11,9 +11,16 @@ describe('Type definitions', () => {
       hash: 'abc',
       size: 5,
       metadata: null,
+      source_application: null,
+      source_window_title: null,
+      custom_title: null,
+      note: null,
       is_favorited: false,
       is_sensitive: false,
       sensitivity_reason: null,
+      formats: [],
+      ocr: null,
+      image_ref: null,
       tags: [],
       created_at: 0,
       last_used_at: 0,
@@ -21,6 +28,38 @@ describe('Type definitions', () => {
     expect(item.id).toBe(1);
     expect(item.content_type).toBe('text');
     expect(item.tags).toEqual([]);
+  });
+
+  it('ClipboardItem for images omits content and carries image_ref', () => {
+    const item: ClipboardItem = {
+      id: 2,
+      content_type: 'image',
+      preview: 'screenshot',
+      hash: 'def',
+      size: 1024,
+      metadata: '{"width":1920,"height":1080}',
+      source_application: null,
+      source_window_title: null,
+      custom_title: null,
+      note: null,
+      is_favorited: false,
+      is_sensitive: false,
+      sensitivity_reason: null,
+      formats: [],
+      ocr: { status: 'pending', text: '', error: null, updated_at: 0 },
+      image_ref: {
+        url: '/api/clipboard/2/image',
+        thumbnail_url: '/api/clipboard/2/thumbnail',
+        width: 1920,
+        height: 1080,
+        size: 1024,
+      },
+      tags: [],
+      created_at: 0,
+      last_used_at: 0,
+    };
+    expect(item.content).toBeUndefined();
+    expect(item.image_ref?.thumbnail_url).toBe('/api/clipboard/2/thumbnail');
   });
 
   it('Tag accepts id, name, color, created_at', () => {
