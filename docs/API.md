@@ -1272,7 +1272,83 @@ try {
 
 ---
 
-## 6. 使用示例
+## 6. 本地 HTTP API
+
+桌面应用内置一个 HTTP 服务器（默认 `http://127.0.0.1:27717`，仅监听回环地址），
+供 `web-klip` 仪表盘和 curl/脚本使用。完整契约见运行时的
+`GET /openapi.json`（OpenAPI 3.1，含 `securitySchemes`）。
+
+### 6.1 可选访问令牌
+
+配置项 `http_access_token` 非空时，**所有**端点（含 SSE 流）都要求令牌，
+缺失或错误一律 `401`：
+
+- `Authorization: Bearer <token>` 请求头，或
+- `?access_token=<token>` 查询参数（`<img src>` 与 `EventSource` 无法带头时用）。
+
+为空（默认）时不鉴权，行为与旧版完全一致。令牌只保存在调用方浏览器
+（localStorage），服务端存于 SQLite `app_config`。
+
+### 6.2 图片按需加载
+
+列表/搜索/单条响应里，图片条目**省略** `content`（base64），改带 `image_ref`：
+
+```json
+{
+  "id": 7, "content_type": "image",
+  "image_ref": {
+    "url": "/api/clipboard/7/image",
+    "thumbnail_url": "/api/clipboard/7/thumbnail",
+    "width": 1920, "height": 1080, "size": 842133
+  },
+  "ocr": { "status": "pending", "text": "", "error": null, "updated_at": 1787556187403 }
+}
+```
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/clipboard/{id}/image` | 原图（`image/png`，长缓存） |
+| GET | `/api/clipboard/{id}/thumbnail` | 缩略图（长边 ≤400px，`image/png`） |
+| GET | `/api/clipboard/{id}/ocr` | OCR 状态：`pending`/`completed`/`failed` + 文本/错误 |
+| POST | `/api/clipboard/{id}/ocr` | （重新）识别；需要桌面应用，否则 `503 ocr_unavailable` |
+
+文本/文件条目调图片端点返回 `400`，不存在的 id 返回 `404`。
+
+### 6.3 流式问答
+
+`POST /api/qa/ask/stream`（`text/event-stream`）依次发：
+
+```
+event: context
+data: {"context_count":1,"items":[{"id":1,"preview":"…","score":1.0}]}
+
+event: delta
+data: {"text":"答案片段"}
+
+event: done
+data: {"provider":"fake","model":"gpt-4o-mini","context_count":1}
+```
+
+任何失败（含 60 秒无 chunk 超时）发 `event: error`：`{"error":"llm","message":"…"}`。
+空问题返回 `400`。引用条目可点击跳到 `/api/clipboard/{id}` 详情。
+
+### 6.4 诊断与窗口状态
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/diagnostics/health` | 三项只读自检：`sqlite_integrity`（quick_check）、`search_index`（指纹比对）、`data_dir_usage`；`status` ∈ `ok`/`degraded`/`error` |
+| GET | `/api/window/status` | 主窗口只读状态 `{exists,visible,minimized,maximized,focused,x,y,width,height}`；无桌面时 `500` |
+
+诊断报告可在前端「Export JSON」下载为本地文件。
+
+### 6.5 SSE 事件
+
+`GET /api/events`（`EventSource`）除既有 `clipboard-updated`/`clipboard-cleared`/
+`config-changed` 外，新增：
+
+- `clipboard-item-updated`：单条目刷新（如 OCR 完成），payload 为刷新后的 `ClipboardItem`。
+
+
 
 ### 6.1 完整的 Hook 示例
 

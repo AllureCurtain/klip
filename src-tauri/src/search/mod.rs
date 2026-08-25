@@ -124,6 +124,98 @@ pub(crate) fn search_ids(db: &Database, query: &str) -> Result<Vec<i64>, SearchE
     index.search_ids(query)
 }
 
+/// Result of comparing the SQLite content with the Tantivy search index.
+/// Used by the HTTP diagnostics endpoint; never mutates anything.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct IndexConsistencyReport {
+    /// The index exists and could be read. When `false`, SQLite LIKE fallback
+    /// still covers search; the check itself is degraded, not failed.
+    pub available: bool,
+    /// Every document id and its content fingerprint match the database.
+    pub consistent: bool,
+    pub database_docs: usize,
+    pub index_docs: usize,
+    /// Rows present in the database but missing from the index.
+    pub missing_from_index: Vec<i64>,
+    /// Documents present in the index but unknown to the database.
+    pub extra_in_index: Vec<i64>,
+    /// Documents present on both sides whose searchable text differs.
+    pub fingerprint_mismatches: Vec<i64>,
+    /// Human-readable reason when the index could not be inspected.
+    pub detail: Option<String>,
+}
+
+impl IndexConsistencyReport {
+    fn unavailable(detail: String) -> Self {
+        Self {
+            available: false,
+            consistent: false,
+            database_docs: 0,
+            index_docs: 0,
+            missing_from_index: Vec::new(),
+            extra_in_index: Vec::new(),
+            fingerprint_mismatches: Vec::new(),
+            detail: Some(detail),
+        }
+    }
+}
+
+/// Compare every clipboard row's searchable text against the indexed documents.
+/// Read-only: runs the same fingerprint comparison the health check performs at
+/// startup (`open_existing`), so a `consistent: true` report means the startup
+/// check would have passed too.
+pub fn consistency_report(db: &Database) -> IndexConsistencyReport {
+    let Some(index) = db.search_index() else {
+        return IndexConsistencyReport::unavailable(
+            "search index is not initialized for this database".to_string(),
+        );
+    };
+    let database_fingerprints = match database_document_fingerprints(db) {
+        Ok(fingerprints) => fingerprints,
+        Err(error) => return IndexConsistencyReport::unavailable(error.to_string()),
+    };
+    let index_fingerprints = match index.core.document_fingerprints() {
+        Ok(fingerprints) => fingerprints,
+        Err(error) => return IndexConsistencyReport::unavailable(error.to_string()),
+    };
+
+    let database_map: HashMap<i64, Vec<u8>> = database_fingerprints.into_iter().collect();
+    let index_map: HashMap<i64, Vec<u8>> = index_fingerprints.into_iter().collect();
+
+    let mut missing_from_index: Vec<i64> = database_map
+        .keys()
+        .filter(|id| !index_map.contains_key(id))
+        .copied()
+        .collect();
+    let mut extra_in_index: Vec<i64> = index_map
+        .keys()
+        .filter(|id| !database_map.contains_key(id))
+        .copied()
+        .collect();
+    let mut fingerprint_mismatches: Vec<i64> = database_map
+        .iter()
+        .filter(|(id, fingerprint)| index_map.get(*id) != Some(*fingerprint))
+        .map(|(id, _)| *id)
+        .collect();
+    missing_from_index.sort_unstable();
+    extra_in_index.sort_unstable();
+    fingerprint_mismatches.sort_unstable();
+
+    let consistent = missing_from_index.is_empty()
+        && extra_in_index.is_empty()
+        && fingerprint_mismatches.is_empty();
+    IndexConsistencyReport {
+        available: true,
+        consistent,
+        database_docs: database_map.len(),
+        index_docs: index_map.len(),
+        missing_from_index,
+        extra_in_index,
+        fingerprint_mismatches,
+        detail: None,
+    }
+}
+
 impl SearchIndex {
     fn open_or_rebuild(index_dir: &Path, db: &Database) -> Result<Self, SearchError> {
         if index_dir.join("meta.json").is_file() {
@@ -407,6 +499,42 @@ impl SearchCore {
             self.commit_locked(&mut state)?;
         }
         Ok(())
+    }
+
+    /// All `(item_id, content_fingerprint)` pairs currently visible to the
+    /// shared (reloaded) reader. Used by the diagnostics consistency check.
+    fn document_fingerprints(&self) -> Result<Vec<(i64, Vec<u8>)>, SearchError> {
+        self.commit_pending()?;
+        let searcher = self.reader.searcher();
+        let document_count = usize::try_from(searcher.num_docs()).unwrap_or(usize::MAX);
+        if document_count == 0 {
+            return Ok(Vec::new());
+        }
+        let hits = searcher
+            .search(&AllQuery, &TopDocs::with_limit(document_count))
+            .map_err(SearchError::from)?;
+        let mut fingerprints = Vec::with_capacity(hits.len());
+        for (_, address) in hits {
+            let document: TantivyDocument = searcher.doc(address).map_err(SearchError::from)?;
+            let item_id = document
+                .get_first(self.id_field)
+                .and_then(|value| value.as_i64())
+                .ok_or_else(|| {
+                    SearchError::Unavailable("index document is missing item_id".to_string())
+                })?;
+            let fingerprint = document
+                .get_first(self.fingerprint_field)
+                .and_then(|value| value.as_bytes())
+                .map(ToOwned::to_owned)
+                .ok_or_else(|| {
+                    SearchError::Unavailable(
+                        "index document is missing content_fingerprint".to_string(),
+                    )
+                })?;
+            fingerprints.push((item_id, fingerprint));
+        }
+        fingerprints.sort_by_key(|(item_id, _)| *item_id);
+        Ok(fingerprints)
     }
 
     fn commit_locked(&self, state: &mut WriterState) -> Result<(), SearchError> {
@@ -1158,5 +1286,75 @@ mod tests {
 
         drop(reopened);
         std::fs::remove_dir_all(root).expect("remove search benchmark directory");
+    }
+
+    #[test]
+    fn consistency_report_is_clean_for_a_synchronized_index() {
+        let (root, db) = temp_database("consistency-clean");
+        insert_text(&db, "consistency report alpha");
+        insert_text(&db, "consistency report beta");
+
+        let report = consistency_report(&db);
+        assert!(report.available, "{report:?}");
+        assert!(report.consistent, "{report:?}");
+        assert_eq!(report.database_docs, 2);
+        assert_eq!(report.index_docs, 2);
+        assert!(report.missing_from_index.is_empty());
+        assert!(report.extra_in_index.is_empty());
+
+        drop(db);
+        std::fs::remove_dir_all(root).expect("remove search test directory");
+    }
+
+    #[test]
+    fn consistency_report_detects_rows_missing_from_the_index() {
+        let (root, db) = temp_database("consistency-missing");
+        let indexed = insert_text(&db, "indexed row stays");
+        let orphaned = insert_text(&db, "orphaned row bypasses the index");
+
+        // Delete the row straight from SQLite, skipping index synchronization —
+        // this is exactly the drift the diagnostics check must surface.
+        {
+            let conn = db.get_connection().expect("lock connection");
+            conn.execute("DELETE FROM clipboard_items WHERE id = ?1", [orphaned.id])
+                .expect("delete row bypassing the index");
+        }
+        // Now the index still holds `orphaned`, while the database no longer
+        // does: the report must flag it as an extra index document.
+        let report = consistency_report(&db);
+        assert!(report.available);
+        assert!(!report.consistent);
+        assert_eq!(report.database_docs, 1, "{report:?}");
+        assert_eq!(report.index_docs, 2, "{report:?}");
+        assert_eq!(report.extra_in_index, vec![orphaned.id]);
+
+        // Re-sync through the public API and the report must turn clean again.
+        crate::search::delete_items(&db, &[orphaned.id]).expect("remove from index");
+        let repaired = consistency_report(&db);
+        assert!(repaired.consistent, "{repaired:?}");
+        assert_eq!(repaired.database_docs, 1);
+        assert_eq!(repaired.index_docs, 1);
+
+        // And a row deleted everywhere changes nothing about cleanliness.
+        crate::database::clipboard::delete(&db, indexed.id).expect("delete indexed row");
+        let after_delete = consistency_report(&db);
+        assert!(after_delete.consistent, "{after_delete:?}");
+        assert_eq!(after_delete.database_docs, 0);
+
+        drop(db);
+        std::fs::remove_dir_all(root).expect("remove search test directory");
+    }
+
+    #[test]
+    fn consistency_report_reports_unavailable_without_an_index() {
+        let conn = rusqlite::Connection::open_in_memory().expect("in-memory connection");
+        let db = Database::from_conn(conn);
+        db.init_schema().expect("init schema");
+        insert_text(&db, "no index attached");
+
+        let report = consistency_report(&db);
+        assert!(!report.available);
+        assert!(!report.consistent);
+        assert!(report.detail.is_some());
     }
 }

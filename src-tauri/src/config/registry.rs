@@ -26,6 +26,9 @@ pub const KEY_LLM_API_KEY: &str = "llm_api_key";
 pub const KEY_LLM_MODEL: &str = "llm_model";
 pub const KEY_LLM_BASE_URL: &str = "llm_base_url";
 pub const KEY_LLM_MAX_CONTEXT_ITEMS: &str = "llm_max_context_items";
+/// Optional access token for the local HTTP API. Empty (the default) disables
+/// authentication and preserves the pre-token behavior exactly.
+pub const KEY_HTTP_ACCESS_TOKEN: &str = "http_access_token";
 
 pub const DEFAULT_TOGGLE_HOTKEY: &str = "Ctrl+Alt+K";
 pub const DEFAULT_QUICK_PASTE_PREFIX: &str = "Ctrl+Alt";
@@ -224,6 +227,12 @@ pub const CONFIG_REGISTRY: &[ConfigDescriptor] = &[
         key: KEY_LLM_MAX_CONTEXT_ITEMS,
         default_value: "8",
         kind: ConfigValueKind::Integer,
+        effect: RuntimeEffect::None,
+    },
+    ConfigDescriptor {
+        key: KEY_HTTP_ACCESS_TOKEN,
+        default_value: "",
+        kind: ConfigValueKind::String,
         effect: RuntimeEffect::None,
     },
 ];

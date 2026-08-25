@@ -4,12 +4,20 @@ use crate::config::registry::{
 };
 use crate::{database, AppError, Database};
 use async_trait::async_trait;
+use futures_util::stream::{self, BoxStream, StreamExt};
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 
 #[async_trait]
 pub trait LlmProvider: Send + Sync {
     async fn complete(&self, prompt: &str) -> Result<String, AppError>;
+    /// Stream the completion as plain-text deltas. The default implementation
+    /// delegates to [`complete`] and yields the whole answer as one chunk.
+    /// Providers that support server-sent streaming override this so the HTTP
+    /// QA endpoint can relay tokens as they arrive.
+    fn complete_stream<'a>(&'a self, prompt: &'a str) -> BoxStream<'a, Result<String, AppError>> {
+        Box::pin(stream::once(async move { self.complete(prompt).await }))
+    }
     fn name(&self) -> &'static str;
 }
 
@@ -152,6 +160,24 @@ struct ChatRequest<'a> {
     model: &'a str,
     messages: [ChatMessage<'a>; 1],
     temperature: f32,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    stream: bool,
+}
+
+#[derive(Deserialize, Default)]
+struct ChatStreamChunk {
+    choices: Vec<ChatStreamChoice>,
+}
+
+#[derive(Deserialize, Default)]
+struct ChatStreamChoice {
+    delta: ChatStreamDelta,
+}
+
+#[derive(Deserialize, Default)]
+struct ChatStreamDelta {
+    #[serde(default)]
+    content: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -178,19 +204,7 @@ struct ChatResponseMessage {
 #[async_trait]
 impl LlmProvider for OpenAiProvider {
     async fn complete(&self, prompt: &str) -> Result<String, AppError> {
-        let api_key = self
-            .config
-            .api_key
-            .as_deref()
-            .ok_or_else(|| AppError::Llm("llm_api_key is not configured".to_string()))?;
-        let body = ChatRequest {
-            model: &self.config.model,
-            messages: [ChatMessage {
-                role: "user",
-                content: prompt,
-            }],
-            temperature: 0.2,
-        };
+        let (api_key, body) = self.prepare_request(prompt, false)?;
         let response = self
             .client
             .post(self.endpoint_url())
@@ -219,8 +233,116 @@ impl LlmProvider for OpenAiProvider {
             .ok_or_else(|| AppError::Llm("LLM returned no choices".to_string()))
     }
 
+    fn complete_stream<'a>(&'a self, prompt: &'a str) -> BoxStream<'a, Result<String, AppError>> {
+        Box::pin(async_stream::stream! {
+            let prepared = self.prepare_request(prompt, true);
+            let (api_key, body) = match prepared {
+                Ok(parts) => parts,
+                Err(error) => {
+                    yield Err(error);
+                    return;
+                }
+            };
+            let response = match self
+                .client
+                .post(self.endpoint_url())
+                .bearer_auth(api_key)
+                .json(&body)
+                .send()
+                .await
+            {
+                Ok(response) => response,
+                Err(error) => {
+                    yield Err(AppError::Llm(format!("LLM request failed: {error}")));
+                    return;
+                }
+            };
+            if !response.status().is_success() {
+                let status = response.status();
+                let body = response.text().await.unwrap_or_default();
+                yield Err(AppError::Llm(format!("LLM returned HTTP {status}: {body}")));
+                return;
+            }
+
+            let mut byte_stream = response.bytes_stream();
+            let mut buffer = String::new();
+            let mut saw_done = false;
+            while let Some(chunk) = byte_stream.next().await {
+                let bytes = match chunk {
+                    Ok(bytes) => bytes,
+                    Err(error) => {
+                        yield Err(AppError::Llm(format!("LLM stream failed: {error}")));
+                        return;
+                    }
+                };
+                buffer.push_str(&String::from_utf8_lossy(&bytes));
+                while let Some(newline) = buffer.find('\n') {
+                    let line = buffer[..newline].trim().to_string();
+                    buffer.drain(..=newline);
+                    let Some(data) = line.strip_prefix("data:") else {
+                        continue;
+                    };
+                    let data = data.trim();
+                    if data.is_empty() {
+                        continue;
+                    }
+                    if data == "[DONE]" {
+                        saw_done = true;
+                        break;
+                    }
+                    match serde_json::from_str::<ChatStreamChunk>(data) {
+                        Ok(parsed) => {
+                            for choice in parsed.choices {
+                                if let Some(text) = choice.delta.content {
+                                    if !text.is_empty() {
+                                        yield Ok(text);
+                                    }
+                                }
+                            }
+                        }
+                        Err(error) => {
+                            yield Err(AppError::Llm(format!(
+                                "failed to parse LLM stream chunk: {error}"
+                            )));
+                            return;
+                        }
+                    }
+                }
+                if saw_done {
+                    break;
+                }
+            }
+        })
+    }
+
     fn name(&self) -> &'static str {
         "openai"
+    }
+}
+
+impl OpenAiProvider {
+    fn prepare_request<'a>(
+        &'a self,
+        prompt: &'a str,
+        stream: bool,
+    ) -> Result<(String, ChatRequest<'a>), AppError> {
+        let api_key = self
+            .config
+            .api_key
+            .as_deref()
+            .ok_or_else(|| AppError::Llm("llm_api_key is not configured".to_string()))?;
+        Ok((
+            api_key.to_string(),
+            ChatRequest {
+                model: &self.config.model,
+                messages: [ChatMessage {
+                    role: "user",
+                    content: prompt,
+                }],
+                temperature: 0.2,
+                stream,
+            },
+        ))
     }
 }
 

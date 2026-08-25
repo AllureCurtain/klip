@@ -40,8 +40,9 @@ axum = { version = "0.7", features = ["macros"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "sync", "time"] }
 tower-http = { version = "0.5", features = ["cors"] }
 futures-util = "0.3"
+async-stream = "0.3"
 async-trait = "0.1"
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
 tantivy = "=0.24.2"
 # 0.16 is the release compatible with Tantivy 0.24's tokenizer API 0.5.
 tantivy-jieba = "=0.16.0"

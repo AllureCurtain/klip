@@ -197,7 +197,12 @@ pub fn build_openapi() -> serde_json::Value {
             &[
                 ("id", s_i64()),
                 ("content_type", ref_s("ContentType")),
-                ("content", s_str()),
+                ("content", {
+                    let mut v = s_str();
+                    // Omitted for image items (use image_ref / the image endpoints).
+                    v["nullable"] = true.into();
+                    v
+                }),
                 ("preview", {
                     let mut v = s_str();
                     v["nullable"] = true.into();
@@ -238,6 +243,16 @@ pub fn build_openapi() -> serde_json::Value {
                     v
                 }),
                 ("formats", arr("ClipboardFormat")),
+                ("ocr", {
+                    let mut v = ref_s("OcrState");
+                    v["nullable"] = true.into();
+                    v
+                }),
+                ("image_ref", {
+                    let mut v = ref_s("ImageRef");
+                    v["nullable"] = true.into();
+                    v
+                }),
                 ("tags", arr("Tag")),
                 ("created_at", s_i64()),
                 ("last_used_at", s_i64()),
@@ -245,7 +260,6 @@ pub fn build_openapi() -> serde_json::Value {
             &[
                 "id",
                 "content_type",
-                "content",
                 "hash",
                 "size",
                 "source_application",
@@ -259,6 +273,103 @@ pub fn build_openapi() -> serde_json::Value {
                 "created_at",
                 "last_used_at",
             ],
+        ),
+    );
+
+    schemas.insert(
+        "ImageRef".into(),
+        obj(
+            &[
+                ("url", s_str()),
+                ("thumbnail_url", s_str()),
+                ("width", {
+                    let mut v = s_i64();
+                    v["nullable"] = true.into();
+                    v
+                }),
+                ("height", {
+                    let mut v = s_i64();
+                    v["nullable"] = true.into();
+                    v
+                }),
+                ("size", s_i64()),
+            ],
+            &["url", "thumbnail_url", "size"],
+        ),
+    );
+
+    schemas.insert(
+        "OcrState".into(),
+        obj(
+            &[
+                (
+                    "status",
+                    serde_json::json!({"type":"string","enum":["pending","completed","failed"]}),
+                ),
+                ("text", s_str()),
+                ("error", {
+                    let mut v = s_str();
+                    v["nullable"] = true.into();
+                    v
+                }),
+                ("updated_at", s_i64()),
+            ],
+            &["status", "text", "updated_at"],
+        ),
+    );
+
+    schemas.insert(
+        "WindowStatus".into(),
+        obj(
+            &[
+                ("exists", s_bool()),
+                ("visible", s_bool()),
+                ("minimized", s_bool()),
+                ("maximized", s_bool()),
+                ("focused", s_bool()),
+                ("x", s_i64()),
+                ("y", s_i64()),
+                ("width", s_i64()),
+                ("height", s_i64()),
+            ],
+            &[
+                "exists",
+                "visible",
+                "minimized",
+                "maximized",
+                "focused",
+                "x",
+                "y",
+                "width",
+                "height",
+            ],
+        ),
+    );
+
+    let health_check_status = serde_json::json!({"type":"string","enum":["ok","degraded","error"]});
+    schemas.insert(
+        "HealthCheck".into(),
+        obj(
+            &[
+                ("id", s_str()),
+                ("label", s_str()),
+                ("status", health_check_status.clone()),
+                ("summary", s_str()),
+                ("details", serde_json::json!({"type":"object"})),
+            ],
+            &["id", "label", "status", "summary", "details"],
+        ),
+    );
+
+    schemas.insert(
+        "HealthReport".into(),
+        obj(
+            &[
+                ("status", health_check_status),
+                ("generated_at", s_i64()),
+                ("checks", arr("HealthCheck")),
+            ],
+            &["status", "generated_at", "checks"],
         ),
     );
 
@@ -635,8 +746,21 @@ pub fn build_openapi() -> serde_json::Value {
 
     let idp = vec![pp("id", "Clipboard item ID")];
     route!("/api/clipboard/{id}",
-        get: get_op("getClipboard","Get single item",idp.clone(),ok(ref_s("ClipboardItem"))),
+        get: get_op("getClipboard","Get single item (image content omitted; use image endpoints)",idp.clone(),ok(ref_s("ClipboardItem"))),
         delete: del_op("deleteClipboard","Delete item",idp.clone(),&[(404,"Not found")])
+    );
+    route!("/api/clipboard/{id}/image",
+        get: get_op("getClipboardImage","Full-size image (image/png)",idp.clone(),
+            ok(serde_json::json!({"type":"string","format":"binary"})))
+    );
+    route!("/api/clipboard/{id}/thumbnail",
+        get: get_op("getClipboardThumbnail","Thumbnail image (image/png, longest side ≤400px)",idp.clone(),
+            ok(serde_json::json!({"type":"string","format":"binary"})))
+    );
+    route!("/api/clipboard/{id}/ocr",
+        get: get_op("getOcr","Get OCR state for an image item",idp.clone(),ok(ref_s("OcrState"))),
+        post: post_op("triggerOcr","(Re)run OCR for an image item (requires desktop app)",idp.clone(),None,ok(ref_s("OcrState")),
+            &[(400,"Not an image"),(404,"Not found"),(503,"OCR worker unavailable")])
     );
     route!("/api/clipboard/{id}/favorite",
         post: post_op("toggleFavorite","Toggle favorite",idp.clone(),None,ok(ref_s("ClipboardItem")),&[(404,"Not found")])
@@ -723,6 +847,10 @@ pub fn build_openapi() -> serde_json::Value {
             "post": post_op(&format!("window_{ep}"),desc,vec![],None,ok_empty(),&[(500,"Requires Tauri app")])
         }));
     }
+    route!("/api/window/status",
+        get: get_op("windowStatus","Read-only main-window status (requires desktop app)",vec![],
+            ok(ref_s("WindowStatus")))
+    );
 
     route!("/api/autostart",
         get: get_op("getAutostart","Get autostart state",vec![],
@@ -732,6 +860,10 @@ pub fn build_openapi() -> serde_json::Value {
     );
     route!("/api/system/info", get: get_op("systemInfo","System info",vec![],ok(ref_s("SystemInfo"))));
     route!("/api/system/diagnostics", get: get_op("diagnostics","Diagnostics info",vec![],ok(ref_s("DiagnosticsInfo"))));
+    route!("/api/diagnostics/health",
+        get: get_op("diagnosticsHealth","Run read-only self-checks (SQLite integrity, search-index consistency, data-directory usage)",
+            vec![], ok(ref_s("HealthReport")))
+    );
 
     for (ep, desc, resp) in [
         ("export/json", "Export to JSON", "BackupSummary"),
@@ -765,16 +897,41 @@ pub fn build_openapi() -> serde_json::Value {
     route!("/api/qa/ask", post: qa_op.clone());
     route!("/api/ask", post: qa_op);
 
+    // SSE stream: `text/event-stream` frames — `context`, then `delta` chunks,
+    // then `done` (or `error`). Documented as an event-stream response.
+    let qa_stream_op = post_op(
+        "qaAskStream",
+        "Ask QA about clipboard history (streaming SSE answer)",
+        vec![],
+        Some("QaAskBody"),
+        ok(serde_json::json!({
+            "type": "string",
+            "format": "text/event-stream",
+            "description": "SSE frames: event=context {context_count,items[{id,preview,score}]}, event=delta {text}, event=done {provider,model,context_count}, event=error {error,message}"
+        })),
+        &[(400, "Empty question"), (502, "LLM provider error")],
+    );
+    route!("/api/qa/ask/stream", post: qa_stream_op);
+
     serde_json::json!({
         "openapi": "3.1.0",
         "info": {
             "title": "Klip HTTP API",
             "version": env!("CARGO_PKG_VERSION"),
-            "description": "Local HTTP API for Klip clipboard manager. Binds to 127.0.0.1 only.\n\nError format: `{\"error\": \"<code>\", \"message\": \"...\"}`"
+            "description": "Local HTTP API for Klip clipboard manager. Binds to 127.0.0.1 only.\n\nError format: `{\"error\": \"<code>\", \"message\": \"...\"}`\n\nOptional access token: when `http_access_token` is set in the config, every endpoint (including the SSE stream) requires `Authorization: Bearer <token>` or `?access_token=<token>`; requests without it get 401."
         },
         "servers": [{"url":"http://127.0.0.1:27717","description":"Default local endpoint"}],
         "paths": serde_json::Value::Object(paths),
-        "components": { "schemas": serde_json::Value::Object(schemas) }
+        "components": {
+            "schemas": serde_json::Value::Object(schemas),
+            "securitySchemes": {
+                "bearerAuth": {
+                    "type": "http",
+                    "scheme": "bearer",
+                    "description": "Present only when http_access_token is configured"
+                }
+            }
+        }
     })
 }
 
@@ -793,6 +950,10 @@ pub const PUBLIC_ROUTES: &[(&str, &str)] = &[
     ("POST", "/api/clipboard/rescan-sensitive"),
     ("GET", "/api/clipboard/{id}"),
     ("DELETE", "/api/clipboard/{id}"),
+    ("GET", "/api/clipboard/{id}/image"),
+    ("GET", "/api/clipboard/{id}/thumbnail"),
+    ("GET", "/api/clipboard/{id}/ocr"),
+    ("POST", "/api/clipboard/{id}/ocr"),
     ("POST", "/api/clipboard/{id}/favorite"),
     ("POST", "/api/clipboard/{id}/copy"),
     ("POST", "/api/clipboard/{id}/paste"),
@@ -819,10 +980,12 @@ pub const PUBLIC_ROUTES: &[(&str, &str)] = &[
     ("POST", "/api/window/toggle"),
     ("POST", "/api/window/show"),
     ("POST", "/api/window/hide"),
+    ("GET", "/api/window/status"),
     ("GET", "/api/autostart"),
     ("PUT", "/api/autostart"),
     ("GET", "/api/system/info"),
     ("GET", "/api/system/diagnostics"),
+    ("GET", "/api/diagnostics/health"),
     ("POST", "/api/export/json"),
     ("POST", "/api/export/csv"),
     ("POST", "/api/import/json"),
@@ -831,6 +994,7 @@ pub const PUBLIC_ROUTES: &[(&str, &str)] = &[
     ("POST", "/api/restore"),
     ("POST", "/api/qa/ask"),
     ("POST", "/api/ask"),
+    ("POST", "/api/qa/ask/stream"),
 ];
 
 #[cfg(test)]
@@ -910,7 +1074,7 @@ mod tests {
                 missing.push(format!("{m} {route}"));
                 continue;
             };
-            if pi.get(&m.to_lowercase()).is_none() {
+            if pi.get(m.to_lowercase()).is_none() {
                 missing.push(format!("{m} {route}"));
             }
         }

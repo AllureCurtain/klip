@@ -7,17 +7,48 @@ export interface Tag {
   created_at: number;
 }
 
+export interface ClipboardFormat {
+  format: 'text' | 'html' | 'rtf';
+  content: string;
+}
+
+export type OcrStatus = 'pending' | 'completed' | 'failed';
+
+export interface OcrState {
+  status: OcrStatus;
+  text: string;
+  error: string | null;
+  updated_at: number;
+}
+
+/// On-demand image links for image clipboard items (see GET /api/clipboard/:id/image).
+export interface ImageRef {
+  url: string;
+  thumbnail_url: string;
+  width?: number | null;
+  height?: number | null;
+  size: number;
+}
+
 export interface ClipboardItem {
   id: number;
   content_type: ContentType;
-  content: string;
+  /** Full text/file content. Omitted for image items — use image_ref instead. */
+  content?: string;
   preview: string | null;
   hash: string;
   size: number;
   metadata: string | null;
+  source_application: string | null;
+  source_window_title: string | null;
+  custom_title: string | null;
+  note: string | null;
   is_favorited: boolean;
   is_sensitive: boolean;
   sensitivity_reason: string | null;
+  formats: ClipboardFormat[];
+  ocr: OcrState | null;
+  image_ref: ImageRef | null;
   tags: Tag[];
   created_at: number;
   last_used_at: number;
@@ -82,6 +113,34 @@ export interface DiagnosticsInfo {
   log_dir: string;
 }
 
+export interface WindowStatus {
+  exists: boolean;
+  visible: boolean;
+  minimized: boolean;
+  maximized: boolean;
+  focused: boolean;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export type HealthCheckStatus = 'ok' | 'degraded' | 'error';
+
+export interface HealthCheck {
+  id: 'sqlite_integrity' | 'search_index' | 'data_dir_usage';
+  label: string;
+  status: HealthCheckStatus;
+  summary: string;
+  details: Record<string, unknown>;
+}
+
+export interface HealthReport {
+  status: HealthCheckStatus;
+  generated_at: number;
+  checks: HealthCheck[];
+}
+
 export interface StatsResponse {
   total_items: number;
   text_count: number;
@@ -127,6 +186,13 @@ export interface QaContextItem {
   score: number;
 }
 
+/** Frames emitted by POST /api/qa/ask/stream (text/event-stream). */
+export type QaStreamEvent =
+  | { type: 'context'; context_count: number; items: QaContextItem[] }
+  | { type: 'delta'; text: string }
+  | { type: 'done'; provider: string; model: string; context_count: number }
+  | { type: 'error'; error: string; message: string };
+
 export interface ApiError {
   error: string;
   message: string;
@@ -139,3 +205,5 @@ export interface SseEvent {
 }
 
 export type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'error';
+
+export type AuthState = 'unknown' | 'ok' | 'unauthorized';

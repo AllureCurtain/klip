@@ -1,3 +1,7 @@
+// Test modules conventionally sit near the code they cover, often before
+// later helpers; silence the newer clippy lint that wants them last.
+#![allow(clippy::items_after_test_module)]
+
 pub mod clipboard;
 pub mod commands;
 pub mod config;

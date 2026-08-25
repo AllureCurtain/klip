@@ -4,7 +4,6 @@ use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut,
 use crate::config::registry;
 use crate::AppError;
 
-
 pub fn register_hotkeys(app_handle: &AppHandle) -> Result<(), AppError> {
     let (toggle_raw, quick_paste_prefix_raw) = read_hotkey_config(app_handle)?;
     tracing::info!(

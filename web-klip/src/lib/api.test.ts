@@ -412,3 +412,182 @@ describe('ApiClient request methods', () => {
     await expect(api.getClipboard(999)).rejects.toMatchObject({ message: 'item missing' });
   });
 });
+
+describe('API client access token', () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+    api.setBaseUrl('http://test:1234');
+    // The shared setup mocks Storage; drive token reads explicitly.
+    (Storage.prototype.getItem as ReturnType<typeof vi.fn>) = vi.fn(() => null);
+    (Storage.prototype.setItem as ReturnType<typeof vi.fn>) = vi.fn();
+  });
+
+  it('sends no Authorization header when no token is stored', async () => {
+    mockFetch.mockResolvedValueOnce(mockResponse({ status: 'ok' }));
+    await api.health();
+    const headers = mockFetch.mock.calls[0][1].headers as Record<string, string>;
+    expect(headers.Authorization).toBeUndefined();
+  });
+
+  it('attaches the bearer token when stored', async () => {
+    (Storage.prototype.getItem as ReturnType<typeof vi.fn>) = vi.fn((key: string) =>
+      key === 'klip-api-token' ? 'secret' : null,
+    );
+    mockFetch.mockResolvedValueOnce(mockResponse({ status: 'ok' }));
+    await api.health();
+    const headers = mockFetch.mock.calls[0][1].headers as Record<string, string>;
+    expect(headers.Authorization).toBe('Bearer secret');
+  });
+
+  it('withAccessToken appends the token as a query parameter', async () => {
+    (Storage.prototype.getItem as ReturnType<typeof vi.fn>) = vi.fn((key: string) =>
+      key === 'klip-api-token' ? 'secret' : null,
+    );
+    const { withAccessToken } = await import('./api');
+    expect(withAccessToken('http://x/api/events')).toBe('http://x/api/events?access_token=secret');
+    expect(withAccessToken('http://x/api/events?x=1')).toBe('http://x/api/events?x=1&access_token=secret');
+  });
+
+  it('withAccessToken is a no-op without a token', async () => {
+    const { withAccessToken } = await import('./api');
+    expect(withAccessToken('http://x/y')).toBe('http://x/y');
+  });
+
+  it('rejects with ApiErrorResponse and fires the auth listener on 401', async () => {
+    (Storage.prototype.getItem as ReturnType<typeof vi.fn>) = vi.fn((key: string) =>
+      key === 'klip-api-token' ? 'wrong' : null,
+    );
+    let failed = false;
+    const { onAuthFailure } = await import('./api');
+    const off = onAuthFailure(() => { failed = true; });
+    mockFetch.mockResolvedValueOnce(mockResponse(
+      { error: 'unauthorized', message: 'missing or invalid access token' }, 401, false
+    ));
+    await expect(api.health()).rejects.toMatchObject({ status: 401 });
+    expect(failed).toBe(true);
+    off();
+  });
+});
+
+describe('API client new endpoints', () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+    api.setBaseUrl('http://test:1234');
+    (Storage.prototype.getItem as ReturnType<typeof vi.fn>) = vi.fn(() => null);
+    (Storage.prototype.setItem as ReturnType<typeof vi.fn>) = vi.fn();
+  });
+
+  it('getOcr() and triggerOcr() call the OCR endpoints', async () => {
+    mockFetch.mockResolvedValueOnce(mockResponse({ status: 'pending', text: '', error: null, updated_at: 1 }));
+    const state = await api.getOcr(7);
+    expect(state.status).toBe('pending');
+    expect(mockFetch).toHaveBeenCalledWith(
+      'http://test:1234/api/clipboard/7/ocr',
+      expect.any(Object),
+    );
+
+    mockFetch.mockResolvedValueOnce(mockResponse({ status: 'completed', text: 'hi', error: null, updated_at: 2 }));
+    const done = await api.triggerOcr(7);
+    expect(done.status).toBe('completed');
+    expect(mockFetch).toHaveBeenLastCalledWith(
+      'http://test:1234/api/clipboard/7/ocr',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('windowStatus() and getHealthReport() call their endpoints', async () => {
+    mockFetch.mockResolvedValueOnce(mockResponse({ visible: true }));
+    const s = await api.windowStatus();
+    expect(s.visible).toBe(true);
+    expect(mockFetch).toHaveBeenCalledWith(
+      'http://test:1234/api/window/status',
+      expect.any(Object),
+    );
+
+    mockFetch.mockResolvedValueOnce(mockResponse({ status: 'ok', generated_at: 1, checks: [] }));
+    const r = await api.getHealthReport();
+    expect(r.status).toBe('ok');
+    expect(mockFetch).toHaveBeenCalledWith(
+      'http://test:1234/api/diagnostics/health',
+      expect.any(Object),
+    );
+  });
+
+  it('imageUrl and thumbnailUrl build token-aware links', async () => {
+    const { imageUrl, thumbnailUrl } = await import('./api');
+    const item = { id: 5, image_ref: { url: '/api/clipboard/5/image', thumbnail_url: '/api/clipboard/5/thumbnail', size: 9 } };
+    expect(imageUrl(item)).toBe('http://127.0.0.1:27717/api/clipboard/5/image');
+    expect(thumbnailUrl(item)).toBe('http://127.0.0.1:27717/api/clipboard/5/thumbnail');
+
+    (Storage.prototype.getItem as ReturnType<typeof vi.fn>) = vi.fn((key: string) =>
+      key === 'klip-api-token' ? 'tok' : null,
+    );
+    expect(thumbnailUrl(item)).toBe('http://127.0.0.1:27717/api/clipboard/5/thumbnail?access_token=tok');
+  });
+});
+
+describe('qaAskStream SSE parsing', () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+    api.setBaseUrl('http://test:1234');
+  });
+
+  function sseResponse(frames: string[], status = 200) {
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      start(controller) {
+        for (const frame of frames) controller.enqueue(encoder.encode(frame));
+        controller.close();
+      },
+    });
+    return {
+      ok: status >= 200 && status < 300,
+      status,
+      body: stream,
+      json: async () => ({}),
+    } as Response;
+  }
+
+  it('dispatches context, delta, and done frames in order', async () => {
+    const events: string[] = [];
+    mockFetch.mockResolvedValueOnce(sseResponse([
+      'event: context\ndata: {"context_count":1,"items":[{"id":9,"preview":"p","score":0.5}]}\n\n',
+      'event: delta\ndata: {"text":"Hel"}\n\n',
+      'event: delta\ndata: {"text":"lo"}\n\n',
+      'event: done\ndata: {"provider":"fake","model":"m","context_count":1}\n\n',
+    ]));
+    await api.qaAskStream('hi', {
+      onContext: (items, n) => events.push(`context:${n}:${items[0].id}`),
+      onDelta: (t) => events.push(`delta:${t}`),
+      onDone: (p) => events.push(`done:${p}`),
+      onError: (e) => events.push(`error:${e}`),
+    });
+    expect(events).toEqual(['context:1:9', 'delta:Hel', 'delta:lo', 'done:fake']);
+  });
+
+  it('dispatches error frames', async () => {
+    const events: string[] = [];
+    mockFetch.mockResolvedValueOnce(sseResponse([
+      'event: context\ndata: {"context_count":0,"items":[]}\n\n',
+      'event: error\ndata: {"error":"llm","message":"boom"}\n\n',
+    ]));
+    await api.qaAskStream('hi', {
+      onContext: (_, n) => events.push(`context:${n}`),
+      onError: (e, m) => events.push(`error:${e}:${m}`),
+    });
+    expect(events).toEqual(['context:0', 'error:llm:boom']);
+  });
+
+  it('rejects on HTTP errors before opening the stream', async () => {
+    mockFetch.mockResolvedValueOnce(sseResponse([''], 401));
+    await expect(api.qaAskStream('hi', {})).rejects.toMatchObject({ status: 401 });
+  });
+
+  it('handles frames split across chunks', async () => {
+    const events: string[] = [];
+    const full = 'event: delta\ndata: {"text":"abc"}\n\n';
+    mockFetch.mockResolvedValueOnce(sseResponse([full.slice(0, 20), full.slice(20)]));
+    await api.qaAskStream('hi', { onDelta: (t) => events.push(t) });
+    expect(events).toEqual(['abc']);
+  });
+});

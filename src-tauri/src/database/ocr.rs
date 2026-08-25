@@ -82,6 +82,21 @@ pub fn get(db: &Database, item_id: i64) -> Result<Option<ClipboardOcr>, AppError
     .map_err(Into::into)
 }
 
+/// Reset a completed/failed OCR job back to `pending` so the worker picks it
+/// up again. Items already pending (or without an OCR row) are left untouched.
+/// Returns `true` when the state actually changed.
+pub fn requeue(db: &Database, item_id: i64) -> Result<bool, AppError> {
+    let conn = db.get_connection()?;
+    let now = crate::now_millis();
+    let updated = conn.execute(
+        "UPDATE clipboard_ocr
+         SET status = 'pending', text = '', error = NULL, updated_at = ?1
+         WHERE item_id = ?2 AND status != 'pending'",
+        rusqlite::params![now, item_id],
+    )?;
+    Ok(updated > 0)
+}
+
 pub fn complete(db: &Database, item_id: i64, text: &str) -> Result<bool, AppError> {
     update_state(db, item_id, OcrStatus::Completed, text, None)
 }
@@ -225,5 +240,50 @@ mod tests {
             recaptured.ocr.as_ref().and_then(|ocr| ocr.error.as_ref()),
             None
         );
+    }
+
+    #[test]
+    fn requeue_resets_completed_and_failed_states() {
+        let db = test_db();
+        let item = insert_image(&db);
+
+        // Completed → requeue makes it pending again and clears the text.
+        assert!(complete(&db, item.id, "recognized text").unwrap());
+        assert!(requeue(&db, item.id).unwrap());
+        let state = get(&db, item.id).unwrap().unwrap();
+        assert_eq!(state.status, OcrStatus::Pending);
+        assert_eq!(state.text, "");
+        assert_eq!(state.error, None);
+
+        // Failed → requeue clears the error too.
+        assert!(fail(&db, item.id, "boom").unwrap());
+        assert!(requeue(&db, item.id).unwrap());
+        let state = get(&db, item.id).unwrap().unwrap();
+        assert_eq!(state.status, OcrStatus::Pending);
+        assert_eq!(state.error, None);
+    }
+
+    #[test]
+    fn requeue_is_a_noop_for_already_pending_or_unknown_items() {
+        let db = test_db();
+        let item = insert_image(&db);
+        // Already pending → not changed.
+        assert!(!requeue(&db, item.id).unwrap());
+        // Unknown item → nothing to do, not an error.
+        assert!(!requeue(&db, 999_999).unwrap());
+        // Non-image item has no OCR row → no-op.
+        let text_item = {
+            let item = crate::database::types::NewClipboardItem {
+                content_type: crate::database::types::ContentType::Text,
+                data: b"hello".to_vec(),
+                preview: Some("hello".into()),
+                hash: "text-hash".into(),
+                size: 5,
+                metadata: None,
+                formats: Vec::new(),
+            };
+            crate::database::clipboard::insert(&db, &item).unwrap()
+        };
+        assert!(!requeue(&db, text_item.id).unwrap());
     }
 }
