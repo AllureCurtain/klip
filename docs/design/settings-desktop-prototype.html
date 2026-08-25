@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="brick" data-mode="system" data-resolved="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Klip Desktop Settings Prototype</title>
+  <style>
+    /* finesse · register=product/workflow · A=four coordinated palette families · B=system sans+mono controls · C=680x720 desktop shell · D=feedback-only · E=quiet native utility · SOUL=5 SPECTACLE=1 DENSITY=8 */
+    :root {
+      color-scheme: light;
+      --stage: #e9e5df;
+      --page: #f2eee7;
+      --surface: #fcfaf7;
+      --surface-2: #f5f0e9;
+      --surface-3: #ebe3d9;
+      --selected: #ead8ca;
+      --ink: #211813;
+      --text: #514238;
+      --muted: #806f61;
+      --faint: #a69384;
+      --border: rgba(80, 54, 38, .15);
+      --border-strong: rgba(80, 54, 38, .26);
+      --accent: #ad5227;
+      --accent-strong: #8f3f21;
+      --accent-soft: rgba(173, 82, 39, .13);
+      --on-accent: #fff7ef;
+      --success: #33715b;
+      --danger: #b94a43;
+      --warning: #b5781d;
+      --rail: #241c17;
+      --rail-2: #30231c;
+      --rail-ink: #baa99a;
+      --rail-active: #fff3e8;
+      --rail-accent: #ef955f;
+      --window-shadow: 0 24px 70px rgba(58, 45, 35, .22);
+      --card-shadow: 0 1px 3px rgba(58, 45, 35, .06);
+      --radius-sm: 8px;
+      --radius-md: 11px;
+      --radius-lg: 15px;
+      --sans: "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, sans-serif;
+      --mono: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+      --sw-ember-a: #ad5227; --sw-ember-b: #241c17;
+      --sw-graphite-a: #b9df31; --sw-graphite-b: #1e2a20;
+      --sw-brick-a: #9e4d3b; --sw-brick-b: #f2eee5;
+      --sw-rose-a: #b34f6a; --sw-rose-b: #f3ebeb;
+    }
+
+    html[data-theme="ember"][data-resolved="light"] { --stage:#e9e2db; --page:#f4eee7; --surface:#fcfaf7; --surface-2:#f0e8df; --surface-3:#e7ddd3; --selected:#ead6c8; --ink:#211813; --text:#514238; --muted:#806f61; --faint:#a69384; --border:rgba(80,54,38,.15); --border-strong:rgba(80,54,38,.26); --accent:#ad5227; --accent-strong:#8f3f21; --accent-soft:rgba(173,82,39,.13); --on-accent:#fff7ef; --success:#33715b; --danger:#b94a43; --warning:#b5781d; --rail:#241c17; --rail-2:#30231c; --rail-ink:#baa99a; --rail-active:#fff3e8; --rail-accent:#ef955f; --window-shadow:0 24px 70px rgba(58,45,35,.22); --card-shadow:0 1px 3px rgba(58,45,35,.06); }
+    html[data-theme="ember"][data-resolved="dark"] { color-scheme:dark; --stage:#0f0c0a; --page:#17110e; --surface:#211814; --surface-2:#2e211a; --surface-3:#38281f; --selected:#3c281d; --ink:#f5e9df; --text:#c8b4a6; --muted:#a18b7a; --faint:#806b5d; --border:rgba(255,235,220,.13); --border-strong:rgba(255,235,220,.24); --accent:#ef955f; --accent-strong:#ffad78; --accent-soft:rgba(239,149,95,.16); --on-accent:#24140c; --success:#78c9a8; --danger:#f08c81; --warning:#e2b25d; --rail:#100d0b; --rail-2:#211712; --rail-ink:#aa9688; --rail-active:#fff2e8; --rail-accent:#ef955f; --window-shadow:0 24px 70px rgba(0,0,0,.45); --card-shadow:0 1px 3px rgba(0,0,0,.28); }
+    html[data-theme="graphite"][data-resolved="light"] { --stage:#e3e8df; --page:#eef0ea; --surface:#fbfcf8; --surface-2:#e7ebe2; --surface-3:#dce5d6; --selected:#dce6d4; --ink:#172019; --text:#3e4e43; --muted:#647267; --faint:#879487; --border:rgba(39,55,42,.14); --border-strong:rgba(39,55,42,.23); --accent:#708f16; --accent-strong:#5d770c; --accent-soft:rgba(112,143,22,.15); --on-accent:#16200d; --success:#2f7b63; --danger:#ba5047; --warning:#ad7416; --rail:#1e2a20; --rail-2:#2a382a; --rail-ink:#a6b7a5; --rail-active:#f1f7ea; --rail-accent:#b9df31; --window-shadow:0 24px 70px rgba(47,65,44,.22); --card-shadow:0 1px 3px rgba(52,71,49,.07); }
+    html[data-theme="graphite"][data-resolved="dark"] { color-scheme:dark; --stage:#080b09; --page:#0d110e; --surface:#151a15; --surface-2:#222b20; --surface-3:#2c3822; --selected:#2d3a22; --ink:#eef2e9; --text:#bdc8b7; --muted:#94a18c; --faint:#73816d; --border:rgba(238,247,231,.13); --border-strong:rgba(238,247,231,.23); --accent:#b9df31; --accent-strong:#d1f46a; --accent-soft:rgba(185,223,49,.16); --on-accent:#11170c; --success:#7cd5b0; --danger:#f08e82; --warning:#e2b259; --rail:#080b09; --rail-2:#151c13; --rail-ink:#9aaa96; --rail-active:#f4f8ee; --rail-accent:#b9df31; --window-shadow:0 24px 70px rgba(0,0,0,.52); --card-shadow:0 1px 3px rgba(0,0,0,.32); }
+    html[data-theme="brick"][data-resolved="light"] { --stage:#e7e2d7; --page:#f2eee5; --surface:#fcfbf7; --surface-2:#ebe7dc; --surface-3:#e2d9cb; --selected:#e9ddd1; --ink:#211916; --text:#51433b; --muted:#7c6c60; --faint:#9e8d7d; --border:rgba(68,49,38,.14); --border-strong:rgba(68,49,38,.23); --accent:#9e4d3b; --accent-strong:#833d30; --accent-soft:rgba(158,77,59,.13); --on-accent:#fff8f1; --success:#3a7757; --danger:#c13e39; --warning:#b5791d; --rail:#27211c; --rail-2:#352b24; --rail-ink:#b8aa9c; --rail-active:#fff4e9; --rail-accent:#e47d65; --window-shadow:0 24px 70px rgba(74,49,36,.22); --card-shadow:0 1px 3px rgba(74,49,36,.06); }
+    html[data-theme="brick"][data-resolved="dark"] { color-scheme:dark; --stage:#0f0b0a; --page:#15100e; --surface:#211816; --surface-2:#31221d; --surface-3:#3b2821; --selected:#3d2921; --ink:#f7eae3; --text:#c9b4aa; --muted:#a38c82; --faint:#836f67; --border:rgba(255,235,227,.13); --border-strong:rgba(255,235,227,.24); --accent:#e47d65; --accent-strong:#f69a7f; --accent-soft:rgba(228,125,101,.16); --on-accent:#26140e; --success:#7bc49c; --danger:#f18a80; --warning:#e2b25b; --rail:#0f0c0a; --rail-2:#221612; --rail-ink:#ad978d; --rail-active:#fff1e9; --rail-accent:#e47d65; --window-shadow:0 24px 70px rgba(0,0,0,.48); --card-shadow:0 1px 3px rgba(0,0,0,.3); }
+    html[data-theme="rose"][data-resolved="light"] { --stage:#e9e1e3; --page:#f3ebeb; --surface:#fdfafa; --surface-2:#eee2e4; --surface-3:#e4d5d8; --selected:#ead7da; --ink:#22171b; --text:#523c43; --muted:#806973; --faint:#9d858e; --border:rgba(74,42,53,.14); --border-strong:rgba(74,42,53,.23); --accent:#b34f6a; --accent-strong:#963d55; --accent-soft:rgba(179,79,106,.13); --on-accent:#fff8fa; --success:#3a775c; --danger:#bc443f; --warning:#b77a1a; --rail:#2a2024; --rail-2:#3b2b32; --rail-ink:#bca7af; --rail-active:#fff1f4; --rail-accent:#ef8ca4; --window-shadow:0 24px 70px rgba(91,48,63,.22); --card-shadow:0 1px 3px rgba(91,48,63,.06); }
+    html[data-theme="rose"][data-resolved="dark"] { color-scheme:dark; --stage:#0e0a0c; --page:#151012; --surface:#21181c; --surface-2:#312329; --surface-3:#3e2a34; --selected:#402b34; --ink:#f7e9ed; --text:#cbb5bd; --muted:#a18b94; --faint:#826f78; --border:rgba(255,235,242,.13); --border-strong:rgba(255,235,242,.24); --accent:#ef8ca4; --accent-strong:#ffabc0; --accent-soft:rgba(239,140,164,.16); --on-accent:#28131b; --success:#7cc6a4; --danger:#f28a82; --warning:#e1b15c; --rail:#0e0b0d; --rail-2:#21161b; --rail-ink:#ae969f; --rail-active:#fff0f4; --rail-accent:#ef8ca4; --window-shadow:0 24px 70px rgba(0,0,0,.5); --card-shadow:0 1px 3px rgba(0,0,0,.31); }
+
+    * { box-sizing: border-box; }
+    html, body { width: 100%; min-height: 100%; }
+    body { margin: 0; overflow: hidden; background: var(--stage); color: var(--text); font: 13px/1.45 var(--sans); transition: background .18s ease, color .18s ease; }
+    button, input, select { font: inherit; }
+    button { cursor: pointer; }
+    button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+
+    .stage { display: grid; place-items: center; min-height: 100dvh; padding: 24px; }
+    .window { display: grid; grid-template-rows: 38px minmax(0,1fr); width: min(680px, calc(100vw - 48px)); height: min(720px, calc(100dvh - 48px)); min-height: 480px; overflow: hidden; border: 1px solid var(--border-strong); border-radius: 14px; background: var(--page); box-shadow: var(--window-shadow); }
+    .titlebar { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:0 10px 0 14px; border-bottom:1px solid var(--border); background:var(--surface); user-select:none; }
+    .titlebar-left { display:flex; align-items:center; gap:8px; min-width:0; color:var(--ink); font-weight:720; letter-spacing:-.02em; }
+    .app-mark { display:grid; place-items:center; width:19px; height:19px; border-radius:6px; background:var(--accent); color:var(--on-accent); font-size:10px; font-weight:850; }
+    .titlebar-left small { color:var(--muted); font-size:10px; font-weight:500; }
+    .window-controls { display:flex; align-items:center; gap:3px; }
+    .window-btn { display:grid; place-items:center; width:28px; height:25px; border:0; border-radius:6px; background:transparent; color:var(--muted); }
+    .window-btn:hover { background:var(--surface-2); color:var(--ink); }
+    .window-btn.close:hover { background:var(--danger); color:var(--on-accent); }
+    .window-btn svg { width:13px; height:13px; }
+
+    .window-body { display:grid; grid-template-columns:146px minmax(0,1fr); min-height:0; }
+    .sidebar { display:flex; flex-direction:column; gap:16px; min-width:0; padding:16px 10px 10px; background:var(--rail); color:var(--rail-ink); }
+    .sidebar-brand { display:flex; align-items:center; gap:8px; min-width:0; padding:0 5px 8px; }
+    .sidebar-brand strong { color:var(--rail-active); font-size:12px; letter-spacing:-.02em; }
+    .sidebar-brand span { display:block; margin-top:1px; color:var(--rail-ink); font-size:9px; }
+    .nav { display:grid; gap:3px; }
+    .nav-label { padding:0 7px 5px; color:var(--rail-ink); font-size:9px; font-weight:750; letter-spacing:.12em; text-transform:uppercase; }
+    .nav-item { display:flex; align-items:center; gap:8px; min-height:37px; width:100%; padding:7px 8px; border:1px solid transparent; border-radius:8px; background:transparent; color:var(--rail-ink); text-align:left; transition:background .14s ease, color .14s ease, border-color .14s ease; }
+    .nav-item:hover { background:var(--rail-2); color:var(--rail-active); }
+    .nav-item[aria-current="page"] { border-color:color-mix(in srgb, var(--rail-accent) 34%, transparent); background:color-mix(in srgb, var(--rail-accent) 16%, transparent); color:var(--rail-active); }
+    .nav-item[aria-current="page"] .nav-icon { color:var(--rail-accent); }
+    .nav-icon { display:grid; place-items:center; width:17px; flex:0 0 17px; color:currentColor; }
+    .nav-icon svg { width:15px; height:15px; stroke-width:1.8; }
+    .sidebar-footer { margin-top:auto; padding:10px 7px 2px; border-top:1px solid var(--rail-2); color:var(--rail-ink); font-size:9px; }
+    .sidebar-footer strong { display:block; margin-bottom:2px; color:var(--rail-active); font-weight:650; }
+
+    .main { display:grid; grid-template-rows:auto minmax(0,1fr) auto; min-width:0; min-height:0; background:var(--page); }
+    .content-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; padding:17px 18px 13px; border-bottom:1px solid var(--border); background:var(--surface); }
+    .content-head h1 { margin:0; color:var(--ink); font-size:19px; line-height:1.12; letter-spacing:-.035em; overflow-wrap:anywhere; }
+    .content-head p { margin:4px 0 0; color:var(--muted); font-size:10px; }
+    .head-status { display:inline-flex; align-items:center; gap:5px; min-height:23px; padding:4px 7px; border:1px solid var(--border); border-radius:99px; background:var(--surface-2); color:var(--muted); font-size:9px; white-space:nowrap; }
+    .head-status i { width:6px; height:6px; border-radius:50%; background:var(--accent); box-shadow:0 0 0 2px var(--accent-soft); }
+    .scroll { min-height:0; overflow-y:auto; padding:14px 16px 18px; scrollbar-width:thin; scrollbar-color:var(--border-strong) transparent; }
+    .scroll::-webkit-scrollbar { width:5px; }
+    .scroll::-webkit-scrollbar-thumb { border-radius:5px; background:var(--border-strong); }
+    .panel { display:none; gap:10px; }
+    .panel.is-active { display:grid; }
+    .panel-intro { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:1px; }
+    .panel-intro h2 { margin:0; color:var(--ink); font-size:14px; letter-spacing:-.02em; }
+    .panel-intro p { margin:3px 0 0; color:var(--muted); font-size:10px; }
+    .card { border:1px solid var(--border); border-radius:var(--radius-lg); background:var(--surface); box-shadow:var(--card-shadow); }
+    .card-head { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:11px 13px; border-bottom:1px solid var(--border); }
+    .card-head h3 { margin:0; color:var(--ink); font-size:11px; font-weight:720; }
+    .card-head p { margin:2px 0 0; color:var(--muted); font-size:9px; }
+    .card-body { padding:2px 13px; }
+    .pill { display:inline-flex; align-items:center; min-height:20px; padding:3px 6px; border-radius:99px; background:var(--accent-soft); color:var(--accent-strong); font-size:9px; font-weight:720; white-space:nowrap; }
+    .pill.ok { background:color-mix(in srgb, var(--success) 14%, transparent); color:var(--success); }
+    .pill.warn { background:color-mix(in srgb, var(--warning) 15%, transparent); color:var(--warning); }
+    .pill.off { background:var(--surface-2); color:var(--muted); }
+
+    .setting-row { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:52px; padding:10px 0; border-bottom:1px solid var(--border); }
+    .setting-row:last-child { border-bottom:0; }
+    .setting-copy { min-width:0; }
+    .setting-copy strong { display:block; overflow-wrap:anywhere; color:var(--ink); font-size:11px; font-weight:650; }
+    .setting-copy span { display:block; margin-top:2px; color:var(--muted); font-size:9px; line-height:1.35; }
+    .control { display:flex; align-items:center; gap:6px; flex:0 0 auto; }
+    .select { height:29px; min-width:110px; padding:0 24px 0 8px; border:1px solid var(--border-strong); border-radius:var(--radius-sm); background:var(--surface-2); color:var(--ink); font-size:10px; }
+    .switch { position:relative; display:inline-flex; width:34px; height:19px; flex:0 0 34px; }
+    .switch input { position:absolute; inset:0; opacity:0; cursor:pointer; }
+    .switch-track { position:absolute; inset:0; border:1px solid var(--border-strong); border-radius:99px; background:var(--surface-3); transition:background .14s ease, border-color .14s ease; }
+    .switch-track::after { content:""; position:absolute; top:3px; left:3px; width:11px; height:11px; border-radius:50%; background:var(--muted); transition:transform .14s ease, background .14s ease; }
+    .switch input:checked + .switch-track { border-color:var(--accent); background:var(--accent); }
+    .switch input:checked + .switch-track::after { transform:translateX(15px); background:var(--on-accent); }
+
+    .mode-label { margin:12px 13px 5px; color:var(--muted); font-size:9px; font-weight:700; }
+    .mode-segment { display:grid; grid-template-columns:repeat(3,1fr); gap:3px; margin:0 13px 12px; padding:3px; border:1px solid var(--border); border-radius:var(--radius-md); background:var(--surface-2); }
+    .mode-option { min-height:28px; border:0; border-radius:7px; background:transparent; color:var(--muted); font-size:9px; font-weight:650; white-space:nowrap; }
+    .mode-option[aria-pressed="true"] { background:var(--surface); color:var(--accent-strong); box-shadow:var(--card-shadow); }
+    .theme-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; padding:0 13px 13px; }
+    .theme-option { display:grid; grid-template-columns:auto minmax(0,1fr); align-items:center; gap:8px; min-width:0; min-height:49px; padding:8px; border:1px solid var(--border); border-radius:var(--radius-md); background:var(--surface-2); color:var(--text); text-align:left; transition:border-color .14s ease, background .14s ease; }
+    .theme-option:hover { border-color:var(--border-strong); }
+    .theme-option[aria-pressed="true"] { border-color:var(--accent); background:var(--accent-soft); color:var(--ink); }
+    .theme-swatches { display:flex; gap:3px; }
+    .theme-swatches i { display:block; width:11px; height:28px; border:1px solid var(--border-strong); border-radius:4px; }
+    .theme-option[data-theme-choice="ember"] .theme-swatches i:first-child { background:var(--sw-ember-a); }
+    .theme-option[data-theme-choice="ember"] .theme-swatches i:last-child { background:var(--sw-ember-b); }
+    .theme-option[data-theme-choice="graphite"] .theme-swatches i:first-child { background:var(--sw-graphite-a); }
+    .theme-option[data-theme-choice="graphite"] .theme-swatches i:last-child { background:var(--sw-graphite-b); }
+    .theme-option[data-theme-choice="brick"] .theme-swatches i:first-child { background:var(--sw-brick-a); }
+    .theme-option[data-theme-choice="brick"] .theme-swatches i:last-child { background:var(--sw-brick-b); }
+    .theme-option[data-theme-choice="rose"] .theme-swatches i:first-child { background:var(--sw-rose-a); }
+    .theme-option[data-theme-choice="rose"] .theme-swatches i:last-child { background:var(--sw-rose-b); }
+    .theme-option strong, .theme-option em { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .theme-option strong { color:var(--ink); font-size:10px; font-weight:700; }
+    .theme-option em { margin-top:1px; color:var(--muted); font-size:8px; font-style:normal; }
+    .appearance-note { margin:0 13px 13px; padding:8px 9px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--surface-2); color:var(--muted); font-size:9px; }
+    .appearance-note strong { color:var(--text); font-weight:650; }
+
+    .shortcut-master { margin-bottom:10px; }
+    .key-field { display:inline-flex; align-items:center; justify-content:center; min-width:112px; height:29px; padding:0 8px; border:1px solid var(--border-strong); border-radius:var(--radius-sm); background:var(--surface-2); color:var(--ink); font:650 9px var(--mono); white-space:nowrap; }
+    .key-field:hover { border-color:var(--accent); }
+    .key-field.is-recording { border-color:var(--accent); background:var(--accent-soft); color:var(--accent-strong); box-shadow:0 0 0 2px var(--accent-soft); }
+    .key-field.is-disabled { opacity:.45; }
+    .shortcut-list { display:grid; }
+    .shortcut-row { display:grid; grid-template-columns:25px minmax(0,1fr) 112px 34px; align-items:center; gap:7px; min-height:43px; padding:6px 13px; border-top:1px solid var(--border); }
+    .shortcut-row:first-child { border-top:0; }
+    .slot-number { display:grid; place-items:center; width:22px; height:22px; border-radius:6px; background:var(--surface-2); color:var(--text); font:700 9px var(--mono); }
+    .shortcut-row strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--ink); font-size:10px; font-weight:620; }
+    .shortcut-row .key-field { width:112px; min-width:0; }
+    .shortcut-row[data-state="warning"] { background:color-mix(in srgb, var(--warning) 5%, transparent); }
+    .shortcut-help { margin:8px 13px 11px; color:var(--muted); font-size:9px; }
+    .shortcut-help b { color:var(--warning); font-weight:700; }
+
+    .info-list { display:grid; gap:0; padding:1px 13px; }
+    .info-line { display:flex; align-items:center; justify-content:space-between; gap:9px; min-height:37px; border-bottom:1px solid var(--border); }
+    .info-line:last-child { border-bottom:0; }
+    .info-line span { color:var(--muted); font-size:9px; }
+    .info-line strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text); font-size:9px; font-weight:650; text-align:right; }
+    .mono { font-family:var(--mono); }
+
+    .action-bar { display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:55px; padding:9px 15px; border-top:1px solid var(--border); background:var(--surface); }
+    .dirty-state { display:flex; align-items:center; gap:6px; min-width:0; color:var(--muted); font-size:9px; }
+    .dirty-state i { width:6px; height:6px; border-radius:50%; background:var(--warning); }
+    .action-buttons { display:flex; align-items:center; gap:6px; }
+    .btn { min-height:30px; padding:0 11px; border:1px solid var(--border); border-radius:var(--radius-sm); font-size:10px; font-weight:650; }
+    .btn.ghost { background:var(--surface-2); color:var(--text); }
+    .btn.ghost:hover { border-color:var(--border-strong); color:var(--ink); }
+    .btn.primary { border-color:var(--accent); background:var(--accent); color:var(--on-accent); }
+    .btn.primary:hover { border-color:var(--accent-strong); background:var(--accent-strong); }
+    .toast { position:fixed; left:50%; bottom:26px; z-index:10; max-width:calc(100% - 32px); padding:8px 11px; border:1px solid var(--border-strong); border-radius:8px; background:var(--surface); color:var(--ink); font-size:10px; opacity:0; transform:translate(-50%,6px); pointer-events:none; transition:opacity .18s ease, transform .18s ease; }
+    .toast.is-visible { opacity:1; transform:translate(-50%,0); }
+
+    @media (max-width: 728px) {
+      .stage { padding:0; }
+      .window { width:100%; height:100dvh; min-height:480px; border:0; border-radius:0; box-shadow:none; }
+    }
+    @media (max-width: 440px) {
+      .window-body { grid-template-columns:54px minmax(0,1fr); }
+      .sidebar { align-items:center; padding:12px 7px 8px; }
+      .sidebar-brand { padding:0 0 9px; }
+      .sidebar-brand > div:last-child, .nav-label, .nav-item > span:last-child, .sidebar-footer { display:none; }
+      .sidebar-brand .app-mark { width:25px; height:25px; }
+      .nav { width:100%; }
+      .nav-item { justify-content:center; min-height:36px; padding:7px 0; }
+      .nav-icon, .nav-icon svg { width:16px; height:16px; }
+      .content-head { padding:14px 13px 11px; }
+      .content-head h1 { font-size:17px; }
+      .content-head p { font-size:9px; }
+      .head-status { padding-inline:6px; }
+      .scroll { padding:11px 11px 14px; }
+      .card-head, .card-body { padding-inline:10px; }
+      .theme-grid { padding-inline:10px; }
+      .mode-label { margin-inline:10px; }
+      .mode-segment, .appearance-note { margin-inline:10px; }
+      .shortcut-row { grid-template-columns:23px minmax(0,1fr) 98px 32px; gap:5px; padding-inline:10px; }
+      .shortcut-row .key-field { width:98px; font-size:8px; }
+      .shortcut-help { margin-inline:10px; }
+      .action-bar { padding-inline:11px; }
+      .dirty-state { display:none; }
+      .action-buttons { width:100%; }
+      .action-buttons .btn { flex:1; }
+    }
+    @media (max-height: 600px) {
+      .titlebar { height:34px; }
+      .window { grid-template-rows:34px minmax(0,1fr); }
+      .content-head { padding-top:10px; padding-bottom:9px; }
+      .scroll { padding-top:9px; padding-bottom:10px; }
+      .action-bar { min-height:48px; padding-block:6px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { transition-duration:.01ms !important; animation-duration:.01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="stage">
+    <section class="window" aria-label="Klip 设置窗口">
+      <header class="titlebar" data-tauri-drag-region>
+        <div class="titlebar-left" data-tauri-drag-region><span class="app-mark">K</span><span>Klip <small>设置</small></span></div>
+        <div class="window-controls">
+          <button class="window-btn" type="button" aria-label="最小化"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14"/></svg></button>
+          <button class="window-btn close" type="button" aria-label="关闭设置"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+        </div>
+      </header>
+
+      <div class="window-body">
+        <aside class="sidebar" aria-label="设置分类">
+          <div class="sidebar-brand"><span class="app-mark">K</span><div><strong>Klip</strong><span>clipboard utility</span></div></div>
+          <nav class="nav" aria-label="设置分类">
+            <div class="nav-label">设置</div>
+            <button class="nav-item" data-panel-target="general" aria-current="false"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-1.7 1.7-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V20h-2.4v-.2a1.7 1.7 0 0 0-1.03-1.56 1.7 1.7 0 0 0-1.88.34l-.06.06-1.7-1.7.06-.06A1.7 1.7 0 0 0 7.4 15a1.7 1.7 0 0 0-1.56-1.03H5v-2.4h.2A1.7 1.7 0 0 0 6.76 10a1.7 1.7 0 0 0-.34-1.88l-.06-.06 1.7-1.7.06.06A1.7 1.7 0 0 0 10 6.76 1.7 1.7 0 0 0 11.03 5.2V5h2.4v.2A1.7 1.7 0 0 0 14.46 6.76a1.7 1.7 0 0 0 1.88-.34l.06-.06 1.7 1.7-.06.06A1.7 1.7 0 0 0 17.7 10a1.7 1.7 0 0 0 1.56 1.03h.2v2.4h-.2A1.7 1.7 0 0 0 17.7 15Z"/></svg></span><span>常规</span></button>
+            <button class="nav-item" data-panel-target="appearance" aria-current="page"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg></span><span>外观</span></button>
+            <button class="nav-item" data-panel-target="shortcuts" aria-current="false"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M7 8h2M11 8h2M15 8h2M7 12h4M13 12h4M7 16h10"/></svg></span><span>快捷键</span></button>
+            <button class="nav-item" data-panel-target="behavior" aria-current="false"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l2.7 2.2"/></svg></span><span>行为</span></button>
+            <button class="nav-item" data-panel-target="data" aria-current="false"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v6c0 1.66 3.13 3 7 3s7-1.34 7-3V6M5 12v6c0 1.66 3.13 3 7 3s7-1.34 7-3v-6"/></svg></span><span>数据</span></button>
+            <button class="nav-item" data-panel-target="about" aria-current="false"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9"/><path d="M12 10v6M12 7.5h.01"/></svg></span><span>关于</span></button>
+          </nav>
+          <div class="sidebar-footer"><strong>v0.2.0 RC</strong><span>本地优先 · Windows</span></div>
+        </aside>
+
+        <main class="main" id="main">
+          <header class="content-head"><div><h1 id="panel-title">外观</h1><p id="panel-desc">选择 Klip 的配色家族和显示模式。</p></div><span class="head-status"><i></i><span id="theme-summary">暖砖 · 跟随系统</span></span></header>
+          <div class="scroll">
+            <section class="panel is-active" data-panel="appearance">
+              <div class="panel-intro"><div><h2>配色家族</h2><p>四种完整表面、文字和操作色一起切换。</p></div><span class="pill">4 套可选</span></div>
+              <div class="card">
+                <div class="mode-label">显示模式</div>
+                <div class="mode-segment" role="group" aria-label="显示模式">
+                  <button class="mode-option" data-mode-choice="system" aria-pressed="true">跟随系统</button>
+                  <button class="mode-option" data-mode-choice="light" aria-pressed="false">浅色</button>
+                  <button class="mode-option" data-mode-choice="dark" aria-pressed="false">深色</button>
+                </div>
+                <div class="theme-grid" aria-label="配色家族">
+                  <button class="theme-option" data-theme-choice="ember" aria-pressed="false"><span class="theme-swatches"><i></i><i></i></span><span><strong>暗琥珀</strong><em>Midnight Amber</em></span></button>
+                  <button class="theme-option" data-theme-choice="graphite" aria-pressed="false"><span class="theme-swatches"><i></i><i></i></span><span><strong>炭黑酸橙</strong><em>Graphite Lime</em></span></button>
+                  <button class="theme-option" data-theme-choice="brick" aria-pressed="true"><span class="theme-swatches"><i></i><i></i></span><span><strong>暖砖</strong><em>Warm Brick</em></span></button>
+                  <button class="theme-option" data-theme-choice="rose" aria-pressed="false"><span class="theme-swatches"><i></i><i></i></span><span><strong>玫瑰纸</strong><em>Rose Clay</em></span></button>
+                </div>
+                <div class="appearance-note"><strong>当前预览：</strong><span id="appearance-note">暖砖在跟随系统模式下使用浅色表面。</span></div>
+              </div>
+              <div class="card"><div class="card-head"><div><h3>窗口与文字</h3><p>主题会同时作用于剪贴板列表、设置页和详情弹窗。</p></div><span class="pill ok">即时预览</span></div><div class="info-list"><div class="info-line"><span>默认窗口</span><strong class="mono">680 × 720</strong></div><div class="info-line"><span>最小尺寸</span><strong class="mono">360 × 480</strong></div><div class="info-line"><span>当前状态</span><strong>本机主题已准备</strong></div></div></div>
+            </section>
+
+            <section class="panel" data-panel="general">
+              <div class="panel-intro"><div><h2>常规</h2><p>控制 Klip 启动和基础偏好。</p></div><span class="pill ok">已同步</span></div>
+              <div class="card"><div class="card-head"><div><h3>启动</h3><p>登录 Windows 后保持在系统托盘。</p></div></div><div class="card-body"><div class="setting-row"><div class="setting-copy"><strong>开机自启</strong><span>启动后不主动打开剪贴板界面。</span></div><label class="switch"><input type="checkbox" checked><span class="switch-track"></span><span class="sr-only">开机自启</span></label></div><div class="setting-row"><div class="setting-copy"><strong>启动时打开主界面</strong><span>关闭后只在需要时由快捷键呼出。</span></div><label class="switch"><input type="checkbox"><span class="switch-track"></span><span class="sr-only">启动时打开主界面</span></label></div><div class="setting-row"><div class="setting-copy"><strong>语言</strong><span>界面文字和快捷键提示语言。</span></div><select class="select" aria-label="语言"><option>简体中文</option><option>English</option></select></div></div></div>
+              <div class="card"><div class="card-head"><div><h3>窗口尺寸</h3><p>默认更宽、更矮，同时保留用户自行调整。</p></div><span class="pill">可调整</span></div><div class="info-list"><div class="info-line"><span>默认窗口</span><strong class="mono">680 × 720 px</strong></div><div class="info-line"><span>允许范围</span><strong class="mono">360 × 480 至 1000 × 1400</strong></div></div></div>
+            </section>
+
+            <section class="panel" data-panel="shortcuts">
+              <div class="panel-intro"><div><h2>快捷键</h2><p>每一项都可以单独启用和重新录入。</p></div><span class="pill">5 项启用</span></div>
+              <div class="card shortcut-master"><div class="card-head"><div><h3>打开 Klip 界面</h3><p>在任何软件中显示或隐藏剪贴板界面。</p></div><label class="switch"><input type="checkbox" checked><span class="switch-track"></span><span class="sr-only">启用打开 Klip 界面</span></label></div><div class="card-body"><div class="setting-row"><div class="setting-copy"><strong>显示 / 隐藏</strong><span>点击键位框后按下新的组合键。</span></div><button class="key-field" type="button" data-hotkey="Ctrl + Alt + K">Ctrl + Alt + K</button></div></div></div>
+              <div class="card"><div class="card-head"><div><h3>快速粘贴槽位</h3><p>1 到 9 每个槽位独立设置，关闭的槽位不会注册快捷键。</p></div><span class="pill">1–9</span></div><div class="shortcut-list">
+                <div class="shortcut-row"><span class="slot-number">1</span><strong>最近一条</strong><button class="key-field" type="button" data-hotkey="Ctrl + Alt + 1">Ctrl + Alt + 1</button><label class="switch"><input type="checkbox" checked><span class="switch-track"></span><span class="sr-only">启用槽位 1</span></label></div>
+                <div class="shortcut-row"><span class="slot-number">2</span><strong>上一个文本</strong><button class="key-field" type="button" data-hotkey="Ctrl + Alt + 2">Ctrl + Alt + 2</button><label class="switch"><input type="checkbox" checked><span class="switch-track"></span><span class="sr-only">启用槽位 2</span></label></div>
+                <div class="shortcut-row"><span class="slot-number">3</span><strong>常用链接</strong><button class="key-field" type="button" data-hotkey="Ctrl + Shift + L">Ctrl + Shift + L</button><label class="switch"><input type="checkbox" checked><span class="switch-track"></span><span class="sr-only">启用槽位 3</span></label></div>
+                <div class="shortcut-row"><span class="slot-number">4</span><strong>截图素材</strong><button class="key-field" type="button" data-hotkey="Ctrl + Alt + 4">Ctrl + Alt + 4</button><label class="switch"><input type="checkbox" checked><span class="switch-track"></span><span class="sr-only">启用槽位 4</span></label></div>
+                <div class="shortcut-row" data-state="warning"><span class="slot-number">5</span><strong>项目片段</strong><button class="key-field" type="button" data-hotkey="Ctrl + Alt + 5">Ctrl + Alt + 5</button><label class="switch"><input type="checkbox" checked><span class="switch-track"></span><span class="sr-only">启用槽位 5</span></label></div>
+                <div class="shortcut-row"><span class="slot-number">6</span><strong>可选槽位</strong><button class="key-field is-disabled" type="button" disabled>未设置</button><label class="switch"><input type="checkbox"><span class="switch-track"></span><span class="sr-only">启用槽位 6</span></label></div>
+                <div class="shortcut-row"><span class="slot-number">7</span><strong>可选槽位</strong><button class="key-field is-disabled" type="button" disabled>未设置</button><label class="switch"><input type="checkbox"><span class="switch-track"></span><span class="sr-only">启用槽位 7</span></label></div>
+                <div class="shortcut-row"><span class="slot-number">8</span><strong>可选槽位</strong><button class="key-field is-disabled" type="button" disabled>未设置</button><label class="switch"><input type="checkbox"><span class="switch-track"></span><span class="sr-only">启用槽位 8</span></label></div>
+                <div class="shortcut-row"><span class="slot-number">9</span><strong>可选槽位</strong><button class="key-field is-disabled" type="button" disabled>未设置</button><label class="switch"><input type="checkbox"><span class="switch-track"></span><span class="sr-only">启用槽位 9</span></label></div>
+              </div><p class="shortcut-help"><b>冲突提示：</b>保存前检测重复组合、系统保留键和无法注册的键位。</p></div>
+            </section>
+
+            <section class="panel" data-panel="behavior">
+              <div class="panel-intro"><div><h2>行为</h2><p>控制窗口何时出现、何时返回后台。</p></div><span class="pill">本机设置</span></div>
+              <div class="card"><div class="card-head"><div><h3>窗口行为</h3><p>保持现在的快速粘贴节奏。</p></div></div><div class="card-body"><div class="setting-row"><div class="setting-copy"><strong>点击其他软件后关闭</strong><span>暂时保留，避免剪贴板窗口挡住原应用。</span></div><label class="switch"><input type="checkbox" checked><span class="switch-track"></span><span class="sr-only">点击其他软件后关闭</span></label></div><div class="setting-row"><div class="setting-copy"><strong>粘贴后自动关闭</strong><span>完成一次粘贴后回到原应用。</span></div><label class="switch"><input type="checkbox" checked><span class="switch-track"></span><span class="sr-only">粘贴后自动关闭</span></label></div><div class="setting-row"><div class="setting-copy"><strong>暂停监听</strong><span>暂停时不新增剪贴板记录。</span></div><label class="switch"><input type="checkbox"><span class="switch-track"></span><span class="sr-only">暂停监听</span></label></div></div></div>
+              <div class="card"><div class="card-head"><div><h3>粘贴行为</h3><p>选中内容后如何写回当前应用。</p></div></div><div class="card-body"><div class="setting-row"><div class="setting-copy"><strong>选中后立即粘贴</strong><span>点击项目即完成粘贴，不需要额外确认。</span></div><label class="switch"><input type="checkbox" checked><span class="switch-track"></span><span class="sr-only">选中后立即粘贴</span></label></div><div class="setting-row"><div class="setting-copy"><strong>重复内容合并</strong><span>相同内容只保留一条记录。</span></div><label class="switch"><input type="checkbox" checked><span class="switch-track"></span><span class="sr-only">重复内容合并</span></label></div></div></div>
+            </section>
+
+            <section class="panel" data-panel="data">
+              <div class="panel-intro"><div><h2>数据</h2><p>管理本地内容、保留期限和图片原始数据。</p></div><span class="pill ok">本地优先</span></div>
+              <div class="card"><div class="card-head"><div><h3>图片保真</h3><p>这是产品保证，不提供会降低质量的选项。</p></div><span class="pill ok">始终开启</span></div><div class="info-list"><div class="info-line"><span>复制内容</span><strong>保留原始像素尺寸</strong></div><div class="info-line"><span>存储内容</span><strong>保留原始编码数据与 MIME</strong></div><div class="info-line"><span>缩略图</span><strong>仅用于预览，不覆盖原文件</strong></div></div></div>
+              <div class="card"><div class="card-head"><div><h3>保留策略</h3><p>收藏项目不受自动清理影响。</p></div></div><div class="card-body"><div class="setting-row"><div class="setting-copy"><strong>历史记录</strong><span>超过期限后自动清理未收藏内容。</span></div><select class="select" aria-label="历史记录保留期限"><option>永久保留</option><option>30 天</option><option>7 天</option></select></div><div class="setting-row"><div class="setting-copy"><strong>数据目录</strong><span class="mono">%APPDATA%\Klip\data</span></div><button class="btn ghost" type="button" data-toast="设计原型未打开文件夹">打开目录</button></div></div></div>
+            </section>
+
+            <section class="panel" data-panel="about">
+              <div class="panel-intro"><div><h2>关于</h2><p>版本、诊断信息和本地应用状态。</p></div><span class="pill">v0.2.0 RC</span></div>
+              <div class="card"><div class="card-head"><div><h3>Klip</h3><p>键盘优先的本地剪贴板工具。</p></div><span class="app-mark">K</span></div><div class="info-list"><div class="info-line"><span>版本</span><strong class="mono">0.2.0-rc</strong></div><div class="info-line"><span>平台</span><strong>Windows · Tauri 2</strong></div><div class="info-line"><span>存储</span><strong>本地 SQLite</strong></div></div></div>
+              <div class="card"><div class="card-head"><div><h3>诊断</h3><p>用于排查快捷键、窗口和剪贴板问题。</p></div></div><div class="card-body"><div class="setting-row"><div class="setting-copy"><strong>导出诊断信息</strong><span>不包含剪贴板正文和图片原文件。</span></div><button class="btn ghost" type="button" data-toast="诊断导出将在产品实现中接入">导出</button></div></div></div>
+            </section>
+          </div>
+          <footer class="action-bar"><span class="dirty-state"><i></i><span>有未保存的预览更改</span></span><div class="action-buttons"><button class="btn ghost" id="cancel" type="button">取消</button><button class="btn primary" id="save" type="button">保存设置</button></div></footer>
+        </main>
+      </div>
+    </section>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    const root = document.documentElement;
+    const themeNames = { ember: '暗琥珀', graphite: '炭黑酸橙', brick: '暖砖', rose: '玫瑰纸' };
+    const modeNames = { system: '跟随系统', light: '浅色', dark: '深色' };
+    const panelNames = { general: ['常规', '控制 Klip 启动和基础偏好。'], appearance: ['外观', '选择 Klip 的配色家族和显示模式。'], shortcuts: ['快捷键', '每一项都可以单独启用和重新录入。'], behavior: ['行为', '控制窗口何时出现、何时返回后台。'], data: ['数据', '管理本地内容、保留期限和图片原始数据。'], about: ['关于', '版本、诊断信息和本地应用状态。'] };
+    const toast = document.getElementById('toast');
+    let toastTimer;
+
+    function showToast(message) {
+      toast.textContent = message;
+      toast.classList.add('is-visible');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove('is-visible'), 2200);
+    }
+
+    function resolveMode() {
+      const selected = root.dataset.mode;
+      root.dataset.resolved = selected === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : selected;
+    }
+
+    function updateAppearance() {
+      resolveMode();
+      const theme = root.dataset.theme;
+      const mode = root.dataset.mode;
+      const resolved = root.dataset.resolved;
+      document.getElementById('theme-summary').textContent = `${themeNames[theme]} · ${modeNames[mode]}`;
+      document.getElementById('appearance-note').textContent = `${themeNames[theme]}在${modeNames[mode]}模式下使用${resolved === 'dark' ? '深色' : '浅色'}表面。`;
+      document.querySelectorAll('[data-theme-choice]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.themeChoice === theme)));
+      document.querySelectorAll('[data-mode-choice]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.modeChoice === mode)));
+    }
+
+    document.querySelectorAll('[data-panel-target]').forEach(button => button.addEventListener('click', () => {
+      const target = button.dataset.panelTarget;
+      document.querySelectorAll('[data-panel-target]').forEach(item => item.setAttribute('aria-current', String(item === button)));
+      document.querySelectorAll('[data-panel]').forEach(panel => panel.classList.toggle('is-active', panel.dataset.panel === target));
+      document.getElementById('panel-title').textContent = panelNames[target][0];
+      document.getElementById('panel-desc').textContent = panelNames[target][1];
+    }));
+
+    document.querySelectorAll('[data-theme-choice]').forEach(button => button.addEventListener('click', () => {
+      root.dataset.theme = button.dataset.themeChoice;
+      updateAppearance();
+      showToast(`已预览「${themeNames[root.dataset.theme]}」`);
+    }));
+
+    document.querySelectorAll('[data-mode-choice]').forEach(button => button.addEventListener('click', () => {
+      root.dataset.mode = button.dataset.modeChoice;
+      updateAppearance();
+      showToast(`已切换为${modeNames[root.dataset.mode]}`);
+    }));
+
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+      if (root.dataset.mode === 'system') updateAppearance();
+    });
+
+    document.querySelectorAll('.key-field:not([disabled])').forEach(field => {
+      field.addEventListener('click', () => {
+        field.classList.add('is-recording');
+        field.textContent = '按下快捷键...';
+        field.dataset.recording = 'true';
+        field.focus();
+      });
+      field.addEventListener('keydown', event => {
+        if (field.dataset.recording !== 'true') return;
+        event.preventDefault();
+        if (event.key === 'Escape') {
+          field.textContent = field.dataset.hotkey || '未设置';
+          field.classList.remove('is-recording');
+          field.dataset.recording = 'false';
+          return;
+        }
+        if (['Control', 'Alt', 'Shift', 'Meta'].includes(event.key)) return;
+        const parts = [];
+        if (event.ctrlKey) parts.push('Ctrl');
+        if (event.altKey) parts.push('Alt');
+        if (event.shiftKey) parts.push('Shift');
+        if (event.metaKey) parts.push('Win');
+        parts.push(event.key.length === 1 ? event.key.toUpperCase() : event.key);
+        field.textContent = parts.join(' + ');
+        field.dataset.hotkey = field.textContent;
+        field.classList.remove('is-recording');
+        field.dataset.recording = 'false';
+        showToast(`已录入 ${field.textContent}`);
+      });
+    });
+
+    document.querySelectorAll('.shortcut-row .switch input').forEach(input => input.addEventListener('change', () => {
+      const row = input.closest('.shortcut-row');
+      const field = row.querySelector('.key-field');
+      field.disabled = !input.checked;
+      field.classList.toggle('is-disabled', !input.checked);
+      row.removeAttribute('data-state');
+    }));
+
+    document.querySelectorAll('[data-toast]').forEach(button => button.addEventListener('click', () => showToast(button.dataset.toast)));
+    document.getElementById('save').addEventListener('click', () => showToast('视觉原型已模拟保存，尚未写入 Klip'));
+    document.getElementById('cancel').addEventListener('click', () => showToast('视觉原型已模拟取消'));
+    document.querySelector('.window-btn.close').addEventListener('click', () => showToast('产品实现中将关闭设置窗口'));
+    document.querySelector('.window-btn:not(.close)').addEventListener('click', () => showToast('产品实现中将最小化窗口'));
+    updateAppearance();
+  </script>
+</body>
+</html>

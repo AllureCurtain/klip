@@ -87,7 +87,6 @@ web-klip/
 |   `-- index.css
 |-- scripts/
 |   `-- verify-api.sh     # Bash API verification script
-|-- screenshots/          # Dashboard screenshots
 |-- index.html
 |-- vite.config.ts
 |-- tsconfig.json

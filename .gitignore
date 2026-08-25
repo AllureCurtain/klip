@@ -24,4 +24,5 @@ src-tauri/icons/android/
 src-tauri/icons/ios/
 e2e/.tmp/
 .worktrees/
+.finesse/
 软著补正重做/
