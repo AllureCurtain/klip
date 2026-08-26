@@ -221,7 +221,7 @@ fn collect_text_formats(contents: Vec<ClipboardContent>) -> Result<ClipboardText
 }
 
 pub fn read_image() -> Result<ClipboardImage, ClipboardError> {
-    let mut sources = read_encoded_image_sources()?;
+    let sources = read_encoded_image_sources()?;
     let decoded_source = sources
         .iter()
         .find(|source| matches!(source.format_name.as_str(), "png" | "jpeg" | "webp" | "gif"));
@@ -261,10 +261,15 @@ pub fn read_image() -> Result<ClipboardImage, ClipboardError> {
         }
     };
 
+    // Only Windows contributes extra bitmap representations, so the mutable
+    // binding is introduced here rather than above — elsewhere it would be an
+    // unused `mut`.
     #[cfg(target_os = "windows")]
-    {
+    let sources = {
+        let mut sources = sources;
         sources.append(&mut bitmap_sources);
-    }
+        sources
+    };
 
     Ok(ClipboardImage {
         rgba,
