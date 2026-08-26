@@ -3,6 +3,7 @@ import { api } from '@/lib/api';
 import { useStore } from '@/lib/stores';
 import { ShieldWarning, Plus, Trash, Pencil, Check, X } from '@phosphor-icons/react';
 import type { SourceRule, SourceRuleInput } from '@/types';
+import { ConfirmDialog } from '@/components/ui';
 
 export function RulesView() {
   const rules = useStore((s) => s.sourceRules);
@@ -10,6 +11,7 @@ export function RulesView() {
   const [editing, setEditing] = useState<number | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<SourceRuleInput>({ matchType: 'process', pattern: '', enabled: true });
+  const [pendingDelete, setPendingDelete] = useState<SourceRule | null>(null);
 
   useEffect(() => { refreshMeta(); }, []);
 
@@ -29,7 +31,6 @@ export function RulesView() {
   }
 
   async function handleDelete(id: number) {
-    if (!confirm('Delete this rule?')) return;
     await api.deleteSourceRule(id);
     refreshMeta();
   }
@@ -101,23 +102,37 @@ export function RulesView() {
                 className="flex-1 px-2 py-1 text-xs border border-ink-200 rounded" />
             </div>
             <div className="flex gap-2">
-              <button onClick={() => handleUpdate(r.id)} className="p-1.5 bg-teal-600 text-white rounded"><Check size={14} /></button>
-              <button onClick={() => setEditing(null)} className="p-1.5 bg-ink-100 rounded"><X size={14} /></button>
+              <button onClick={() => handleUpdate(r.id)} aria-label="Save rule" title="Save" className="p-1.5 bg-teal-600 text-white rounded"><Check size={14} /></button>
+              <button onClick={() => setEditing(null)} aria-label="Cancel editing" title="Cancel" className="p-1.5 bg-ink-100 rounded"><X size={14} /></button>
             </div>
           </div>
         ) : (
           <div key={r.id} className="bg-white border border-ink-200 rounded-lg p-4 flex items-center gap-3">
             <button onClick={() => toggleEnabled(r)}
+              aria-label={r.enabled ? `Disable rule ${r.pattern}` : `Enable rule ${r.pattern}`}
+              title={r.enabled ? "Disable" : "Enable"}
               className={`w-8 h-5 rounded-full relative transition-colors ${r.enabled ? 'bg-teal-500' : 'bg-ink-300'}`}>
               <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform ${r.enabled ? 'left-3.5' : 'left-0.5'}`} />
             </button>
             <span className="text-xs px-2 py-0.5 bg-ink-100 text-ink-600 rounded font-mono">{r.match_type}</span>
             <span className="text-sm text-ink-800 flex-1 font-mono">{r.pattern}</span>
-            <button onClick={() => startEdit(r)} className="p-1.5 hover:bg-ink-100 rounded text-ink-400 hover:text-ink-700"><Pencil size={14} /></button>
-            <button onClick={() => handleDelete(r.id)} className="p-1.5 hover:bg-red-50 rounded text-ink-400 hover:text-red-600"><Trash size={14} /></button>
+            <button onClick={() => startEdit(r)} aria-label={`Edit rule ${r.pattern}`} title="Edit" className="p-1.5 hover:bg-ink-100 rounded text-ink-400 hover:text-ink-700"><Pencil size={14} /></button>
+            <button onClick={() => setPendingDelete(r)} aria-label={`Delete rule ${r.pattern}`} title="Delete" className="p-1.5 hover:bg-red-50 rounded text-ink-400 hover:text-red-600"><Trash size={14} /></button>
           </div>
         ))}
       </div>
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="Delete rule?"
+        message={pendingDelete ? `The ${pendingDelete.match_type} rule "${pendingDelete.pattern}" will be permanently deleted.` : ''}
+        confirmLabel="Delete"
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={() => {
+          if (pendingDelete) void handleDelete(pendingDelete.id);
+          setPendingDelete(null);
+        }}
+      />
     </div>
   );
 }

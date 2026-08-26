@@ -52,6 +52,45 @@ pub async fn answer_question(
     })
 }
 
+/// Retrieve the context for `question` and build the prompt, both owned.
+/// The HTTP streaming endpoint owns the provider and the prompt inside its
+/// stream block (borrowed values cannot outlive the response), so the heavy
+/// lifting happens here first.
+pub fn prepare_stream_answer(
+    db: &Database,
+    question: &str,
+    config: &LlmConfig,
+) -> Result<(Vec<QaContextItem>, String), AppError> {
+    let question = question.trim();
+    if question.is_empty() {
+        return Err(AppError::InvalidInput(
+            "question cannot be empty".to_string(),
+        ));
+    }
+    let context = retrieve_context(db, question, config.max_context_items)?;
+    let prompt = build_prompt(question, &context);
+    Ok((context, prompt))
+}
+
+/// One retrieved clipboard excerpt with its id and relevance score.
+/// Serialized for the QA streaming `context` SSE event.
+#[derive(Debug, Serialize)]
+pub struct QaContextSnapshot {
+    pub id: i64,
+    pub preview: String,
+    pub score: f64,
+}
+
+impl From<&QaContextItem> for QaContextSnapshot {
+    fn from(item: &QaContextItem) -> Self {
+        Self {
+            id: item.id,
+            preview: item.preview.clone(),
+            score: item.score,
+        }
+    }
+}
+
 fn retrieve_context(
     db: &Database,
     question: &str,

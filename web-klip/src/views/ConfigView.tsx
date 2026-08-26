@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { useStore } from '@/lib/stores';
+import { getAccessToken, setAccessToken } from '@/lib/api';
 import { Gear, FloppyDisk, Check } from '@phosphor-icons/react';
 
 const CONFIG_FIELDS = [
@@ -25,6 +26,9 @@ export function ConfigView() {
   const [local, setLocal] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [tokenDraft, setTokenDraft] = useState(getAccessToken());
+  const [showToken, setShowToken] = useState(false);
+  const pushToast = useStore((s) => s.pushToast);
 
   useEffect(() => { loadConfig(); }, [loadConfig]);
   useEffect(() => { setLocal(config); }, [config]);
@@ -32,12 +36,21 @@ export function ConfigView() {
   async function handleSave() {
     setSaving(true);
     try {
+      // The token is a separate, local-browser concern: write it to the
+      // server only when the user edited it here, then remember it locally
+      // so subsequent requests authenticate.
+      if (tokenDraft !== getAccessToken()) {
+        await api.setConfigKey('http_access_token', tokenDraft);
+        setAccessToken(tokenDraft);
+        pushToast(tokenDraft ? 'success' : 'info', tokenDraft ? 'Access token enabled — saved locally too' : 'Access token disabled');
+      }
       await api.setConfigMany(local);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
       loadConfig();
     } catch (e: unknown) {
-      alert((e as Error).message);
+      const err = e as { body?: { message?: string }; message?: string };
+      pushToast('error', err.body?.message || err.message || 'Save failed');
     } finally { setSaving(false); }
   }
 
@@ -61,14 +74,45 @@ export function ConfigView() {
         </button>
       </div>
 
+      <div className="bg-white border border-ink-200 rounded-xl overflow-hidden mb-4">
+        <div className="px-5 py-3 border-b border-ink-100 bg-ink-50/50">
+          <div className="text-xs font-semibold text-ink-700">HTTP access token</div>
+          <div className="text-[11px] text-ink-400 mt-0.5">
+            When non-empty, every HTTP endpoint (including the event stream) requires this token. Empty (default) disables authentication.
+          </div>
+        </div>
+        <div className="px-5 py-3 flex items-center gap-3">
+          <input
+            type={showToken ? 'text' : 'password'}
+            value={tokenDraft}
+            onChange={(e) => setTokenDraft(e.target.value)}
+            placeholder="leave empty for no authentication"
+            autoComplete="off"
+            aria-label="HTTP access token"
+            className="flex-1 max-w-md px-3 py-1.5 text-xs border border-ink-200 rounded-lg font-mono focus:outline-none focus:border-teal-500"
+          />
+          <button
+            type="button"
+            onClick={() => setShowToken(!showToken)}
+            className="text-xs text-ink-500 hover:text-ink-800"
+          >
+            {showToken ? 'Hide' : 'Show'}
+          </button>
+          <span className="text-[11px] text-ink-400 font-mono">http_access_token</span>
+        </div>
+      </div>
+
       <div className="bg-white border border-ink-200 rounded-xl overflow-hidden">
         {CONFIG_FIELDS.map((field, i) => (
           <div key={field.key} className={`flex items-center gap-4 px-5 py-3 ${i > 0 ? 'border-t border-ink-100' : ''}`}>
-            <label className="text-xs text-ink-600 w-48 flex-shrink-0">{field.label}</label>
+            <label htmlFor={`cfg-${field.key}`} className="text-xs text-ink-600 w-48 flex-shrink-0">{field.label}</label>
             {field.type === 'bool' ? (
               <label className="flex items-center gap-2 cursor-pointer">
                 <button
+                  id={`cfg-${field.key}`}
                   type="button"
+                  role="switch"
+                  aria-checked={local[field.key] === 'true'}
                   onClick={() => setVal(field.key, local[field.key] === 'true' ? 'false' : 'true')}
                   className={`w-9 h-5 rounded-full relative transition-colors ${local[field.key] === 'true' ? 'bg-teal-500' : 'bg-ink-300'}`}
                 >
@@ -78,6 +122,7 @@ export function ConfigView() {
               </label>
             ) : (
               <input
+                id={`cfg-${field.key}`}
                 type={field.type}
                 value={local[field.key] ?? config[field.key] ?? ''}
                 onChange={(e) => setVal(field.key, e.target.value)}

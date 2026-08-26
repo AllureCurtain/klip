@@ -33,6 +33,9 @@ pub const KEY_LLM_MAX_CONTEXT_ITEMS: &str = "llm_max_context_items";
 pub const KEY_THEME_FAMILY: &str = "theme_family";
 pub const KEY_THEME_MODE: &str = "theme_mode";
 pub const KEY_IMAGE_BUDGET_BYTES: &str = "image_budget_bytes";
+/// Optional access token for the local HTTP API. Empty (the default) disables
+/// authentication and preserves the pre-token behavior exactly.
+pub const KEY_HTTP_ACCESS_TOKEN: &str = "http_access_token";
 
 pub const DEFAULT_TOGGLE_HOTKEY: &str = "Ctrl+Alt+K";
 pub const DEFAULT_QUICK_PASTE_PREFIX: &str = "Ctrl+Alt";
@@ -281,6 +284,12 @@ pub const CONFIG_REGISTRY: &[ConfigDescriptor] = &[
         key: KEY_IMAGE_BUDGET_BYTES,
         default_value: "2147483648",
         kind: ConfigValueKind::Integer,
+        effect: RuntimeEffect::None,
+    },
+    ConfigDescriptor {
+        key: KEY_HTTP_ACCESS_TOKEN,
+        default_value: "",
+        kind: ConfigValueKind::String,
         effect: RuntimeEffect::None,
     },
 ];

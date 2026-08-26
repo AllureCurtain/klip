@@ -1,2 +1,5 @@
 # OCR dictionary bytes are part of the bundled model integrity contract.
 src-tauri/resources/ocr/ppocrv5_dict.txt -text
+
+# Shell scripts must stay LF or bash refuses to execute them (especially on Windows checkouts).
+*.sh text eol=lf

@@ -1,6 +1,7 @@
 use crate::config::registry;
 use crate::database;
 use crate::{AppError, WindowCloseDecision};
+use serde::Serialize;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tauri::{AppHandle, Emitter, Manager, Monitor};
 
@@ -24,6 +25,56 @@ struct WindowPlacement {
     height_dip: i64,
     monitor_id: String,
     scale_factor: f64,
+}
+
+/// Read-only snapshot of the main window, served by `GET /api/window/status`.
+/// Coordinates and sizes are physical pixels; the window controls are
+/// unaffected by this snapshot.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowStatus {
+    pub exists: bool,
+    pub visible: bool,
+    pub minimized: bool,
+    pub maximized: bool,
+    pub focused: bool,
+    pub x: i32,
+    pub y: i32,
+    pub width: u32,
+    pub height: u32,
+}
+
+pub fn main_window_status(app: &AppHandle) -> Result<WindowStatus, AppError> {
+    let Some(window) = app.get_webview_window("main") else {
+        return Ok(WindowStatus {
+            exists: false,
+            visible: false,
+            minimized: false,
+            maximized: false,
+            focused: false,
+            x: 0,
+            y: 0,
+            width: 0,
+            height: 0,
+        });
+    };
+    let position = window
+        .outer_position()
+        .map_err(|error| AppError::Window(format!("failed to read window position: {error}")))?;
+    let size = window
+        .outer_size()
+        .map_err(|error| AppError::Window(format!("failed to read window size: {error}")))?;
+    Ok(WindowStatus {
+        exists: true,
+        visible: window.is_visible().unwrap_or(false),
+        minimized: window.is_minimized().unwrap_or(false),
+        maximized: window.is_maximized().unwrap_or(false),
+        focused: window.is_focused().unwrap_or(false),
+        x: position.x,
+        y: position.y,
+        width: size.width,
+        height: size.height,
+    })
 }
 
 pub fn show_main_window_and_focus(app: &AppHandle) -> Result<(), AppError> {

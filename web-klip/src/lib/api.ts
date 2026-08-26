@@ -2,9 +2,11 @@ import type {
   ClipboardItem, Tag, Snippet, SnippetInput, SourceRule, SourceRuleInput,
   AdvancedSearchQuery, SystemInfo, DiagnosticsInfo, StatsResponse,
   ImportSummary, BackupSummary, RestoreSummary, QaAnswer, ApiError,
+  OcrState, WindowStatus, HealthReport, QaStreamEvent, QaContextItem,
 } from '@/types';
 
 const DEFAULT_BASE_URL = 'http://127.0.0.1:27717';
+const TOKEN_STORAGE_KEY = 'klip-api-token';
 
 function getBaseUrl(): string {
   return localStorage.getItem('klip-api-url') || DEFAULT_BASE_URL;
@@ -15,6 +17,68 @@ export function setBaseUrl(url: string) {
 }
 
 export { getBaseUrl };
+
+export function getAccessToken(): string {
+  return localStorage.getItem(TOKEN_STORAGE_KEY) || '';
+}
+
+export function setAccessToken(token: string) {
+  if (token) {
+    localStorage.setItem(TOKEN_STORAGE_KEY, token);
+  } else {
+    localStorage.removeItem(TOKEN_STORAGE_KEY);
+  }
+  authListeners.forEach((listener) => listener());
+}
+
+/**
+ * Append the access token as a query parameter. Used for channels that cannot
+ * set request headers: <img src> and EventSource. The server accepts
+ * ?access_token= as a fallback to the Authorization header.
+ */
+export function withAccessToken(url: string): string {
+  const token = getAccessToken();
+  if (!token) return url;
+  const separator = url.includes('?') ? '&' : '?';
+  return `${url}${separator}access_token=${encodeURIComponent(token)}`;
+}
+
+export function imageUrl(item: Pick<ClipboardItem, 'id' | 'image_ref'>): string {
+  const path = item.image_ref?.url ?? `/api/clipboard/${item.id}/image`;
+  return withAccessToken(`${getBaseUrl()}${path}`);
+}
+
+export function thumbnailUrl(item: Pick<ClipboardItem, 'id' | 'image_ref'>): string {
+  const path = item.image_ref?.thumbnail_url ?? `/api/clipboard/${item.id}/thumbnail`;
+  return withAccessToken(`${getBaseUrl()}${path}`);
+}
+
+type AuthFailureListener = () => void;
+const authListeners: AuthFailureListener[] = [];
+
+export function onAuthFailure(listener: AuthFailureListener): () => void {
+  authListeners.push(listener);
+  return () => {
+    const index = authListeners.indexOf(listener);
+    if (index >= 0) authListeners.splice(index, 1);
+  };
+}
+
+function notifyAuthFailure() {
+  authListeners.forEach((listener) => listener());
+}
+
+class ApiErrorResponse extends Error {
+  status: number;
+  body: ApiError;
+  constructor(status: number, body: ApiError) {
+    super(body.message || `HTTP ${status}`);
+    this.status = status;
+    this.body = body;
+  }
+}
+
+export { ApiErrorResponse };
 
 class ApiClient {
   private base: string;
@@ -37,20 +101,26 @@ class ApiClient {
     options: RequestInit = {}
   ): Promise<T> {
     const url = `${this.base}${path}`;
+    const token = getAccessToken();
     const res = await fetch(url, {
       ...options,
       headers: {
         'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...options.headers,
       },
     });
+
+    if (res.status === 401) {
+      notifyAuthFailure();
+    }
 
     if (!res.ok) {
       let err: ApiError = { error: 'unknown', message: `HTTP ${res.status}` };
       try {
         err = await res.json();
-      } catch { /* ignore */ }
-      throw err;
+      } catch { /* keep default */ }
+      throw new ApiErrorResponse(res.status, err);
     }
 
     if (res.status === 204 || res.headers.get('content-length') === '0') {
@@ -138,6 +208,15 @@ class ApiClient {
 
   async rescanSensitive(): Promise<{ count: number }> {
     return this.request('/api/clipboard/rescan-sensitive', { method: 'POST' });
+  }
+
+  // OCR
+  async getOcr(id: number): Promise<OcrState> {
+    return this.request(`/api/clipboard/${id}/ocr`);
+  }
+
+  async triggerOcr(id: number): Promise<OcrState> {
+    return this.request(`/api/clipboard/${id}/ocr`, { method: 'POST' });
   }
 
   // Tags
@@ -254,6 +333,9 @@ class ApiClient {
   async hideWindow(): Promise<void> {
     return this.request('/api/window/hide', { method: 'POST' });
   }
+  async windowStatus(): Promise<WindowStatus> {
+    return this.request('/api/window/status');
+  }
 
   // Autostart
   async getAutostart(): Promise<boolean> {
@@ -272,6 +354,9 @@ class ApiClient {
   }
   async getDiagnostics(): Promise<DiagnosticsInfo> {
     return this.request('/api/system/diagnostics');
+  }
+  async getHealthReport(): Promise<HealthReport> {
+    return this.request('/api/diagnostics/health');
   }
 
   // Stats
@@ -323,6 +408,117 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify({ question }),
     });
+  }
+
+  /**
+   * Streaming QA: POST /api/qa/ask/stream, parse the text/event-stream body
+   * frame by frame. `handlers` receive parsed events; `signal` aborts.
+   * Resolves when the stream ends; rejects on network/parse failure.
+   */
+  async qaAskStream(
+    question: string,
+    handlers: {
+      onContext?: (items: QaContextItem[], contextCount: number) => void;
+      onDelta?: (text: string) => void;
+      onDone?: (provider: string, model: string, contextCount: number) => void;
+      onError?: (error: string, message: string) => void;
+    },
+    signal?: AbortSignal,
+  ): Promise<void> {
+    const token = getAccessToken();
+    const res = await fetch(`${this.base}/api/qa/ask/stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ question }),
+      signal,
+    });
+
+    if (res.status === 401) {
+      notifyAuthFailure();
+      throw new ApiErrorResponse(401, { error: 'unauthorized', message: 'missing or invalid access token' });
+    }
+    if (!res.ok || !res.body) {
+      let message = `HTTP ${res.status}`;
+      try {
+        const body = await res.json();
+        message = body.message ?? message;
+      } catch { /* ignore */ }
+      throw new Error(message);
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    const dispatch = (frame: { event: string; data: string }) => {
+      if (!frame.event) return;
+      let payload: Record<string, unknown> = {};
+      try {
+        payload = frame.data ? JSON.parse(frame.data) : {};
+      } catch {
+        payload = {};
+      }
+      const event = frame.event as QaStreamEvent['type'];
+      switch (event) {
+        case 'context':
+          handlers.onContext?.(
+            (payload.items as QaContextItem[]) ?? [],
+            (payload.context_count as number) ?? 0,
+          );
+          break;
+        case 'delta':
+          handlers.onDelta?.((payload.text as string) ?? '');
+          break;
+        case 'done':
+          handlers.onDone?.(
+            (payload.provider as string) ?? '',
+            (payload.model as string) ?? '',
+            (payload.context_count as number) ?? 0,
+          );
+          break;
+        case 'error':
+          handlers.onError?.(
+            (payload.error as string) ?? 'unknown',
+            (payload.message as string) ?? 'unknown error',
+          );
+          break;
+      }
+    };
+
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let separator: number;
+      // SSE frames are separated by a blank line.
+      while ((separator = buffer.indexOf('\n\n')) >= 0) {
+        const raw = buffer.slice(0, separator);
+        buffer = buffer.slice(separator + 2);
+        const lines = raw.split('\n');
+        let event = '';
+        const dataLines: string[] = [];
+        for (const line of lines) {
+          if (line.startsWith('event:')) event = line.slice(6).trim();
+          else if (line.startsWith('data:')) dataLines.push(line.slice(5).trim());
+        }
+        if (event) dispatch({ event, data: dataLines.join('\n') });
+      }
+    }
+    // Flush a final frame not terminated by a blank line.
+    const tail = buffer.trim();
+    if (tail) {
+      const lines = tail.split('\n');
+      let event = '';
+      const dataLines: string[] = [];
+      for (const line of lines) {
+        if (line.startsWith('event:')) event = line.slice(6).trim();
+        else if (line.startsWith('data:')) dataLines.push(line.slice(5).trim());
+      }
+      if (event) dispatch({ event, data: dataLines.join('\n') });
+    }
   }
 
   // OpenAPI spec

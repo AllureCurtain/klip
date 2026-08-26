@@ -1,15 +1,21 @@
 #![cfg_attr(test, allow(dead_code, unused_imports, unused_variables))]
 
+mod auth;
+mod diagnostics;
+mod dto;
 mod events;
+mod images;
 pub mod openapi;
 
 use crate::config::registry::{self, RuntimeEffect};
 use crate::database::StatsResponse;
 use crate::database::{
-    self, AdvancedSearchQuery, BackupSummary, ClipboardItem, DiagnosticsInfo, ImportSummary,
-    RestoreSummary, Snippet, SnippetInput, SourceRule, SourceRuleInput, SystemInfo, Tag,
+    self, AdvancedSearchQuery, BackupSummary, ClipboardItem, ClipboardOcr, ContentType,
+    DiagnosticsInfo, ImportSummary, RestoreSummary, Snippet, SnippetInput, SourceRule,
+    SourceRuleInput, SystemInfo, Tag,
 };
-use crate::llm::{create_provider_from_config, LlmConfig};
+use crate::llm::{create_provider_from_config, LlmConfig, LlmProvider};
+use crate::qa::QaContextSnapshot;
 use crate::{AppError, Database};
 use axum::extract::{Path, Query, State};
 use axum::http::{header, HeaderValue, Method, StatusCode};
@@ -17,16 +23,20 @@ use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, get, patch, post, put};
 use axum::{Json, Router};
-use futures_util::stream;
+use futures_util::{stream, StreamExt};
 use serde::{Deserialize, Serialize};
 use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 #[cfg(not(test))]
 use tauri::{Emitter, Listener};
 use tower_http::cors::{AllowOrigin, CorsLayer};
 
+use dto::ClipboardItemDto;
+
+pub use diagnostics::{HealthCheck, HealthReport};
 pub use events::{EventBroadcaster, ServerEvent};
 pub use openapi::build_openapi;
 
@@ -119,6 +129,7 @@ fn attach_event_forwarding(app: &tauri::AppHandle, broadcaster: EventBroadcaster
         clear_broadcaster.send(ServerEvent::ClipboardCleared);
     });
 
+    let config_broadcaster = broadcaster.clone();
     app.listen("config-changed", move |event| {
         if let Ok(payload) = serde_json::from_str::<serde_json::Value>(event.payload()) {
             let key = payload
@@ -131,9 +142,27 @@ fn attach_event_forwarding(app: &tauri::AppHandle, broadcaster: EventBroadcaster
                 .and_then(|value| value.as_str())
                 .unwrap_or_default()
                 .to_string();
-            broadcaster.send(ServerEvent::ConfigChanged { key, value });
+            config_broadcaster.send(ServerEvent::ConfigChanged { key, value });
         }
     });
+
+    // OCR completion (and any other item refresh) is broadcast so web clients
+    // can update OCR status without polling.
+    let item_broadcaster = broadcaster.clone();
+    app.listen(crate::ocr::ITEM_UPDATED_EVENT, move |event| {
+        let payload = serde_json::from_str::<serde_json::Value>(event.payload())
+            .unwrap_or(serde_json::Value::Null);
+        item_broadcaster.send(ServerEvent::ClipboardItemUpdated(payload));
+    });
+}
+
+/// Build the full production router without a Tauri application.
+/// Tauri-dependent endpoints (paste, window controls, OCR trigger) answer
+/// 500/503 in that mode; everything else works for real. Powers the
+/// `klip_http_check` standalone binary used for curl-level verification.
+#[cfg(not(test))]
+pub fn build_standalone_router(db: Arc<Database>, data_dir: PathBuf) -> Router {
+    build_router(db, None, data_dir, EventBroadcaster::new())
 }
 
 #[cfg(not(test))]
@@ -168,6 +197,9 @@ fn build_router(
             "/api/clipboard/:id",
             get(get_clipboard).delete(delete_clipboard),
         )
+        .route("/api/clipboard/:id/image", get(get_clipboard_image))
+        .route("/api/clipboard/:id/thumbnail", get(get_clipboard_thumbnail))
+        .route("/api/clipboard/:id/ocr", get(get_ocr).post(trigger_ocr))
         .route("/api/clipboard/:id/favorite", post(toggle_favorite))
         .route("/api/clipboard/:id/copy", post(copy_clipboard))
         .route("/api/clipboard/:id/paste", post(paste_clipboard))
@@ -200,9 +232,11 @@ fn build_router(
         .route("/api/window/toggle", post(toggle_window))
         .route("/api/window/show", post(show_window))
         .route("/api/window/hide", post(hide_window))
+        .route("/api/window/status", get(window_status))
         .route("/api/autostart", get(get_autostart).put(set_autostart))
         .route("/api/system/info", get(system_info))
         .route("/api/system/diagnostics", get(diagnostics_info))
+        .route("/api/diagnostics/health", get(diagnostics_health))
         .route("/api/export/json", post(export_json))
         .route("/api/export/csv", post(export_csv))
         .route("/api/import/json", post(import_json))
@@ -211,7 +245,12 @@ fn build_router(
         .route("/api/restore", post(restore_database))
         .route("/api/qa/ask", post(qa_ask))
         .route("/api/ask", post(qa_ask))
+        .route("/api/qa/ask/stream", post(qa_ask_stream))
         .fallback(fallback_404)
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            auth::require_access_token,
+        ))
         .layer(cors_layer())
         .with_state(state)
 }
@@ -243,9 +282,21 @@ fn build_router_for_test(
         .route("/openapi.json", get(openapi_json_handler))
         .route("/api/events", get(sse_events))
         .route("/api/stats", get(get_stats))
+        .route("/api/clipboard", get(list_clipboard))
+        .route("/api/clipboard/search/advanced", post(advanced_search))
+        .route("/api/clipboard/:id", get(get_clipboard))
+        .route("/api/clipboard/:id/image", get(get_clipboard_image))
+        .route("/api/clipboard/:id/thumbnail", get(get_clipboard_thumbnail))
+        .route("/api/clipboard/:id/ocr", get(get_ocr).post(trigger_ocr))
+        .route("/api/diagnostics/health", get(diagnostics_health))
         .route("/api/qa/ask", post(qa_ask))
         .route("/api/ask", post(qa_ask))
+        .route("/api/qa/ask/stream", post(qa_ask_stream))
         .fallback(fallback_404)
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            auth::require_access_token,
+        ))
         .layer(cors_layer())
         .with_state(state)
 }
@@ -353,6 +404,7 @@ impl IntoResponse for ApiError {
             AppError::NotFound(_) => StatusCode::NOT_FOUND,
             AppError::InvalidInput(_) => StatusCode::BAD_REQUEST,
             AppError::Llm(_) => StatusCode::BAD_GATEWAY,
+            AppError::Unavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
         (
@@ -373,7 +425,9 @@ fn json_result<T: Serialize>(result: Result<T, AppError>) -> ApiResult<T> {
 #[cfg(not(test))]
 fn app_required(state: &AppState, operation: &str) -> Result<RuntimeAppHandle, AppError> {
     state.app.clone().ok_or_else(|| {
-        AppError::System(format!("{operation} requires a running Tauri application"))
+        AppError::Unavailable(format!(
+            "{operation} requires a running Klip desktop application"
+        ))
     })
 }
 
@@ -485,57 +539,276 @@ struct CountResponse {
 async fn list_clipboard(
     State(state): State<AppState>,
     Query(query): Query<ListQuery>,
-) -> ApiResult<Vec<ClipboardItem>> {
-    json_result(database::productization::get_list_filtered(
-        &state.db,
-        query.limit.unwrap_or(100),
-        query.offset.unwrap_or(0),
-        query.content_type.as_deref(),
-        query.favorite_only.unwrap_or(false),
-        query.tag_id,
-    ))
+) -> ApiResult<Vec<ClipboardItemDto>> {
+    json_result(
+        database::productization::get_list_filtered(
+            &state.db,
+            query.limit.unwrap_or(100),
+            query.offset.unwrap_or(0),
+            query.content_type.as_deref(),
+            query.favorite_only.unwrap_or(false),
+            query.tag_id,
+        )
+        .map(|items| items.into_iter().map(ClipboardItemDto::from).collect()),
+    )
 }
 
 async fn search_clipboard(
     State(state): State<AppState>,
     Query(query): Query<SearchQuery>,
-) -> ApiResult<Vec<ClipboardItem>> {
-    json_result(database::productization::search_filtered(
-        &state.db,
-        &query.q,
-        query.content_type.as_deref(),
-        query.favorite_only.unwrap_or(false),
-        query.tag_id,
-        query.limit.unwrap_or(100),
-        query.offset.unwrap_or(0),
-    ))
+) -> ApiResult<Vec<ClipboardItemDto>> {
+    json_result(
+        database::productization::search_filtered(
+            &state.db,
+            &query.q,
+            query.content_type.as_deref(),
+            query.favorite_only.unwrap_or(false),
+            query.tag_id,
+            query.limit.unwrap_or(100),
+            query.offset.unwrap_or(0),
+        )
+        .map(|items| items.into_iter().map(ClipboardItemDto::from).collect()),
+    )
 }
 
 async fn advanced_search(
     State(state): State<AppState>,
     Json(body): Json<AdvancedSearchQuery>,
-) -> ApiResult<Vec<ClipboardItem>> {
-    json_result(database::productization::search_advanced(&state.db, body))
+) -> ApiResult<Vec<ClipboardItemDto>> {
+    json_result(
+        database::productization::search_advanced(&state.db, body)
+            .map(|items| items.into_iter().map(ClipboardItemDto::from).collect()),
+    )
 }
 
 async fn get_clipboard(
     State(state): State<AppState>,
     Path(id): Path<i64>,
-) -> ApiResult<ClipboardItem> {
+) -> ApiResult<ClipboardItemDto> {
     json_result(
         database::clipboard::get_by_id(&state.db, id)?
-            .ok_or_else(|| AppError::NotFound(format!("clipboard item {id} not found"))),
+            .ok_or_else(|| AppError::NotFound(format!("clipboard item {id} not found")))
+            .map(ClipboardItemDto::from),
     )
 }
 
 async fn delete_clipboard(State(state): State<AppState>, Path(id): Path<i64>) -> ApiResult<()> {
-    json_result(database::clipboard::delete(&state.db, id))
+    json_result(database::clipboard::delete(&state.db, id).map(|()| {
+        // Best-effort: drop any cached thumbnails for the deleted item.
+        images::invalidate(&state.data_dir, id);
+    }))
+}
+
+const IMAGE_CACHE_CONTROL: &str = "private, max-age=31536000, immutable";
+
+#[derive(Debug, Deserialize)]
+struct ThumbnailQuery {
+    #[serde(default)]
+    max: Option<u32>,
+}
+
+/// Full-size PNG for an image item, read from the item's `canonical`
+/// representation (always PNG) rather than from `content` — image bytes live in
+/// `binary_blobs` since db v8, and `content` no longer carries a data URL.
+/// Content is addressed by the item hash, so ETag/If-None-Match lets repeat
+/// views skip the payload entirely (304).
+async fn get_clipboard_image(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    headers: axum::http::HeaderMap,
+) -> Result<Response, ApiError> {
+    let item = image_item_or_error(&state, id)?;
+    let etag = format!("\"{}\"", item.hash);
+    if etag_matches(&headers, &etag) {
+        return Ok(not_modified(etag));
+    }
+    let bytes = canonical_image_bytes(&state, id)?;
+    Ok(png_response(bytes, Some(etag), None))
+}
+
+/// Canonical (PNG) bytes for an image item. A missing or corrupt blob surfaces
+/// as a locatable error instead of a silently empty response.
+fn canonical_image_bytes(state: &AppState, id: i64) -> Result<Vec<u8>, ApiError> {
+    database::productization::get_image_representation(&state.db, id, Some("canonical"))
+        .map_err(ApiError)
+}
+
+/// Thumbnail rendition for list views: longest side clamped by
+/// `images::DEFAULT_THUMBNAIL_MAX_EDGE` (512px). Generated once and cached on
+/// disk under `<data_dir>/thumbnails/` so list scrolling does not re-encode
+/// images on every request; `x-klip-thumbnail-cache` exposes hit/miss for
+/// diagnostics.
+///
+/// Renders from the `canonical` representation. The stored `thumbnail`
+/// representation is deliberately not reused here: it is fixed at 192px for the
+/// desktop list, while this endpoint serves caller-chosen edges up to 512px.
+async fn get_clipboard_thumbnail(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    headers: axum::http::HeaderMap,
+    Query(query): Query<ThumbnailQuery>,
+) -> Result<Response, ApiError> {
+    let item = image_item_or_error(&state, id)?;
+    let max_edge = images::clamp_max_edge(query.max);
+    let original_hash = item.hash.clone();
+    let etag = format!("\"{original_hash}-{max_edge}\"");
+    if etag_matches(&headers, &etag) {
+        return Ok(not_modified(etag));
+    }
+    let bytes = canonical_image_bytes(&state, id)?;
+    let cache_root = state.data_dir.clone();
+    // Encoding off the async runtime; disk cache keeps repeat requests cheap.
+    let generated = tokio::task::spawn_blocking(move || {
+        images::thumbnail(&cache_root, id, &original_hash, &bytes, max_edge)
+    })
+    .await
+    .map_err(|error| ApiError(AppError::System(format!("thumbnail task failed: {error}"))))??;
+    let (thumbnail, cached) = generated;
+    Ok(png_response(
+        thumbnail,
+        Some(etag),
+        Some(if cached { "hit" } else { "miss" }),
+    ))
+}
+
+fn etag_matches(headers: &axum::http::HeaderMap, etag: &str) -> bool {
+    headers
+        .get(header::IF_NONE_MATCH)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|candidate| candidate == etag)
+}
+
+fn not_modified(etag: String) -> Response {
+    (
+        StatusCode::NOT_MODIFIED,
+        [(header::ETAG, HeaderValue::from_str(&etag).unwrap())],
+    )
+        .into_response()
+}
+
+fn png_response(bytes: Vec<u8>, etag: Option<String>, thumbnail_cache: Option<&str>) -> Response {
+    let mut response = bytes.into_response();
+    response
+        .headers_mut()
+        .insert(header::CONTENT_TYPE, HeaderValue::from_static("image/png"));
+    response.headers_mut().insert(
+        header::CACHE_CONTROL,
+        HeaderValue::from_static(IMAGE_CACHE_CONTROL),
+    );
+    if let Some(etag) = etag {
+        if let Ok(value) = HeaderValue::from_str(&etag) {
+            response.headers_mut().insert(header::ETAG, value);
+        }
+    }
+    if let Some(state) = thumbnail_cache {
+        let name = axum::http::HeaderName::from_static("x-klip-thumbnail-cache");
+        if let Ok(value) = HeaderValue::from_str(state) {
+            response.headers_mut().insert(name, value);
+        }
+    }
+    response
+}
+
+fn image_item_or_error(state: &AppState, id: i64) -> Result<ClipboardItem, ApiError> {
+    let item = database::clipboard::get_by_id(&state.db, id)
+        .map_err(ApiError)?
+        .ok_or_else(|| {
+            ApiError::from(AppError::NotFound(format!("clipboard item {id} not found")))
+        })?;
+    if item.content_type != ContentType::Image {
+        return Err(ApiError(AppError::InvalidInput(format!(
+            "clipboard item {id} is not an image"
+        ))));
+    }
+    Ok(item)
+}
+
+/// Current OCR state for an image item (pending / completed / failed).
+async fn get_ocr(State(state): State<AppState>, Path(id): Path<i64>) -> ApiResult<ClipboardOcr> {
+    // 404 first when the item does not exist at all.
+    let item = database::clipboard::get_by_id(&state.db, id)
+        .map_err(ApiError)?
+        .ok_or_else(|| {
+            ApiError::from(AppError::NotFound(format!("clipboard item {id} not found")))
+        })?;
+    if item.content_type != ContentType::Image {
+        return Err(ApiError(AppError::InvalidInput(format!(
+            "clipboard item {id} is not an image"
+        ))));
+    }
+    json_result(
+        database::ocr::get(&state.db, id)?
+            .ok_or_else(|| AppError::NotFound(format!("no OCR state recorded for item {id}"))),
+    )
+}
+
+/// Ask the desktop OCR worker to (re)recognize an image item. Without a
+/// running Tauri application the worker is unreachable: answer 503 with an
+/// explicit message instead of pretending the job was accepted.
+async fn trigger_ocr(State(state): State<AppState>, Path(id): Path<i64>) -> Response {
+    let item = match image_item_or_error(&state, id) {
+        Ok(item) => item,
+        Err(error) => return error.into_response(),
+    };
+    // The desktop worker is only reachable inside the Tauri app; outside it
+    // (standalone server, tests) answer 503 instead of pretending success.
+    #[cfg(not(test))]
+    {
+        let Some(app) = state.app.as_ref() else {
+            return ocr_unavailable_response();
+        };
+        if let Err(error) = enqueue_ocr(app, id) {
+            return ApiError(error).into_response();
+        }
+    }
+    #[cfg(test)]
+    if state.app.is_none() {
+        return ocr_unavailable_response();
+    }
+
+    let requeued = match database::ocr::requeue(&state.db, id) {
+        Ok(requeued) => requeued,
+        Err(error) => return ApiError(error).into_response(),
+    };
+    if requeued {
+        tracing::info!("OCR re-queued for item {id} via HTTP");
+    }
+    match database::ocr::get(&state.db, id) {
+        Ok(Some(ocr)) => Json(ocr).into_response(),
+        Ok(None) => ApiError(AppError::System(format!(
+            "OCR state for item {} vanished after requeue",
+            item.id
+        )))
+        .into_response(),
+        Err(error) => ApiError(error).into_response(),
+    }
+}
+
+fn ocr_unavailable_response() -> Response {
+    (
+        axum::http::StatusCode::SERVICE_UNAVAILABLE,
+        Json(serde_json::json!({
+            "error": "ocr_unavailable",
+            "message": "OCR requires the Klip desktop application to be running",
+        })),
+    )
+        .into_response()
+}
+
+#[cfg(not(test))]
+fn enqueue_ocr(app: &tauri::AppHandle, item_id: i64) -> Result<(), AppError> {
+    use tauri::Manager;
+    app.state::<crate::ocr::OcrService>()
+        .enqueue(item_id)
+        .map_err(|error| AppError::System(format!("failed to enqueue OCR job: {error}")))
 }
 
 async fn clear_clipboard(State(state): State<AppState>) -> ApiResult<()> {
     let result = database::clipboard::clear(&state.db);
     if result.is_ok() {
         emit_clipboard_cleared(&state);
+        // Best-effort: the thumbnail cache is derived data, drop it all.
+        images::clear_cache(&state.data_dir);
     }
     json_result(result)
 }
@@ -554,8 +827,13 @@ async fn batch_delete(
     Json(body): Json<IdsBody>,
 ) -> ApiResult<CountResponse> {
     json_result(
-        database::productization::batch_delete(&state.db, &body.ids)
-            .map(|count| CountResponse { count }),
+        database::productization::batch_delete(&state.db, &body.ids).map(|count| {
+            // Best-effort: drop cached thumbnails for every deleted item.
+            for id in &body.ids {
+                images::invalidate(&state.data_dir, *id);
+            }
+            CountResponse { count }
+        }),
     )
 }
 
@@ -839,6 +1117,16 @@ async fn hide_window(State(state): State<AppState>) -> ApiResult<()> {
     json_result(crate::window::controller::hide_main_window(&app))
 }
 
+/// Read-only snapshot of the main window (visibility, position, size).
+/// Sits beside the show/hide/toggle controls without mutating anything.
+#[cfg(not(test))]
+async fn window_status(
+    State(state): State<AppState>,
+) -> ApiResult<crate::window::controller::WindowStatus> {
+    let app = app_required(&state, "window status")?;
+    json_result(crate::window::controller::main_window_status(&app))
+}
+
 #[cfg(not(test))]
 async fn get_autostart(State(state): State<AppState>) -> ApiResult<bool> {
     let app = app_required(&state, "autostart")?;
@@ -897,6 +1185,18 @@ fn set_autostart_enabled(app: &tauri::AppHandle, enabled: bool) -> Result<(), Ap
 
 async fn system_info() -> ApiResult<SystemInfo> {
     json_result(Ok(build_system_info()))
+}
+
+/// Read-only self-check report (SQLite integrity, search-index consistency,
+/// data-directory usage). Runs blocking work off the async runtime.
+async fn diagnostics_health(State(state): State<AppState>) -> ApiResult<HealthReport> {
+    let db = state.db.clone();
+    let data_dir = state.data_dir.clone();
+    json_result(
+        tokio::task::spawn_blocking(move || diagnostics::run_all_checks(&db, &data_dir))
+            .await
+            .map_err(|error| AppError::System(format!("diagnostics task failed: {error}"))),
+    )
 }
 
 async fn diagnostics_info(State(state): State<AppState>) -> ApiResult<DiagnosticsInfo> {
@@ -1071,6 +1371,169 @@ async fn qa_ask(
     json_result(
         crate::qa::answer_question(&state.db, &body.question, provider.as_ref(), &config).await,
     )
+}
+
+/// Maximum silence tolerated between two LLM chunks before the answer is
+/// declared failed. Keeps a wedged provider from hanging the stream forever.
+const QA_STREAM_CHUNK_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// Streaming variant of `/api/qa/ask`: emits the reference list first
+/// (`context`), then `delta` frames as the provider produces them, and closes
+/// with `done`. Any failure (including a chunk timeout) is reported as an
+/// `error` frame instead of a hung spinner.
+async fn qa_ask_stream(State(state): State<AppState>, Json(body): Json<QaAskBody>) -> Response {
+    if body.question.trim().is_empty() {
+        return ApiError(AppError::InvalidInput(
+            "question cannot be empty".to_string(),
+        ))
+        .into_response();
+    }
+
+    let config = match LlmConfig::load(&state.db) {
+        Ok(config) => config,
+        Err(error) => return sse_error_response("config", &error),
+    };
+    let (context, prompt) =
+        match crate::qa::prepare_stream_answer(&state.db, &body.question, &config) {
+            Ok(prepared) => prepared,
+            Err(error) => return sse_error_response("retrieval", &error),
+        };
+    let provider = create_provider_from_config(&config);
+    let provider_name = provider.name().to_string();
+    let model = config.model.clone();
+    let context_count = context.len();
+    let snapshots = context
+        .iter()
+        .map(QaContextSnapshot::from)
+        .collect::<Vec<_>>();
+
+    let stream = qa_stream_events(
+        provider,
+        prompt,
+        snapshots,
+        context_count,
+        provider_name,
+        model,
+    );
+    Sse::new(stream)
+        .keep_alive(KeepAlive::default())
+        .into_response()
+}
+
+/// Build the QA SSE event stream from a provider's token stream.
+/// The provider and prompt are moved into the stream so the result is
+/// `'static` (axum's `Sse` requires it). Extracted from the handler so tests
+/// can drive it with stub providers (including one that fails mid-stream and
+/// one that never produces a chunk).
+fn qa_stream_events(
+    provider: Box<dyn LlmProvider>,
+    prompt: String,
+    context: Vec<QaContextSnapshot>,
+    context_count: usize,
+    provider_name: String,
+    model: String,
+) -> stream::BoxStream<'static, Result<Event, Infallible>> {
+    qa_stream_events_with_timeout(
+        provider,
+        prompt,
+        context,
+        context_count,
+        provider_name,
+        model,
+        QA_STREAM_CHUNK_TIMEOUT,
+    )
+}
+
+fn qa_stream_events_with_timeout(
+    provider: Box<dyn LlmProvider>,
+    prompt: String,
+    context: Vec<QaContextSnapshot>,
+    context_count: usize,
+    provider_name: String,
+    model: String,
+    chunk_timeout: Duration,
+) -> stream::BoxStream<'static, Result<Event, Infallible>> {
+    Box::pin(async_stream::stream! {
+        let context_event = serde_json::json!({
+            "context_count": context_count,
+            "items": context,
+        });
+        yield Ok(Event::default().event("context").data(
+            serde_json::to_string(&context_event).unwrap_or_else(|_| "{}".to_string()),
+        ));
+        let mut token_stream = provider.complete_stream(&prompt);
+        let mut failure: Option<String> = None;
+        loop {
+            match next_stream_chunk(&mut token_stream, chunk_timeout).await {
+                ChunkOutcome::Chunk(Ok(text)) => {
+                    if text.is_empty() {
+                        continue;
+                    }
+                    let payload = serde_json::json!({ "text": text });
+                    yield Ok(Event::default().event("delta").data(
+                        serde_json::to_string(&payload).unwrap_or_else(|_| "{}".to_string()),
+                    ));
+                }
+                ChunkOutcome::Chunk(Err(error)) => {
+                    failure = Some(error.to_string());
+                    break;
+                }
+                ChunkOutcome::End => break,
+                ChunkOutcome::Timeout => {
+                    failure = Some(format!(
+                        "LLM did not produce a chunk within {} seconds",
+                        QA_STREAM_CHUNK_TIMEOUT.as_secs()
+                    ));
+                    break;
+                }
+            }
+        }
+        match failure {
+            Some(message) => {
+                let payload = serde_json::json!({ "error": "llm", "message": message });
+                yield Ok(Event::default().event("error").data(
+                    serde_json::to_string(&payload).unwrap_or_else(|_| "{}".to_string()),
+                ));
+            }
+            None => {
+                let payload = serde_json::json!({
+                    "provider": provider_name,
+                    "model": model,
+                    "context_count": context_count,
+                });
+                yield Ok(Event::default().event("done").data(
+                    serde_json::to_string(&payload).unwrap_or_else(|_| "{}".to_string()),
+                ));
+            }
+        }
+    })
+}
+
+enum ChunkOutcome {
+    Chunk(Result<String, AppError>),
+    End,
+    Timeout,
+}
+
+async fn next_stream_chunk<S>(stream: &mut S, timeout: Duration) -> ChunkOutcome
+where
+    S: stream::Stream<Item = Result<String, AppError>> + Unpin,
+{
+    match tokio::time::timeout(timeout, stream.next()).await {
+        Ok(Some(result)) => ChunkOutcome::Chunk(result),
+        Ok(None) => ChunkOutcome::End,
+        Err(_) => ChunkOutcome::Timeout,
+    }
+}
+
+fn sse_error_response(code: &str, error: &AppError) -> Response {
+    let payload = serde_json::json!({ "error": code, "message": error.to_string() });
+    let event = Event::default()
+        .event("error")
+        .data(serde_json::to_string(&payload).unwrap_or_else(|_| "{}".to_string()));
+    Sse::new(stream::once(std::future::ready(Ok::<_, Infallible>(event))))
+        .keep_alive(KeepAlive::default())
+        .into_response()
 }
 
 #[cfg(test)]
@@ -1340,5 +1803,659 @@ mod tests {
             .event_name(),
             "config-changed"
         );
+        assert_eq!(
+            ServerEvent::ClipboardItemUpdated(serde_json::json!({ "id": 1 })).event_name(),
+            "clipboard-item-updated"
+        );
+    }
+
+    // ----- image on-demand loading -------------------------------------
+
+    /// A real (tiny) PNG: the image endpoints must decode the stored data URL
+    /// and serve bytes, so fixtures have to be valid PNGs.
+    fn png_fixture() -> Vec<u8> {
+        let image = image::RgbaImage::new(2, 2);
+        let mut buffer = Vec::new();
+        image::DynamicImage::ImageRgba8(image)
+            .write_to(
+                &mut std::io::Cursor::new(&mut buffer),
+                image::ImageFormat::Png,
+            )
+            .unwrap();
+        buffer
+    }
+
+    fn insert_image_item(db: &crate::Database, data: &[u8]) -> ClipboardItem {
+        let hash = format!("{:x}", Sha256::digest(data));
+        let item = NewClipboardItem {
+            content_type: ContentType::Image,
+            data: data.to_vec(),
+            preview: Some("image fixture".to_string()),
+            hash,
+            size: data.len() as i64,
+            metadata: Some(r#"{"width":2,"height":2}"#.to_string()),
+            formats: Vec::new(),
+            // Left empty on purpose: `insert` synthesizes the PNG source
+            // representation from the canonical bytes, so this also covers
+            // that default path.
+            image_sources: Vec::new(),
+        };
+        crate::database::clipboard::insert(db, &item).unwrap()
+    }
+
+    #[tokio::test]
+    async fn list_and_detail_responses_omit_full_image_base64() {
+        let db = Arc::new(test_db());
+        let png = png_fixture();
+        let image = insert_image_item(&db, &png);
+        insert_text(&db, "plain text item");
+
+        let app = build_router_for_test(
+            db,
+            None,
+            PathBuf::from("C:/tmp/klip-test"),
+            EventBroadcaster::new(),
+        );
+
+        for uri in [
+            "/api/clipboard?limit=10",
+            "/api/clipboard/1",
+            "/api/clipboard/2",
+        ] {
+            let response = app
+                .clone()
+                .oneshot(Request::get(uri).body(Body::empty()).unwrap())
+                .await
+                .unwrap();
+            assert!(response.status().is_success(), "{uri}");
+            let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+            let raw = String::from_utf8_lossy(&bytes);
+            assert!(
+                !raw.contains("data:image/png;base64"),
+                "{uri} must not ship base64: {raw}"
+            );
+        }
+
+        // Explicitly: the list payload must not contain the base64 payload,
+        // and each image item carries the on-demand image_ref links.
+        let response = app
+            .clone()
+            .oneshot(
+                Request::get("/api/clipboard?limit=10")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let raw = String::from_utf8_lossy(&bytes);
+        assert!(
+            !raw.contains("data:image/png;base64"),
+            "list must not ship base64: {raw}"
+        );
+        let value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        let image_entry = value
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|entry| entry["id"] == serde_json::json!(image.id))
+            .unwrap();
+        assert!(
+            image_entry.get("content").is_none(),
+            "image items omit content"
+        );
+        assert_eq!(
+            image_entry["image_ref"]["url"],
+            format!("/api/clipboard/{}/image", image.id)
+        );
+        assert_eq!(
+            image_entry["image_ref"]["thumbnail_url"],
+            format!("/api/clipboard/{}/thumbnail", image.id)
+        );
+        assert_eq!(image_entry["image_ref"]["width"], 2);
+    }
+
+    #[tokio::test]
+    async fn image_and_thumbnail_endpoints_serve_png_and_reject_other_types() {
+        let db = Arc::new(test_db());
+        let png = png_fixture();
+        let image = insert_image_item(&db, &png);
+        insert_text(&db, "a plain text item");
+        let app = build_router_for_test(
+            db,
+            None,
+            PathBuf::from("C:/tmp/klip-test"),
+            EventBroadcaster::new(),
+        );
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::get(format!("/api/clipboard/{}/image", image.id))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response.headers().get(header::CONTENT_TYPE).unwrap(),
+            "image/png"
+        );
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        assert_eq!(&body[..8], b"\x89PNG\r\n\x1a\n", "must serve the real PNG");
+        assert_eq!(body.len(), png.len());
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::get(format!("/api/clipboard/{}/thumbnail", image.id))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response.headers().get(header::CONTENT_TYPE).unwrap(),
+            "image/png"
+        );
+
+        // Text items have no image.
+        let response = app
+            .clone()
+            .oneshot(
+                Request::get("/api/clipboard/2/image")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+        // Missing items 404.
+        let response = app
+            .clone()
+            .oneshot(
+                Request::get("/api/clipboard/9999/image")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    // ----- OCR over HTTP -------------------------------------------------
+
+    #[tokio::test]
+    async fn ocr_state_is_visible_and_trigger_reports_worker_unavailability() {
+        let db = Arc::new(test_db());
+        let png = png_fixture();
+        let image = insert_image_item(&db, &png);
+        insert_text(&db, "a plain text item");
+        let app = build_router_for_test(
+            db,
+            None,
+            PathBuf::from("C:/tmp/klip-test"),
+            EventBroadcaster::new(),
+        );
+
+        // The image starts with a pending OCR row (created at insert time).
+        let response = app
+            .clone()
+            .oneshot(
+                Request::get(format!("/api/clipboard/{}/ocr", image.id))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert!(response.status().is_success());
+        let value = response_json(response).await;
+        assert_eq!(value["status"], "pending");
+
+        // Triggering without a desktop worker is an explicit 503, never a
+        // fake success — and it does not poison the OCR state.
+        let response = app
+            .clone()
+            .oneshot(
+                Request::post(format!("/api/clipboard/{}/ocr", image.id))
+                    .header("content-type", "application/json")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        let value = response_json(response).await;
+        assert_eq!(value["error"], "ocr_unavailable");
+        assert!(
+            value["message"].as_str().unwrap().contains("desktop"),
+            "must explain why: {value}"
+        );
+
+        // After the 503, other endpoints (and OCR state) still work.
+        let response = app
+            .clone()
+            .oneshot(Request::get("/api/health").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let response = app
+            .clone()
+            .oneshot(
+                Request::get(format!("/api/clipboard/{}/ocr", image.id))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response_json(response).await["status"], "pending");
+
+        // Non-image item → 400; missing item → 404.
+        let response = app
+            .clone()
+            .oneshot(
+                Request::get("/api/clipboard/2/ocr")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let response = app
+            .clone()
+            .oneshot(
+                Request::post("/api/clipboard/9999/ocr")
+                    .header("content-type", "application/json")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    // ----- QA streaming ---------------------------------------------------
+
+    async fn sse_frames(response: axum::response::Response) -> Vec<(String, serde_json::Value)> {
+        let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let text = String::from_utf8_lossy(&bytes);
+        let mut frames = Vec::new();
+        for block in text.split("\n\n") {
+            let (mut event, mut data) = (String::new(), String::new());
+            for line in block.trim_start().lines() {
+                if let Some(value) = line.strip_prefix("event:") {
+                    event = value.trim().to_string();
+                }
+                if let Some(value) = line.strip_prefix("data:") {
+                    data = value.trim().to_string();
+                }
+            }
+            if event.is_empty() {
+                continue;
+            }
+            frames.push((
+                event,
+                serde_json::from_str(&data).unwrap_or(serde_json::Value::Null),
+            ));
+        }
+        frames
+    }
+
+    #[tokio::test]
+    async fn qa_stream_emits_context_then_deltas_then_done() {
+        let db = Arc::new(test_db());
+        insert_text(&db, "deploy token is klip-secret-123");
+        let app = build_router_for_test(
+            db,
+            None,
+            PathBuf::from("C:/tmp/klip-test"),
+            EventBroadcaster::new(),
+        );
+
+        let response = app
+            .oneshot(
+                Request::post("/api/qa/ask/stream")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"question":"what is the deploy token?"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let frames = sse_frames(response).await;
+        let events: Vec<&str> = frames.iter().map(|(event, _)| event.as_str()).collect();
+        assert_eq!(events[0], "context");
+        assert_eq!(*events.last().unwrap(), "done");
+        assert!(events.contains(&"delta"));
+        let context = &frames[0].1;
+        assert_eq!(context["context_count"], 1);
+        assert_eq!(context["items"][0]["id"], 1);
+        let done = frames.last().unwrap().1.clone();
+        assert_eq!(done["context_count"], 1);
+    }
+
+    #[tokio::test]
+    async fn qa_stream_empty_question_is_rejected_with_400() {
+        let app = build_router_for_test(
+            Arc::new(test_db()),
+            None,
+            PathBuf::from("C:/tmp/klip-test"),
+            EventBroadcaster::new(),
+        );
+        let response = app
+            .oneshot(
+                Request::post("/api/qa/ask/stream")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"question":"   "}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn qa_stream_empty_retrieval_reports_zero_context() {
+        let db = Arc::new(test_db());
+        insert_text(&db, "shopping list milk eggs");
+        let app = build_router_for_test(
+            db,
+            None,
+            PathBuf::from("C:/tmp/klip-test"),
+            EventBroadcaster::new(),
+        );
+
+        let response = app
+            .oneshot(
+                Request::post("/api/qa/ask/stream")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"question":"quantum physics"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let frames = sse_frames(response).await;
+        assert_eq!(frames[0].1["context_count"], 0);
+        assert_eq!(frames[0].1["items"].as_array().unwrap().len(), 0);
+        assert_eq!(frames.last().unwrap().0, "done");
+    }
+
+    struct FailAfterFirstProvider;
+
+    #[async_trait::async_trait]
+    impl LlmProvider for FailAfterFirstProvider {
+        async fn complete(&self, _prompt: &str) -> Result<String, AppError> {
+            Ok("unused".into())
+        }
+        fn complete_stream<'a>(
+            &'a self,
+            _prompt: &'a str,
+        ) -> stream::BoxStream<'a, Result<String, AppError>> {
+            Box::pin(stream::iter(vec![
+                Ok("partial".to_string()),
+                Err(AppError::Llm("injected mid-stream failure".into())),
+            ]))
+        }
+        fn name(&self) -> &'static str {
+            "fail-test"
+        }
+    }
+
+    struct PendingProvider;
+
+    #[async_trait::async_trait]
+    impl LlmProvider for PendingProvider {
+        async fn complete(&self, _prompt: &str) -> Result<String, AppError> {
+            std::future::pending().await
+        }
+        fn complete_stream<'a>(
+            &'a self,
+            _prompt: &'a str,
+        ) -> stream::BoxStream<'a, Result<String, AppError>> {
+            Box::pin(stream::pending())
+        }
+        fn name(&self) -> &'static str {
+            "pending-test"
+        }
+    }
+
+    #[tokio::test]
+    async fn qa_stream_mid_stream_failure_emits_error_frame() {
+        let provider = FailAfterFirstProvider;
+        let stream = qa_stream_events_with_timeout(
+            Box::new(provider),
+            "prompt".to_string(),
+            vec![],
+            0,
+            "fail-test".to_string(),
+            "model".into(),
+            Duration::from_secs(60),
+        );
+        let frames = collect_stream_frames(stream).await;
+        let events: Vec<&str> = frames.iter().map(|(event, _)| event.as_str()).collect();
+        assert!(
+            events.contains(&"delta"),
+            "partial delta got through: {events:?}"
+        );
+        assert_eq!(*events.last().unwrap(), "error");
+        assert!(frames.last().unwrap().1["message"]
+            .as_str()
+            .unwrap()
+            .contains("injected mid-stream failure"));
+    }
+
+    #[tokio::test]
+    async fn qa_stream_chunk_timeout_emits_error_frame() {
+        let provider = PendingProvider;
+        let stream = qa_stream_events_with_timeout(
+            Box::new(provider),
+            "prompt".to_string(),
+            vec![],
+            0,
+            "pending-test".to_string(),
+            "model".into(),
+            Duration::from_millis(20),
+        );
+        let frames = collect_stream_frames(stream).await;
+        assert_eq!(frames[0].0, "context");
+        assert_eq!(frames[1].0, "error");
+        assert!(
+            frames[1].1["message"].as_str().unwrap().contains("within"),
+            "{:?}",
+            frames[1].1
+        );
+    }
+
+    async fn collect_stream_frames(
+        stream: stream::BoxStream<'static, Result<Event, Infallible>>,
+    ) -> Vec<(String, serde_json::Value)> {
+        let events: Vec<Event> = stream.map(|item| item.unwrap()).collect().await;
+        let mut frames = Vec::new();
+        for event in events {
+            let response = Sse::new(stream::once(std::future::ready(Ok::<_, Infallible>(event))))
+                .into_response();
+            let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+            let text = String::from_utf8_lossy(&bytes);
+            let (mut name, mut data) = (String::new(), String::new());
+            for line in text.lines() {
+                if let Some(value) = line.strip_prefix("event:") {
+                    name = value.trim().to_string();
+                }
+                if let Some(value) = line.strip_prefix("data:") {
+                    data = value.trim().to_string();
+                }
+            }
+            frames.push((
+                name,
+                serde_json::from_str(&data).unwrap_or(serde_json::Value::Null),
+            ));
+        }
+        frames
+    }
+
+    // ----- access token ----------------------------------------------------
+
+    fn set_access_token(db: &crate::Database, token: &str) {
+        crate::database::config::set(db, registry::KEY_HTTP_ACCESS_TOKEN, token).unwrap();
+    }
+
+    #[tokio::test]
+    async fn access_token_disabled_keeps_endpoints_open() {
+        let db = Arc::new(test_db());
+        let app = build_router_for_test(
+            db,
+            None,
+            PathBuf::from("C:/tmp/klip-test"),
+            EventBroadcaster::new(),
+        );
+        let response = app
+            .oneshot(Request::get("/api/health").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn access_token_enabled_rejects_missing_and_wrong_credentials_everywhere() {
+        let db = Arc::new(test_db());
+        set_access_token(&db, "klip-test-token");
+        let app = build_router_for_test(
+            db,
+            None,
+            PathBuf::from("C:/tmp/klip-test"),
+            EventBroadcaster::new(),
+        );
+
+        // No token at all.
+        let response = app
+            .clone()
+            .oneshot(Request::get("/api/health").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+        // Wrong bearer token.
+        let response = app
+            .clone()
+            .oneshot(
+                Request::get("/api/health")
+                    .header("authorization", "Bearer nope")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+        // Wrong query token (EventSource channel).
+        let response = app
+            .clone()
+            .oneshot(
+                Request::get("/api/health?access_token=nope")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+        // SSE stream is gated too — the header is checked before the stream.
+        let response = app
+            .clone()
+            .oneshot(Request::get("/api/events").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+        // The OpenAPI document is gated as well (everything is).
+        let response = app
+            .clone()
+            .oneshot(
+                Request::get("/api/openapi.json")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn access_token_accepts_bearer_and_query_credentials() {
+        let db = Arc::new(test_db());
+        set_access_token(&db, "klip-test-token");
+        let app = build_router_for_test(
+            db,
+            None,
+            PathBuf::from("C:/tmp/klip-test"),
+            EventBroadcaster::new(),
+        );
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::get("/api/health")
+                    .header("authorization", "Bearer klip-test-token")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::get("/api/health?access_token=klip-test-token")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    // ----- diagnostics ------------------------------------------------------
+
+    #[tokio::test]
+    async fn diagnostics_health_runs_three_checks() {
+        let dir = std::env::temp_dir().join(format!("klip-http-diag-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("klip.db"), b"not a database").unwrap();
+        let db = Arc::new(test_db());
+        let app = build_router_for_test(db, None, dir.clone(), EventBroadcaster::new());
+
+        let response = app
+            .oneshot(
+                Request::get("/api/diagnostics/health")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let value = response_json(response).await;
+        let checks = value["checks"].as_array().unwrap();
+        assert_eq!(checks.len(), 3, "{value}");
+        let by_id = |id: &str| {
+            checks
+                .iter()
+                .find(|check| check["id"] == id)
+                .unwrap()
+                .clone()
+        };
+        assert_eq!(by_id("sqlite_integrity")["status"], "ok");
+        // In-memory test databases have no Tantivy index attached.
+        assert_eq!(by_id("search_index")["status"], "degraded");
+        assert!(by_id("search_index")["summary"]
+            .as_str()
+            .unwrap()
+            .contains("LIKE fallback"));
+        assert_eq!(by_id("data_dir_usage")["status"], "ok");
+        assert_eq!(by_id("data_dir_usage")["details"]["file_count"], 1);
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }
