@@ -303,7 +303,7 @@ function App() {
         {imageWarning && (
           <div
             role="status"
-            className="flex shrink-0 items-start justify-between gap-3 border-b border-amber-500/25 bg-amber-500/8 px-3 py-2 text-amber-800 dark:text-amber-200"
+            className="flex shrink-0 items-start justify-between gap-3 border-b border-warning/25 bg-warning/8 px-3 py-2 text-warning"
           >
             <p className="text-[11px] leading-4">
               {t(`app.imageStorage.${imageWarning.code}`)}

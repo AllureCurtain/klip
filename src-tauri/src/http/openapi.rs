@@ -910,7 +910,7 @@ mod tests {
                 missing.push(format!("{m} {route}"));
                 continue;
             };
-            if pi.get(&m.to_lowercase()).is_none() {
+            if pi.get(m.to_lowercase()).is_none() {
                 missing.push(format!("{m} {route}"));
             }
         }

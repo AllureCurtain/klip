@@ -107,6 +107,6 @@ mod tests {
     fn common_8k_rgba_buffer_is_inside_the_working_limit() {
         let bytes = 7680usize * 4320 * 4;
         assert!(bytes <= MAX_RGBA_BYTES);
-        assert!((7680u64 * 4320) <= MAX_IMAGE_PIXELS);
+        const { assert!((7680u64 * 4320) <= MAX_IMAGE_PIXELS) };
     }
 }

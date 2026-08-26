@@ -362,8 +362,12 @@ fn encode_dibv5(rgba: &[u8], width: u32, height: u32) -> Result<Vec<u8>, Clipboa
     put_u32(&mut dib, 56, 0x7352_4742);
     put_u32(&mut dib, 108, 4);
 
-    for (source, target) in rgba.chunks_exact(4).zip(dib[124..].chunks_exact_mut(4)) {
-        target.copy_from_slice(&[source[2], source[1], source[0], source[3]]);
+    // RGBA -> BGRA. Both slices are exact multiples of 4 (checked above), so the
+    // `as_chunks` remainders are empty and the zip covers every pixel.
+    let (sources, _) = rgba.as_chunks::<4>();
+    let (targets, _) = dib[124..].as_chunks_mut::<4>();
+    for (source, target) in sources.iter().zip(targets) {
+        *target = [source[2], source[1], source[0], source[3]];
     }
     Ok(dib)
 }

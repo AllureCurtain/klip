@@ -735,7 +735,148 @@ void
 
 ---
 
-### 1.5 系统操作
+### 1.5 快捷键绑定、窗口状态与图片存储
+
+`db_version = 8` 引入的命令。快捷键不再通过 `set_config` 写 `hotkey_*` 键，改用下面的
+`set_shortcut_bindings`；`hotkey_toggle_window` 与 `hotkey_quick_paste_prefix` 仅作为
+迁移来源保留。
+
+#### `get_shortcut_bindings`
+
+读取十个动作的绑定。
+
+**参数**: 无
+
+**返回**:
+```typescript
+ShortcutBinding[]   // 见 3.8
+```
+
+---
+
+#### `set_shortcut_bindings`
+
+整体替换绑定，并同步重新注册全局快捷键。
+
+**参数**:
+```typescript
+{
+  bindings: ShortcutBinding[];
+}
+```
+
+**返回**:
+```typescript
+void
+```
+
+**事务语义**:
+
+1. 先校验并归一化组合键，非法组合直接报错，不产生任何副作用
+2. 再向系统注册新绑定；任一条注册失败则整体失败，已注册的部分回滚
+3. 注册成功后才写库；写库失败会把运行时注册回滚到旧绑定
+4. 全部成功后广播 `shortcut-registration-changed`
+
+失败时错误信息里会带上组合键，便于前端定位到具体行。若回滚本身也失败，错误信息会追加
+`runtime rollback failed: ...`——此时运行时注册与数据库可能不一致，需要重启修复。
+
+> 实现不使用 `unregister_all`：全量注销会在失败路径上连带丢掉其他仍然有效的快捷键。
+
+---
+
+#### `get_window_state`
+
+读取窗口的保存状态。
+
+**参数**:
+```typescript
+{
+  windowLabel?: string;   // 默认 "main"
+}
+```
+
+**返回**:
+```typescript
+WindowState | null      // 见 3.8；从未保存过时为 null
+```
+
+---
+
+#### `reset_window_state`
+
+把窗口恢复为默认尺寸并在当前活动显示器居中，同时写回新状态。
+
+**参数**:
+```typescript
+{
+  windowLabel?: string;   // 默认 "main"
+}
+```
+
+**返回**:
+```typescript
+WindowState             // 重置后的状态
+```
+
+---
+
+#### `get_storage_usage`
+
+读取图片存储用量与预算。
+
+**参数**: 无
+
+**返回**:
+```typescript
+StorageUsage            // 见 3.8
+```
+
+`budgetBytes` 为 `null` 表示用户选择了不限制。
+
+---
+
+#### `get_image_representation`
+
+取出图片可粘贴的原始字节，优先 `source`，其次 `canonical`。
+
+**参数**:
+```typescript
+{
+  itemId: number;
+  format?: string;        // 指定格式名，如 "png"；省略则按优先级选取
+}
+```
+
+**返回**:
+```typescript
+number[]                 // 字节数组
+```
+
+**错误**: 条目不存在、不是图片，或没有任何可用表示时返回错误。
+
+---
+
+#### `get_image_thumbnail`
+
+取出列表预览用的缩略图字节。
+
+**参数**:
+```typescript
+{
+  itemId: number;
+}
+```
+
+**返回**:
+```typescript
+number[]                 // PNG 字节数组
+```
+
+缩略图与 `source` / `canonical` 物理隔离，**不可**用于复制或导出。
+
+---
+
+### 1.6 系统操作
 
 #### `toggle_window`
 
@@ -889,6 +1030,51 @@ ClipboardItem
 
 ---
 
+### 2.3 快捷键、窗口与图片存储事件
+
+#### `shortcut-registration-changed`
+
+`set_shortcut_bindings` 成功注册并落库后触发，用于让其他窗口同步显示。
+
+**数据**:
+```typescript
+ShortcutBinding[]
+```
+
+---
+
+#### `window-state-changed`
+
+窗口尺寸或位置稳定后触发（拖动过程中不会连续发事件）。
+
+**数据**:
+```typescript
+WindowState
+```
+
+---
+
+#### `image-storage-warning`
+
+图片存储触及边界时触发。
+
+**数据**:
+```typescript
+{
+  code: 'capacity_cleanup'          // 已清理最旧的未收藏图片以回到预算内
+      | 'capacity_exceeded'         // 超出预算且无可清理项
+      | 'representation_too_large'  // 单张图片超过单图上限，未保存
+      | 'capture_failed';           // 图片采集失败
+  message: string;
+  itemIds: number[];                // 受影响的条目；无关联时为空数组
+}
+```
+
+Klip 不会为了腾出空间压缩图片，收藏的条目也不参与清理——`capacity_cleanup` 只删除
+最旧的未收藏图片。
+
+---
+
 ## 3. 数据类型
 
 ### 3.1 ClipboardItem
@@ -959,8 +1145,12 @@ interface AppConfig {
   hotkey_quick_paste_prefix: string;
   auto_start: boolean; // 启动时会与系统层面的自启状态同步
   close_to_tray: boolean;
-  window_width: number;
-  window_height: number;
+  hide_on_focus_loss?: boolean;
+  hide_after_paste?: boolean;
+  show_window_on_startup?: boolean;
+  always_on_top?: boolean;
+  window_width: number;   // DIP，最小 360
+  window_height: number;  // DIP，最小 480
   search_debounce_ms: number;
   language: string;
   sensitive_capture_policy: 'flag' | 'skip';
@@ -973,8 +1163,17 @@ interface AppConfig {
   encryption_status: string;
   sync_folder: string;
   plugin_folder: string;
+  theme_family?: ThemeFamily;
+  theme_mode?: ThemeMode;
+  image_budget_bytes?: number;   // -1 表示不限制
 }
+
+type ThemeFamily = 'ember' | 'graphite' | 'brick' | 'rose';
+type ThemeMode = 'light' | 'dark' | 'system';
 ```
+
+> `hotkey_toggle_window` 与 `hotkey_quick_paste_prefix` 自 v8 起只作为迁移来源保留，
+> 运行时的快捷键状态以 `shortcut_bindings` 为准，通过 1.5 的命令读写。
 
 ### 3.4 Snippet / SourceRule / AdvancedSearchQuery
 
@@ -1063,6 +1262,46 @@ interface SystemInfo {
   platform: 'windows' | 'macos' | 'linux';
   version: string;
   app_version: string;
+}
+```
+
+### 3.8 ShortcutBinding / WindowState / StorageUsage
+
+`db_version = 8` 引入。字段以 camelCase 序列化。
+
+```typescript
+type ShortcutActionId =
+  | 'toggle_window'
+  | 'quick_paste_1' | 'quick_paste_2' | 'quick_paste_3'
+  | 'quick_paste_4' | 'quick_paste_5' | 'quick_paste_6'
+  | 'quick_paste_7' | 'quick_paste_8' | 'quick_paste_9';
+
+interface ShortcutBinding {
+  actionId: ShortcutActionId;
+  enabled: boolean;
+  /** 禁用时可为 null；enabled 为 true 时必须有值 */
+  accelerator: string | null;
+  updatedAt: number;
+}
+
+interface WindowState {
+  windowLabel: string;
+  widthDip: number;
+  heightDip: number;
+  /** null 表示在当前活动显示器居中 */
+  x: number | null;
+  y: number | null;
+  monitorId: string | null;
+  scaleFactor: number | null;
+  updatedAt: number;
+}
+
+interface StorageUsage {
+  usedBytes: number;
+  /** null 表示不限制 */
+  budgetBytes: number | null;
+  imageBytes: number;
+  blobCount: number;
 }
 ```
 
