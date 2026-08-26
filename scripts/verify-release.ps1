@@ -140,8 +140,11 @@ Write-Host "Version metadata OK: $packageVersion"
 Step 'Checking distribution readiness'
 Write-ReadinessSummary $readinessReport
 
-Step 'Running frontend lint, tests, and build'
+Step 'Running frontend lint, static gates, tests, and build'
 pnpm lint
+pnpm check:contrast
+pnpm check:i18n
+pnpm check:tokens
 pnpm test -- --run
 pnpm build
 

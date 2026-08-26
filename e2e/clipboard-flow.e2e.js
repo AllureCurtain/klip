@@ -34,6 +34,31 @@ function runPowerShell(command, env = {}) {
   return result.stdout;
 }
 
+/**
+ * The Win32 clipboard is a single global resource guarded by `OpenClipboard`. Any process that holds
+ * it — Explorer, a password manager, an IME, another test — makes the next `Set-Clipboard` /
+ * `Clipboard::SetImage` fail immediately with `ExternalException` instead of blocking. That is
+ * transient contention, not a product defect, so retry briefly before giving up.
+ *
+ * Matching is on `ExternalException` rather than the message text: the message is localized by the
+ * OS display language, the exception type name is not. Non-contention failures still fail fast.
+ */
+function runPowerShellWithClipboardRetry(command, env = {}, attempts = 5) {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return runPowerShell(command, env);
+    } catch (error) {
+      const contended = /ExternalException/.test(String(error && error.message));
+      if (!contended || attempt >= attempts) throw error;
+      // Busy-wait: this helper is sync, and the point is to let the other holder release.
+      const until = Date.now() + attempt * 150;
+      while (Date.now() < until) {
+        /* spin */
+      }
+    }
+  }
+}
+
 function runCommand(command, args, env = {}) {
   const result = spawnSync(command, args, {
     encoding: 'utf8',
@@ -83,7 +108,7 @@ function linuxClipboardTool() {
 function setClipboardText(text) {
   if (process.platform === 'win32') {
     requireWindowsClipboard();
-    runPowerShell('Set-Clipboard -Value $env:KLIP_E2E_CLIPBOARD_TEXT', {
+    runPowerShellWithClipboardRetry('Set-Clipboard -Value $env:KLIP_E2E_CLIPBOARD_TEXT', {
       KLIP_E2E_CLIPBOARD_TEXT: text,
     });
     return;
@@ -107,7 +132,7 @@ function setClipboardText(text) {
 function getClipboardText() {
   if (process.platform === 'win32') {
     requireWindowsClipboard();
-    return runPowerShell('Get-Clipboard -Raw').replace(/\r?\n$/, '');
+    return runPowerShellWithClipboardRetry('Get-Clipboard -Raw').replace(/\r?\n$/, '');
   }
 
   if (process.platform === 'linux') {
@@ -129,7 +154,7 @@ function sendWindowsQuickPaste(index) {
 
 function setClipboardBitmap() {
   requireWindowsClipboard();
-  runPowerShell(`
+  runPowerShellWithClipboardRetry(`
     Add-Type -AssemblyName System.Windows.Forms
     Add-Type -AssemblyName System.Drawing
     $bitmap = [System.Drawing.Bitmap]::new(3, 2, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
@@ -146,7 +171,7 @@ function setClipboardBitmap() {
 
 function getClipboardBitmapSnapshot() {
   requireWindowsClipboard();
-  const output = runPowerShell(`
+  const output = runPowerShellWithClipboardRetry(`
     Add-Type -AssemblyName System.Windows.Forms
     Add-Type -AssemblyName System.Drawing
     $image = [System.Windows.Forms.Clipboard]::GetImage()
