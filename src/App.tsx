@@ -15,6 +15,7 @@ import {
   onConfigChanged,
   onOpenAbout,
   onOpenSettings,
+  onImageStorageWarning,
   clipboardApi,
   configApi,
 } from '@/lib/tauri';
@@ -23,6 +24,9 @@ import { clipboardItemMatchesNonSearchFilters } from '@/lib/clipboardFilters';
 import { setLanguage, type SupportedLanguage, SUPPORTED_LANGUAGES } from '@/i18n';
 import { CONFIG_KEYS } from '@/stores/configSchema';
 import type { ClipboardItem, ClipboardQueryOptions } from './types';
+import type { ImageStorageWarning } from './types';
+import { useThemeStore } from './stores/themeStore';
+import { useShortcutStore } from './stores/shortcutStore';
 
 const DEFAULT_SEARCH_DEBOUNCE_MS = 150;
 
@@ -65,7 +69,12 @@ function App() {
   const [searchResultsRevision, setSearchResultsRevision] = useState(0);
   const [view, setView] = useState<AppView>('clipboard');
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('general');
+  const [imageWarning, setImageWarning] = useState<ImageStorageWarning | null>(null);
   const fetchProductivity = useProductivityStore((state) => state.fetchProductivity);
+  const hydrateTheme = useThemeStore((state) => state.hydrate);
+  const shortcutBindings = useShortcutStore((state) => state.bindings);
+  const fetchShortcuts = useShortcutStore((state) => state.fetch);
+  const toggleShortcut = shortcutBindings.find((binding) => binding.actionId === 'toggle_window') ?? null;
   const queryOptions = useMemo<ClipboardQueryOptions>(
     () => ({
       contentType: contentType as 'text' | 'image' | 'file' | null,
@@ -91,6 +100,8 @@ function App() {
     fetchItems();
     fetchTags();
     fetchProductivity();
+    void hydrateTheme();
+    void fetchShortcuts();
 
     configApi.get(CONFIG_KEYS.searchDebounceMs).then((value) => {
       if (value) {
@@ -143,7 +154,7 @@ function App() {
       unlistenSettingsPromise.then((fn) => fn());
       unlistenAboutPromise.then((fn) => fn());
     };
-  }, [fetchItems, fetchProductivity, fetchTags, setItems]);
+  }, [fetchItems, fetchProductivity, fetchShortcuts, fetchTags, hydrateTheme, setItems]);
 
   useEffect(() => {
     const visibleIds =
@@ -171,13 +182,23 @@ function App() {
         upsertItem(item);
       }
     });
+    const unlistenImageWarningPromise = onImageStorageWarning((warning) => {
+      setImageWarning(warning);
+      if (hasActiveSearch) {
+        refreshSearchResults();
+      } else {
+        void fetchItems(queryOptions);
+      }
+    });
 
     return () => {
       unlistenPromise.then((fn) => fn());
       unlistenItemUpdatedPromise.then((fn) => fn());
+      unlistenImageWarningPromise.then((fn) => fn());
     };
   }, [
     addItems,
+    fetchItems,
     queryOptions,
     searchQuery,
     upsertItem,
@@ -255,6 +276,11 @@ function App() {
           setSettingsInitialTab('general');
           setView('settings');
         }}
+        onShortcutsOpen={() => {
+          setSettingsInitialTab('shortcuts');
+          setView('settings');
+        }}
+        toggleShortcut={toggleShortcut}
       />
       <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {loading && (
@@ -272,6 +298,23 @@ function App() {
           >
             <p className="text-xs font-medium">{t('app.errorLabel')}</p>
             <p className="mt-1 text-[11px] text-destructive/80">{error}</p>
+          </div>
+        )}
+        {imageWarning && (
+          <div
+            role="status"
+            className="flex shrink-0 items-start justify-between gap-3 border-b border-warning/25 bg-warning/8 px-3 py-2 text-warning"
+          >
+            <p className="text-[11px] leading-4">
+              {t(`app.imageStorage.${imageWarning.code}`)}
+            </p>
+            <button
+              type="button"
+              className="shrink-0 text-[10px] font-medium underline-offset-2 hover:underline"
+              onClick={() => setImageWarning(null)}
+            >
+              {t('app.dismiss')}
+            </button>
           </div>
         )}
         <div className="min-h-0 flex-1">

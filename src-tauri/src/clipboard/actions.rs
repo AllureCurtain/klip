@@ -234,6 +234,7 @@ mod tests {
             tags: Vec::new(),
             created_at: 0,
             last_used_at: 0,
+            media: None,
         }
     }
 
@@ -431,6 +432,7 @@ mod tests {
             size: content.len() as i64,
             metadata: None,
             formats: Vec::new(),
+            image_sources: Vec::new(),
         };
         database::clipboard::insert(db, &inserted).unwrap()
     }

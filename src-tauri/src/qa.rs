@@ -219,15 +219,21 @@ mod tests {
     }
 
     fn insert_item(db: &crate::Database, content_type: ContentType, content: &str) {
-        let hash = format!("{:x}", Sha256::digest(content.as_bytes()));
+        let data = if content_type == ContentType::Image {
+            include_bytes!("../tests/fixtures/ocr/chinese-text.png").to_vec()
+        } else {
+            content.as_bytes().to_vec()
+        };
+        let hash = format!("{:x}", Sha256::digest(&data));
         let item = NewClipboardItem {
             content_type,
-            data: content.as_bytes().to_vec(),
+            size: data.len() as i64,
+            data,
             preview: Some(content.chars().take(80).collect()),
             hash,
-            size: content.len() as i64,
             metadata: None,
             formats: Vec::new(),
+            image_sources: Vec::new(),
         };
         crate::database::clipboard::insert(db, &item).unwrap();
     }

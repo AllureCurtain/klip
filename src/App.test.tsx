@@ -55,7 +55,12 @@ const tauriMocks = vi.hoisted(() => ({
     tauriMocks.openAbout = callback;
     return Promise.resolve(vi.fn());
   }),
+  onImageStorageWarning: vi.fn(() => Promise.resolve(vi.fn())),
   configGet: vi.fn(() => Promise.resolve(null)),
+  configGetAll: vi.fn(() => Promise.resolve({
+    theme_family: 'brick',
+    theme_mode: 'system',
+  })),
   setVisibleItems: vi.fn(() => Promise.resolve()),
 }));
 
@@ -110,6 +115,7 @@ vi.mock('@tauri-apps/api/event', () => ({
 vi.mock('@/lib/tauri', () => ({
   configApi: {
     get: tauriMocks.configGet,
+    getAll: tauriMocks.configGetAll,
   },
   clipboardApi: {
     setVisibleItems: tauriMocks.setVisibleItems,
@@ -119,6 +125,7 @@ vi.mock('@/lib/tauri', () => ({
   onConfigChanged: tauriMocks.onConfigChanged,
   onOpenSettings: tauriMocks.onOpenSettings,
   onOpenAbout: tauriMocks.onOpenAbout,
+  onImageStorageWarning: tauriMocks.onImageStorageWarning,
 }));
 
 vi.mock('./stores/clipboardStore', () => ({

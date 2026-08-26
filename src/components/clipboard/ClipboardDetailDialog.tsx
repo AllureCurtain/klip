@@ -42,6 +42,7 @@ import {
 import { useClipboardStore } from '@/stores';
 import { useConfigStore } from '@/stores/configStore';
 import { cn, formatSize } from '@/lib/utils';
+import { systemApi } from '@/lib/tauri';
 import {
   MAX_CLIPBOARD_NOTE_LENGTH,
   MAX_CLIPBOARD_TITLE_LENGTH,
@@ -460,6 +461,8 @@ function ImageDetail({ item }: { item: ClipboardItem }) {
   const metadata = parseImageMetadata(item);
   const [scale, setScale] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [imageUrl, setImageUrl] = useState(item.content);
+  const [imageError, setImageError] = useState<string | null>(null);
   const dragRef = useRef<{
     startX: number;
     startY: number;
@@ -472,6 +475,35 @@ function ImageDetail({ item }: { item: ClipboardItem }) {
     setOffset({ x: 0, y: 0 });
     dragRef.current = null;
   }, [item.id]);
+
+  useEffect(() => {
+    if (item.content) {
+      setImageUrl(item.content);
+      setImageError(null);
+      return;
+    }
+    let objectUrl = '';
+    let cancelled = false;
+    setImageUrl('');
+    setImageError(null);
+    void systemApi.getImageRepresentation(item.id, 'canonical')
+      .then((bytes) => {
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(
+          new Blob([new Uint8Array(bytes)], { type: 'image/png' })
+        );
+        setImageUrl(objectUrl);
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setImageError(error instanceof Error ? error.message : String(error));
+        }
+      });
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [item.content, item.id]);
 
   const changeScale = (delta: number) => {
     setScale((current) => {
@@ -491,12 +523,27 @@ function ImageDetail({ item }: { item: ClipboardItem }) {
 
   const downloadImage = async () => {
     try {
-      const response = await fetch(item.content);
-      const blob = await response.blob();
+      const sourceFormat = item.media?.sourceFormats.find((format) =>
+        ['png', 'jpeg', 'webp', 'gif'].includes(format)
+      );
+      const format = sourceFormat || 'png';
+      const blob = item.content
+        ? await (await fetch(item.content)).blob()
+        : new Blob(
+            [
+              new Uint8Array(
+                await systemApi.getImageRepresentation(
+                  item.id,
+                  sourceFormat || 'canonical'
+                )
+              ),
+            ],
+            { type: imageMimeType(format) }
+          );
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = url;
-      anchor.download = `clipboard-image.${metadata?.format || 'png'}`;
+      anchor.download = `clipboard-image.${format === 'jpeg' ? 'jpg' : format}`;
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
@@ -570,16 +617,22 @@ function ImageDetail({ item }: { item: ClipboardItem }) {
             icon={Download}
           />
         </div>
-        <img
-          src={item.content}
-          alt={t('clipboard.detail.imageAlt')}
-          draggable={false}
-          className="h-full w-full select-none object-contain p-3"
-          style={{
-            transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})`,
-            transformOrigin: 'center',
-          }}
-        />
+        {imageUrl ? (
+          <img
+            src={imageUrl}
+            alt={t('clipboard.detail.imageAlt')}
+            draggable={false}
+            className="h-full w-full select-none object-contain p-3"
+            style={{
+              transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})`,
+              transformOrigin: 'center',
+            }}
+          />
+        ) : (
+          <div className="flex h-full items-center justify-center px-8 text-center text-xs text-muted-foreground">
+            {imageError ? t('clipboard.detail.imageUnavailable') : t('clipboard.detail.loadingImage')}
+          </div>
+        )}
         {metadata && <ImageFormatBadge metadata={metadata} />}
       </div>
       {item.ocr && (
@@ -595,6 +648,19 @@ function ImageDetail({ item }: { item: ClipboardItem }) {
       )}
     </div>
   );
+}
+
+function imageMimeType(format: string): string {
+  switch (format) {
+    case 'jpeg':
+      return 'image/jpeg';
+    case 'webp':
+      return 'image/webp';
+    case 'gif':
+      return 'image/gif';
+    default:
+      return 'image/png';
+  }
 }
 
 function ImageFormatBadge({ metadata }: { metadata: ImageMetadata }) {

@@ -3,8 +3,91 @@ use crate::database::{
     SourceRule, SourceRuleInput, Tag,
 };
 use crate::AppError;
-use tauri::Manager;
 use tauri::State;
+use tauri::{Emitter, Manager};
+
+#[tauri::command]
+pub fn begin_focus_loss_suppression() {
+    crate::window::controller::begin_focus_loss_suppression();
+}
+
+#[tauri::command]
+pub fn end_focus_loss_suppression() {
+    crate::window::controller::end_focus_loss_suppression();
+}
+
+#[tauri::command]
+pub fn get_shortcut_bindings(
+    db: State<'_, database::Database>,
+) -> Result<Vec<database::ShortcutBinding>, AppError> {
+    database::productization::list_shortcut_bindings(&db)
+}
+
+#[tauri::command]
+pub fn set_shortcut_bindings(
+    app: tauri::AppHandle,
+    db: State<'_, database::Database>,
+    bindings: Vec<database::ShortcutBinding>,
+) -> Result<(), AppError> {
+    let bindings = crate::hotkey::manager::normalize_bindings_for_command(&bindings)?;
+    let old = database::productization::list_shortcut_bindings(&db)?;
+    crate::hotkey::manager::apply_bindings(&app, &bindings)?;
+    if let Err(error) = database::productization::replace_shortcut_bindings(&db, &bindings) {
+        let rollback = crate::hotkey::manager::apply_bindings(&app, &old);
+        let detail = rollback
+            .err()
+            .map(|rollback_error| format!("; runtime rollback failed: {rollback_error}"))
+            .unwrap_or_default();
+        return Err(AppError::Database(format!(
+            "failed to persist shortcut bindings: {}{}",
+            error, detail
+        )));
+    }
+    let _ = app.emit("shortcut-registration-changed", &bindings);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_window_state(
+    db: State<'_, database::Database>,
+    window_label: Option<String>,
+) -> Result<Option<database::WindowState>, AppError> {
+    database::productization::get_window_state(&db, window_label.as_deref().unwrap_or("main"))
+}
+
+#[tauri::command]
+pub fn reset_window_state(
+    app: tauri::AppHandle,
+    db: State<'_, database::Database>,
+    window_label: Option<String>,
+) -> Result<database::WindowState, AppError> {
+    let label = window_label.unwrap_or_else(|| "main".into());
+    crate::window::controller::reset_window_state(&app, &db, &label)
+}
+
+#[tauri::command]
+pub fn get_storage_usage(
+    db: State<'_, database::Database>,
+) -> Result<database::StorageUsage, AppError> {
+    database::productization::storage_usage(&db)
+}
+
+#[tauri::command]
+pub fn get_image_representation(
+    db: State<'_, database::Database>,
+    item_id: i64,
+    format: Option<String>,
+) -> Result<Vec<u8>, AppError> {
+    database::productization::get_image_representation(&db, item_id, format.as_deref())
+}
+
+#[tauri::command]
+pub fn get_image_thumbnail(
+    db: State<'_, database::Database>,
+    item_id: i64,
+) -> Result<Vec<u8>, AppError> {
+    database::productization::get_image_thumbnail(&db, item_id)
+}
 
 #[tauri::command]
 pub fn get_clipboard_list_filtered(

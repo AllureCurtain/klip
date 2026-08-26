@@ -72,6 +72,13 @@ pub(crate) fn fetch_items_locked(
         .collect::<Result<Vec<_>, _>>()?;
     crate::database::formats::hydrate(conn, &mut items)?;
     crate::database::ocr::hydrate(conn, &mut items)?;
+    hydrate_media(conn, &mut items)?;
+    for item in items
+        .iter_mut()
+        .filter(|item| item.content_type == ContentType::Image)
+    {
+        item.content.clear();
+    }
     Ok(items)
 }
 
@@ -109,6 +116,7 @@ pub(crate) fn fetch_item_by_id_locked(
     if let Some(item) = item.as_mut() {
         crate::database::formats::hydrate(conn, std::slice::from_mut(item))?;
         crate::database::ocr::hydrate(conn, std::slice::from_mut(item))?;
+        crate::database::clipboard_query::hydrate_media(conn, std::slice::from_mut(item))?;
         // Mirror the list path so a single-item fetch reports tags too
         // (the settings/editor UIs read the item through this path).
         hydrate_tags(conn, std::slice::from_mut(item))?;
@@ -124,6 +132,7 @@ pub(crate) fn fetch_item_by_id_required_locked(
     let mut item = stmt.query_row([id], |row| Ok(clipboard_item_from_row(row)))?;
     crate::database::formats::hydrate(conn, std::slice::from_mut(&mut item))?;
     crate::database::ocr::hydrate(conn, std::slice::from_mut(&mut item))?;
+    hydrate_media(conn, std::slice::from_mut(&mut item))?;
     Ok(item)
 }
 
@@ -135,7 +144,59 @@ pub(crate) fn fetch_item_by_hash_locked(
     let mut item = stmt.query_row([hash], |row| Ok(clipboard_item_from_row(row)))?;
     crate::database::formats::hydrate(conn, std::slice::from_mut(&mut item))?;
     crate::database::ocr::hydrate(conn, std::slice::from_mut(&mut item))?;
+    hydrate_media(conn, std::slice::from_mut(&mut item))?;
     Ok(item)
+}
+
+pub(crate) fn hydrate_media(
+    conn: &rusqlite::Connection,
+    items: &mut [ClipboardItem],
+) -> Result<(), AppError> {
+    for item in items
+        .iter_mut()
+        .filter(|item| item.content_type == ContentType::Image)
+    {
+        let mut stmt = conn.prepare(
+            "SELECT role, format_name, byte_length, width, height, blob_sha256
+             FROM clipboard_item_representations WHERE item_id = ?1 ORDER BY priority DESC",
+        )?;
+        let rows = stmt
+            .query_map([item.id], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, i64>(2)?,
+                    row.get::<_, Option<i64>>(3)?,
+                    row.get::<_, Option<i64>>(4)?,
+                    row.get::<_, String>(5)?,
+                ))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        if rows.is_empty() {
+            continue;
+        }
+        let width = rows.iter().find_map(|row| row.3).unwrap_or(0);
+        let height = rows.iter().find_map(|row| row.4).unwrap_or(0);
+        let size_bytes = rows.iter().map(|row| row.2).max().unwrap_or(item.size);
+        let source_formats = rows
+            .iter()
+            .filter(|row| row.0 == "source")
+            .map(|row| row.1.clone())
+            .collect::<Vec<_>>();
+        let thumbnail_ref = rows
+            .iter()
+            .find(|row| row.0 == "thumbnail")
+            .map(|row| row.5.clone());
+        item.media = Some(crate::database::types::ImageMedia {
+            width,
+            height,
+            size_bytes,
+            original_available: !source_formats.is_empty(),
+            source_formats,
+            thumbnail_ref,
+        });
+    }
+    Ok(())
 }
 
 pub(crate) fn hydrate_tags(
@@ -319,6 +380,7 @@ fn clipboard_item_from_row(row: &rusqlite::Row<'_>) -> ClipboardItem {
         formats: Vec::new(),
         ocr: None,
         tags: Vec::new(),
+        media: None,
     }
 }
 

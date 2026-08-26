@@ -187,14 +187,16 @@ mod tests {
     }
 
     fn insert_image(db: &Database) -> ClipboardItem {
+        let data = include_bytes!("../../tests/fixtures/ocr/chinese-text.png").to_vec();
         let item = crate::database::NewClipboardItem {
             content_type: ContentType::Image,
-            data: vec![1, 2, 3],
+            size: data.len() as i64,
+            data,
             preview: Some("image fixture".into()),
             hash: "ocr-image-fixture".into(),
-            size: 3,
             metadata: None,
             formats: Vec::new(),
+            image_sources: Vec::new(),
         };
         crate::database::clipboard::insert(db, &item).unwrap()
     }
@@ -281,6 +283,7 @@ mod tests {
                 size: 5,
                 metadata: None,
                 formats: Vec::new(),
+                image_sources: Vec::new(),
             };
             crate::database::clipboard::insert(&db, &item).unwrap()
         };

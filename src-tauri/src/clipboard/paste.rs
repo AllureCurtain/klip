@@ -93,13 +93,29 @@ fn copy_loaded_item(
     item: &ClipboardItem,
     mode: ClipboardWriteMode,
 ) -> Result<(), AppError> {
-    crate::clipboard::copy_to_clipboard(
-        &item.content,
-        &item.content_type,
-        item.metadata.as_deref(),
-        &item.formats,
-        mode,
-    )?;
+    if item.content_type == crate::database::ContentType::Image {
+        match crate::database::productization::get_image_write_bundle(db, item.id) {
+            Ok(bundle) => {
+                crate::clipboard::writer::copy_image_bundle_to_clipboard(&bundle, &item.hash)?
+            }
+            Err(AppError::NotFound(_)) => crate::clipboard::copy_to_clipboard(
+                &item.content,
+                &item.content_type,
+                item.metadata.as_deref(),
+                &item.formats,
+                mode,
+            )?,
+            Err(error) => return Err(error),
+        }
+    } else {
+        crate::clipboard::copy_to_clipboard(
+            &item.content,
+            &item.content_type,
+            item.metadata.as_deref(),
+            &item.formats,
+            mode,
+        )?;
+    }
     let _ = database::clipboard::touch_last_used(db, item.id);
     Ok(())
 }
@@ -167,6 +183,7 @@ mod tests {
             size: content.len() as i64,
             metadata: None,
             formats: Vec::new(),
+            image_sources: Vec::new(),
         };
         let saved = database::clipboard::insert(db, &item).unwrap();
         let conn = db.get_connection().unwrap();

@@ -1,14 +1,15 @@
 //! On-demand image serving for the HTTP API.
 //!
-//! Clipboard image items are stored as `data:image/png;base64,...` strings in
-//! SQLite. List and search responses strip that payload (see
-//! `super::to_list_item`) and point clients at `/api/clipboard/:id/image`
-//! (original bytes) and `/api/clipboard/:id/thumbnail` (downscaled copy cached
-//! on disk). This module only deals with transport: the database schema and
-//! the on-disk storage model are untouched, and the desktop app never calls
-//! these paths.
+//! Since db v8 the image bytes of a clipboard item live in `binary_blobs`,
+//! referenced by `clipboard_item_representations` (`source` / `canonical` /
+//! `thumbnail`); `content` no longer carries a base64 data URL. List and search
+//! responses omit image payloads (see `super::to_list_item`) and point clients
+//! at `/api/clipboard/:id/image` (canonical PNG) and
+//! `/api/clipboard/:id/thumbnail` (downscaled copy cached on disk). This module
+//! only deals with transport — resizing and disk caching; reading the stored
+//! representation is `database::productization::get_image_representation`, and
+//! the desktop app never calls these HTTP paths.
 
-use base64::Engine;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -18,19 +19,6 @@ pub const THUMBNAIL_CACHE_DIR: &str = "thumbnails";
 pub const DEFAULT_THUMBNAIL_MAX_EDGE: u32 = 512;
 const MIN_THUMBNAIL_MAX_EDGE: u32 = 64;
 const MAX_THUMBNAIL_MAX_EDGE: u32 = 1536;
-
-/// Decode the PNG bytes of an image clipboard item, rejecting anything that is
-/// not the expected `data:image/png;base64,` payload.
-pub fn decode_png_data_url(content: &str) -> Result<Vec<u8>, AppError> {
-    let encoded = content
-        .strip_prefix("data:image/png;base64,")
-        .ok_or_else(|| {
-            AppError::InvalidInput("clipboard image is not stored as a PNG data URL".to_string())
-        })?;
-    base64::engine::general_purpose::STANDARD
-        .decode(encoded)
-        .map_err(|error| AppError::InvalidInput(format!("invalid base64 image: {error}")))
-}
 
 /// Clamp a client-requested thumbnail edge length to the supported range.
 pub fn clamp_max_edge(max_edge: Option<u32>) -> u32 {
@@ -179,27 +167,6 @@ mod tests {
             )
             .unwrap();
         buffer
-    }
-
-    fn data_url(bytes: &[u8]) -> String {
-        format!(
-            "data:image/png;base64,{}",
-            base64::engine::general_purpose::STANDARD.encode(bytes)
-        )
-    }
-
-    #[test]
-    fn decode_rejects_non_png_data_urls() {
-        assert!(decode_png_data_url("data:image/jpeg;base64,AAAA").is_err());
-        assert!(decode_png_data_url("not-a-data-url").is_err());
-        assert!(decode_png_data_url("data:image/png;base64,!!!not-base64").is_err());
-    }
-
-    #[test]
-    fn decode_roundtrips_png_bytes() {
-        let bytes = png_fixture(8, 8);
-        let decoded = decode_png_data_url(&data_url(&bytes)).unwrap();
-        assert_eq!(decoded, bytes);
     }
 
     #[test]

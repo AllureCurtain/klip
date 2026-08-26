@@ -104,6 +104,7 @@ impl ClipboardFormatStrategy for FileStrategy {
             size,
             metadata: Some(metadata),
             formats: Vec::new(),
+            image_sources: Vec::new(),
         })
     }
 }

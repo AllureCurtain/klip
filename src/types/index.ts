@@ -18,6 +18,51 @@ export interface ClipboardItem {
   tags: Tag[];
   created_at: number;
   last_used_at: number;
+  media?: ImageMedia | null;
+}
+
+export interface ImageMedia {
+  width: number;
+  height: number;
+  sizeBytes: number;
+  originalAvailable: boolean;
+  sourceFormats: string[];
+  thumbnailRef: string | null;
+}
+
+export type ShortcutActionId =
+  | 'toggle_window'
+  | `quick_paste_${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}`;
+
+export interface ShortcutBinding {
+  actionId: ShortcutActionId;
+  enabled: boolean;
+  accelerator: string | null;
+  updatedAt: number;
+}
+
+export interface WindowState {
+  windowLabel: string;
+  widthDip: number;
+  heightDip: number;
+  x: number | null;
+  y: number | null;
+  monitorId: string | null;
+  scaleFactor: number | null;
+  updatedAt: number;
+}
+
+export interface StorageUsage {
+  usedBytes: number;
+  budgetBytes: number | null;
+  imageBytes: number;
+  blobCount: number;
+}
+
+export interface ImageStorageWarning {
+  code: 'capacity_cleanup' | 'capacity_exceeded' | 'representation_too_large' | 'capture_failed';
+  message: string;
+  itemIds: number[];
 }
 
 export interface ClipboardAnnotationInput {
@@ -153,6 +198,10 @@ export interface AppConfig {
   hotkey_quick_paste_prefix: string;
   auto_start: boolean;
   close_to_tray: boolean;
+  hide_on_focus_loss?: boolean;
+  hide_after_paste?: boolean;
+  show_window_on_startup?: boolean;
+  always_on_top?: boolean;
   window_width: number;
   window_height: number;
   search_debounce_ms: number;
@@ -167,7 +216,13 @@ export interface AppConfig {
   encryption_status: string;
   sync_folder: string;
   plugin_folder: string;
+  theme_family?: ThemeFamily;
+  theme_mode?: ThemeMode;
+  image_budget_bytes?: number;
 }
+
+export type ThemeFamily = 'ember' | 'graphite' | 'brick' | 'rose';
+export type ThemeMode = 'light' | 'dark' | 'system';
 
 export interface SystemInfo {
   platform: 'windows' | 'macos' | 'linux' | 'unknown';

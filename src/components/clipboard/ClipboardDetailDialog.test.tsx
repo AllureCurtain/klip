@@ -19,6 +19,10 @@ const contentActionMocks = vi.hoisted(() => ({
   refresh: vi.fn(),
 }));
 
+const imageApiMocks = vi.hoisted(() => ({
+  getImageRepresentation: vi.fn(),
+}));
+
 vi.mock('@/stores', () => ({
   useClipboardStore: () => storeMocks,
 }));
@@ -28,6 +32,12 @@ vi.mock('./useClipboardContentActions', () => ({
     enabled
       ? contentActionMocks
       : { ...contentActionMocks, actions: [] },
+}));
+
+vi.mock('@/lib/tauri', () => ({
+  systemApi: {
+    getImageRepresentation: imageApiMocks.getImageRepresentation,
+  },
 }));
 
 function makeItem(overrides: Partial<ClipboardItem> = {}): ClipboardItem {
@@ -60,6 +70,11 @@ describe('ClipboardDetailDialog', () => {
     useConfigStore.setState((state) => ({
       config: { ...state.config, mask_sensitive_previews: true },
     }));
+    imageApiMocks.getImageRepresentation.mockResolvedValue([137, 80, 78, 71]);
+    vi.stubGlobal('URL', {
+      createObjectURL: vi.fn(() => 'blob:klip-image'),
+      revokeObjectURL: vi.fn(),
+    });
   });
 
   afterEach(() => {
@@ -73,6 +88,8 @@ describe('ClipboardDetailDialog', () => {
     contentActionMocks.actions = [];
     contentActionMocks.executeAction.mockReset();
     contentActionMocks.refresh.mockReset();
+    imageApiMocks.getImageRepresentation.mockReset();
+    vi.unstubAllGlobals();
   });
 
   it('shows complete plain and sanitized rich text in separate tabs', () => {
@@ -229,6 +246,45 @@ describe('ClipboardDetailDialog', () => {
     expect(screen.getByText('640 x 480')).toBeTruthy();
     expect(screen.getByText(/png/i)).toBeTruthy();
     expect(screen.getByRole('button', { name: '下载图片' })).toBeTruthy();
+  });
+
+  it('loads canonical bytes on demand and exports the original encoded representation', async () => {
+    const click = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => undefined);
+    render(
+      <ClipboardDetailDialog
+        item={makeItem({
+          content_type: 'image',
+          content: '',
+          preview: 'Image 8x6',
+          metadata: JSON.stringify({ width: 8, height: 6, format: 'jpeg' }),
+          media: {
+            width: 8,
+            height: 6,
+            sizeBytes: 120,
+            originalAvailable: true,
+            sourceFormats: ['jpeg', 'dibv5'],
+            thumbnailRef: 'thumbnail-hash',
+          },
+        })}
+        open
+        onOpenChange={() => undefined}
+      />
+    );
+
+    await vi.waitFor(() => {
+      expect(screen.getByRole('img', { name: '剪贴板图片' }).getAttribute('src')).toBe(
+        'blob:klip-image'
+      );
+    });
+    expect(imageApiMocks.getImageRepresentation).toHaveBeenCalledWith(42, 'canonical');
+
+    fireEvent.click(screen.getByRole('button', { name: '下载图片' }));
+    await vi.waitFor(() => {
+      expect(imageApiMocks.getImageRepresentation).toHaveBeenCalledWith(42, 'jpeg');
+      expect(click).toHaveBeenCalled();
+    });
   });
 
   it('does not render sensitive image data or file paths behind the mask', () => {

@@ -5,6 +5,10 @@ pub const KEY_HOTKEY_TOGGLE_WINDOW: &str = "hotkey_toggle_window";
 pub const KEY_HOTKEY_QUICK_PASTE_PREFIX: &str = "hotkey_quick_paste_prefix";
 pub const KEY_AUTO_START: &str = "auto_start";
 pub const KEY_CLOSE_TO_TRAY: &str = "close_to_tray";
+pub const KEY_HIDE_ON_FOCUS_LOSS: &str = "hide_on_focus_loss";
+pub const KEY_HIDE_AFTER_PASTE: &str = "hide_after_paste";
+pub const KEY_SHOW_WINDOW_ON_STARTUP: &str = "show_window_on_startup";
+pub const KEY_ALWAYS_ON_TOP: &str = "always_on_top";
 pub const KEY_SHOW_IN_TRAY: &str = "show_in_tray";
 pub const KEY_WINDOW_WIDTH: &str = "window_width";
 pub const KEY_WINDOW_HEIGHT: &str = "window_height";
@@ -26,6 +30,9 @@ pub const KEY_LLM_API_KEY: &str = "llm_api_key";
 pub const KEY_LLM_MODEL: &str = "llm_model";
 pub const KEY_LLM_BASE_URL: &str = "llm_base_url";
 pub const KEY_LLM_MAX_CONTEXT_ITEMS: &str = "llm_max_context_items";
+pub const KEY_THEME_FAMILY: &str = "theme_family";
+pub const KEY_THEME_MODE: &str = "theme_mode";
+pub const KEY_IMAGE_BUDGET_BYTES: &str = "image_budget_bytes";
 /// Optional access token for the local HTTP API. Empty (the default) disables
 /// authentication and preserves the pre-token behavior exactly.
 pub const KEY_HTTP_ACCESS_TOKEN: &str = "http_access_token";
@@ -41,6 +48,7 @@ pub enum RuntimeEffect {
     None,
     HotkeyReload,
     WindowSize,
+    AlwaysOnTop,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -67,6 +75,13 @@ impl ConfigDescriptor {
                 crate::hotkey::manager::validate_config_value(self.key, value)?;
                 Ok(value.to_string())
             }
+            KEY_THEME_FAMILY => {
+                normalize_enum(self.key, value, &["ember", "graphite", "brick", "rose"])
+            }
+            KEY_THEME_MODE => normalize_enum(self.key, value, &["light", "dark", "system"]),
+            KEY_LANGUAGE => normalize_enum(self.key, value, &["zh-CN", "en-US"]),
+            KEY_SENSITIVE_CAPTURE_POLICY => normalize_enum(self.key, value, &["flag", "skip"]),
+            KEY_IMAGE_BUDGET_BYTES => normalize_image_budget(value),
             _ => normalize_by_kind(self.key, self.kind, value),
         }
     }
@@ -83,13 +98,13 @@ pub const CONFIG_REGISTRY: &[ConfigDescriptor] = &[
         key: KEY_HOTKEY_TOGGLE_WINDOW,
         default_value: DEFAULT_TOGGLE_HOTKEY,
         kind: ConfigValueKind::String,
-        effect: RuntimeEffect::HotkeyReload,
+        effect: RuntimeEffect::None,
     },
     ConfigDescriptor {
         key: KEY_HOTKEY_QUICK_PASTE_PREFIX,
         default_value: DEFAULT_QUICK_PASTE_PREFIX,
         kind: ConfigValueKind::String,
-        effect: RuntimeEffect::HotkeyReload,
+        effect: RuntimeEffect::None,
     },
     ConfigDescriptor {
         key: KEY_AUTO_START,
@@ -104,6 +119,30 @@ pub const CONFIG_REGISTRY: &[ConfigDescriptor] = &[
         effect: RuntimeEffect::None,
     },
     ConfigDescriptor {
+        key: KEY_HIDE_ON_FOCUS_LOSS,
+        default_value: "true",
+        kind: ConfigValueKind::Boolean,
+        effect: RuntimeEffect::None,
+    },
+    ConfigDescriptor {
+        key: KEY_HIDE_AFTER_PASTE,
+        default_value: "true",
+        kind: ConfigValueKind::Boolean,
+        effect: RuntimeEffect::None,
+    },
+    ConfigDescriptor {
+        key: KEY_SHOW_WINDOW_ON_STARTUP,
+        default_value: "false",
+        kind: ConfigValueKind::Boolean,
+        effect: RuntimeEffect::None,
+    },
+    ConfigDescriptor {
+        key: KEY_ALWAYS_ON_TOP,
+        default_value: "true",
+        kind: ConfigValueKind::Boolean,
+        effect: RuntimeEffect::AlwaysOnTop,
+    },
+    ConfigDescriptor {
         key: KEY_SHOW_IN_TRAY,
         default_value: "true",
         kind: ConfigValueKind::Boolean,
@@ -111,13 +150,13 @@ pub const CONFIG_REGISTRY: &[ConfigDescriptor] = &[
     },
     ConfigDescriptor {
         key: KEY_WINDOW_WIDTH,
-        default_value: "560",
+        default_value: "680",
         kind: ConfigValueKind::Integer,
         effect: RuntimeEffect::WindowSize,
     },
     ConfigDescriptor {
         key: KEY_WINDOW_HEIGHT,
-        default_value: "760",
+        default_value: "720",
         kind: ConfigValueKind::Integer,
         effect: RuntimeEffect::WindowSize,
     },
@@ -230,6 +269,24 @@ pub const CONFIG_REGISTRY: &[ConfigDescriptor] = &[
         effect: RuntimeEffect::None,
     },
     ConfigDescriptor {
+        key: KEY_THEME_FAMILY,
+        default_value: "brick",
+        kind: ConfigValueKind::String,
+        effect: RuntimeEffect::None,
+    },
+    ConfigDescriptor {
+        key: KEY_THEME_MODE,
+        default_value: "system",
+        kind: ConfigValueKind::String,
+        effect: RuntimeEffect::None,
+    },
+    ConfigDescriptor {
+        key: KEY_IMAGE_BUDGET_BYTES,
+        default_value: "2147483648",
+        kind: ConfigValueKind::Integer,
+        effect: RuntimeEffect::None,
+    },
+    ConfigDescriptor {
         key: KEY_HTTP_ACCESS_TOKEN,
         default_value: "",
         kind: ConfigValueKind::String,
@@ -265,6 +322,37 @@ fn normalize_window_height(value: &str) -> Result<String, AppError> {
         .map(crate::config::clamp_window_height)
         .map(|value| value.to_string())
         .map_err(|_| AppError::InvalidInput(format!("{KEY_WINDOW_HEIGHT} must be a number")))
+}
+
+fn normalize_enum(key: &str, value: &str, allowed: &[&str]) -> Result<String, AppError> {
+    if allowed.contains(&value) {
+        Ok(value.to_string())
+    } else {
+        Err(AppError::InvalidInput(format!(
+            "{} must be one of: {}",
+            key,
+            allowed.join(", ")
+        )))
+    }
+}
+
+fn normalize_image_budget(value: &str) -> Result<String, AppError> {
+    const ALLOWED_BUDGETS: [i64; 4] = [
+        -1,
+        512 * 1024 * 1024,
+        2 * 1024 * 1024 * 1024,
+        5 * 1024 * 1024 * 1024,
+    ];
+    let parsed = value.parse::<i64>().map_err(|_| {
+        AppError::InvalidInput(format!("{KEY_IMAGE_BUDGET_BYTES} must be a number"))
+    })?;
+    if ALLOWED_BUDGETS.contains(&parsed) {
+        Ok(parsed.to_string())
+    } else {
+        Err(AppError::InvalidInput(format!(
+            "{KEY_IMAGE_BUDGET_BYTES} must be -1, 536870912, 2147483648, or 5368709120"
+        )))
+    }
 }
 
 fn normalize_by_kind(key: &str, kind: ConfigValueKind, value: &str) -> Result<String, AppError> {
@@ -316,5 +404,41 @@ mod tests {
                 .unwrap(),
             "480"
         );
+    }
+
+    #[test]
+    fn registry_rejects_unknown_theme_and_mode_values() {
+        assert!(require_descriptor(KEY_THEME_FAMILY)
+            .unwrap()
+            .normalize("violet")
+            .is_err());
+        assert!(require_descriptor(KEY_THEME_MODE)
+            .unwrap()
+            .normalize("auto")
+            .is_err());
+        assert_eq!(
+            require_descriptor(KEY_THEME_MODE)
+                .unwrap()
+                .normalize("system")
+                .unwrap(),
+            "system"
+        );
+    }
+
+    #[test]
+    fn registry_accepts_only_documented_image_budgets() {
+        for value in ["-1", "536870912", "2147483648", "5368709120"] {
+            assert_eq!(
+                require_descriptor(KEY_IMAGE_BUDGET_BYTES)
+                    .unwrap()
+                    .normalize(value)
+                    .unwrap(),
+                value
+            );
+        }
+        assert!(require_descriptor(KEY_IMAGE_BUDGET_BYTES)
+            .unwrap()
+            .normalize("1024")
+            .is_err());
     }
 }

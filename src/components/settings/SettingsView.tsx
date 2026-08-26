@@ -1,41 +1,23 @@
-import { useEffect, useState } from 'react';
-import { open as openPath } from '@tauri-apps/plugin-shell';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { ArrowLeft, Check, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
 import { useConfigStore } from '@/stores/configStore';
-import {
-  ArrowLeft,
-  Settings,
-  Keyboard,
-  Sliders,
-  Info,
-  Monitor,
-  Loader2,
-  Database,
-  ClipboardCopy,
-  ExternalLink,
-} from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { SUPPORTED_LANGUAGES } from '@/i18n';
+import { useShortcutStore } from '@/stores/shortcutStore';
+import { useThemeStore } from '@/stores/themeStore';
 import { DataManagementView } from './DataManagementView';
-import {
-  DEFAULT_WINDOW_HEIGHT,
-  DEFAULT_WINDOW_WIDTH,
-  MIN_WINDOW_HEIGHT,
-  MIN_WINDOW_WIDTH,
-} from '@/lib/constants';
+import { SettingsRail } from './SettingsRail';
+import { SETTINGS_NAV, type SettingsTab } from './settingsNav';
+import { InlineMessage, StatusPill } from './primitives';
+import { GeneralPanel } from './panels/GeneralPanel';
+import { AppearancePanel } from './panels/AppearancePanel';
+import { ShortcutsPanel } from './panels/ShortcutsPanel';
+import { BehaviorPanel } from './panels/BehaviorPanel';
+import { StorageSection } from './panels/StoragePanel';
+import { AboutPanel } from './panels/AboutPanel';
+import { UnsavedChangesDialog } from './UnsavedChangesDialog';
 
-export type SettingsTab = 'general' | 'shortcuts' | 'behavior' | 'data' | 'about';
-
-const TOGGLE_HOTKEY_OPTIONS = Array.from({ length: 26 }, (_value, index) =>
-  `Ctrl+Alt+${String.fromCharCode(65 + index)}`
-);
-const QUICK_PASTE_PREFIX_OPTIONS = ['Ctrl+Alt'];
+export type { SettingsTab };
 
 interface SettingsViewProps {
   onBack: () => void;
@@ -45,426 +27,289 @@ interface SettingsViewProps {
 export function SettingsView({ onBack, initialTab = 'general' }: SettingsViewProps) {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
+  const [guardOpen, setGuardOpen] = useState(false);
+  const config = useConfigStore();
+  const shortcuts = useShortcutStore();
+  const theme = useThemeStore();
+
   const {
-    config,
-    systemInfo,
-    diagnosticsInfo,
-    loading,
-    error,
-    hasChanges,
     fetchConfig,
     fetchSystemInfo,
     fetchDiagnosticsInfo,
-    setMaxHistoryCount,
-    setHotkeyToggleWindow,
-    setHotkeyQuickPastePrefix,
-    setAutoStart,
-    setCloseToTray,
-    setWindowWidth,
-    setWindowHeight,
-    setSearchDebounceMs,
-    setLanguage,
-    saveChanges,
-    resetChanges,
-  } = useConfigStore();
-
-  const tabItems: { value: SettingsTab; label: string; icon: React.ReactNode }[] = [
-    { value: 'general', label: t('settings.tabs.general'), icon: <Sliders className="h-3.5 w-3.5" /> },
-    { value: 'shortcuts', label: t('settings.tabs.shortcuts'), icon: <Keyboard className="h-3.5 w-3.5" /> },
-    { value: 'behavior', label: t('settings.tabs.behavior'), icon: <Monitor className="h-3.5 w-3.5" /> },
-    { value: 'data', label: t('settings.tabs.data'), icon: <Database className="h-3.5 w-3.5" /> },
-    { value: 'about', label: t('settings.tabs.about'), icon: <Info className="h-3.5 w-3.5" /> },
-  ];
+    fetchStorageUsage,
+    fetchWindowState,
+  } = config;
+  const fetchShortcuts = shortcuts.fetch;
 
   useEffect(() => {
-    fetchConfig();
-    fetchSystemInfo();
-    fetchDiagnosticsInfo();
-  }, [fetchConfig, fetchSystemInfo, fetchDiagnosticsInfo]);
+    void fetchConfig();
+    void fetchSystemInfo();
+    void fetchDiagnosticsInfo();
+    void fetchStorageUsage();
+    void fetchWindowState();
+    void fetchShortcuts();
+  }, [
+    fetchConfig,
+    fetchSystemInfo,
+    fetchDiagnosticsInfo,
+    fetchStorageUsage,
+    fetchWindowState,
+    fetchShortcuts,
+  ]);
 
   useEffect(() => {
     setActiveTab(initialTab);
   }, [initialTab]);
 
-  const handleSave = async () => {
-    const saved = await saveChanges();
-    if (saved) {
-      onBack();
-    }
-  };
+  const dirty = config.hasChanges || shortcuts.isDirty;
+  const saving = config.saveState === 'saving' || shortcuts.saving;
+  // `loading` is shared by the initial fetch and the save call, so a save is
+  // excluded here to keep the two indicators from firing at once.
+  const initialLoading = config.loading && !saving;
+  const saveError = config.error ?? shortcuts.error;
+  const saved = config.saveState === 'saved' && !dirty;
 
-  const handleCancel = async () => {
-    await resetChanges();
+  /** Spec §5.2: a successful save keeps the page open and clears dirty state. */
+  const handleSave = useCallback(async () => {
+    const configSaved = await useConfigStore.getState().saveChanges();
+    const shortcutState = useShortcutStore.getState();
+    const shortcutsSaved = !shortcutState.isDirty || (await shortcutState.save());
+    if (configSaved && shortcutsSaved) {
+      await useThemeStore.getState().hydrate();
+      void useConfigStore.getState().fetchStorageUsage();
+      return true;
+    }
+    return false;
+  }, []);
+
+  const discardAndLeave = useCallback(async () => {
+    await useConfigStore.getState().resetChanges();
+    useShortcutStore.getState().reset();
+    await useThemeStore.getState().hydrate();
     onBack();
-  };
+  }, [onBack]);
+
+  const handleBack = useCallback(() => {
+    if (dirty) {
+      setGuardOpen(true);
+      return;
+    }
+    void discardAndLeave();
+  }, [dirty, discardAndLeave]);
+
+  const activeNav = SETTINGS_NAV.find((item) => item.value === activeTab) ?? SETTINGS_NAV[0];
 
   return (
-    <div className="flex min-h-dvh flex-col text-foreground">
-      {/* Title bar */}
+    <div className="relative flex h-dvh flex-col bg-[var(--background)] text-[var(--ink)]">
       <div
         data-tauri-drag-region
-        className="flex items-center gap-2 px-2 pt-1.5 pb-1 border-b border-[var(--glass-border)] backdrop-blur-md bg-[var(--glass-bg)]"
+        className="flex shrink-0 items-center gap-2 border-b border-[var(--border)] bg-[var(--glass-bg)] px-2 py-1.5 backdrop-blur-md"
       >
         <Button
           variant="ghost"
           size="icon"
           className="size-7 shrink-0"
-          onClick={handleCancel}
+          onClick={handleBack}
           title={t('settings.back')}
+          aria-label={t('settings.back')}
         >
-          <ArrowLeft className="h-3.5 w-3.5" />
+          <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
         </Button>
-        <div className="flex items-center gap-1.5" data-tauri-drag-region>
-          <Settings className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className="text-xs font-medium">{t('settings.title')}</span>
-        </div>
+        <span className="text-[12px] font-semibold" data-tauri-drag-region>
+          {t('settings.title')}
+        </span>
       </div>
 
-      {/* Tab row */}
-      <div
-        role="tablist"
-        aria-label={t('settings.title')}
-        className="flex items-center gap-0.5 px-2 pb-1.5 border-b border-[var(--glass-border)]"
-      >
-        {tabItems.map((tab) => (
-          <button
-            key={tab.value}
-            id={`settings-tab-${tab.value}`}
-            role="tab"
-            type="button"
-            aria-selected={activeTab === tab.value}
-            aria-controls={`settings-panel-${tab.value}`}
-            className={cn(
-              'flex items-center gap-1 h-6 px-2 rounded-md text-[11px] font-medium transition-colors',
-              activeTab === tab.value
-                ? 'bg-accent text-accent-foreground'
-                : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
-            )}
-            onClick={() => setActiveTab(tab.value)}
+      <div className="flex min-h-0 flex-1">
+        <SettingsRail
+          activeTab={activeTab}
+          onSelect={setActiveTab}
+          footer={
+            config.systemInfo ? (
+              <>
+                <strong className="block font-semibold text-[var(--rail-active)]">
+                  v{config.systemInfo.app_version}
+                </strong>
+                <span>{t('settings.about.tagline')}</span>
+              </>
+            ) : undefined
+          }
+        />
+
+        <main className="flex min-w-0 flex-1 flex-col">
+          <header className="flex shrink-0 items-start justify-between gap-3 border-b border-[var(--border)] bg-[var(--surface)] px-3 py-2">
+            <div className="min-w-0">
+              <h1 className="text-[13px] font-semibold leading-tight">{t(activeNav.labelKey)}</h1>
+              <p className="mt-0.5 text-[10.5px] leading-snug text-[var(--muted)]">
+                {t(activeNav.descriptionKey)}
+              </p>
+            </div>
+            {initialLoading ? (
+              <StatusPill tone="info">{t('settings.loading')}</StatusPill>
+            ) : saved ? (
+              <StatusPill tone="success">{t('settings.saved')}</StatusPill>
+            ) : dirty ? (
+              <StatusPill tone="warning">{t('settings.unsaved')}</StatusPill>
+            ) : null}
+          </header>
+
+          <div
+            id={`settings-panel-${activeTab}`}
+            role="tabpanel"
+            aria-labelledby={`settings-tab-${activeTab}`}
+            className="scrollbar-thin min-h-0 flex-1 overflow-y-auto px-3 py-2.5"
           >
-            {tab.icon}
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Content */}
-      <div
-        id={`settings-panel-${activeTab}`}
-        role="tabpanel"
-        aria-labelledby={`settings-tab-${activeTab}`}
-        className="flex-1 overflow-y-auto px-3 py-3 scrollbar-thin"
-      >
-        {activeTab === 'general' && (
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="max-history" className="text-xs">{t('settings.general.historyCount')}</Label>
-              <div className="flex items-center gap-3">
-                <Input
-                  id="max-history"
-                  type="number"
-                  min={10}
-                  max={1000}
-                  value={config.max_history_count}
-                  onChange={(e) => setMaxHistoryCount(parseInt(e.target.value, 10) || 100)}
-                  className="h-7 w-20 text-xs"
-                />
-                <span className="text-[10px] text-muted-foreground">
-                  {t('settings.general.maxItems')}
-                </span>
-              </div>
-            </div>
-
-            <Separator />
-
-            <div className="space-y-2">
-              <Label className="text-xs">{t('settings.general.windowSize')}</Label>
-              <div className="flex items-center gap-2">
-                <Label htmlFor="window-width" className="sr-only">
-                  {t('settings.general.windowWidth')}
-                </Label>
-                <Input
-                  id="window-width"
-                  type="number"
-                  min={MIN_WINDOW_WIDTH}
-                  max={1000}
-                  value={config.window_width}
-                  onChange={(e) => setWindowWidth(parseInt(e.target.value, 10) || DEFAULT_WINDOW_WIDTH)}
-                  className="h-7 w-16 text-xs"
-                />
-                <span className="text-muted-foreground text-xs">x</span>
-                <Label htmlFor="window-height" className="sr-only">
-                  {t('settings.general.windowHeight')}
-                </Label>
-                <Input
-                  id="window-height"
-                  type="number"
-                  min={MIN_WINDOW_HEIGHT}
-                  max={1400}
-                  value={config.window_height}
-                  onChange={(e) => setWindowHeight(parseInt(e.target.value, 10) || DEFAULT_WINDOW_HEIGHT)}
-                  className="h-7 w-16 text-xs"
-                />
-                <span className="text-[10px] text-muted-foreground">px</span>
-              </div>
-            </div>
-
-            <Separator />
-
-            <div className="space-y-2">
-              <Label htmlFor="debounce" className="text-xs">{t('settings.general.searchDebounce')}</Label>
-              <div className="flex items-center gap-3">
-                <Input
-                  id="debounce"
-                  type="number"
-                  min={50}
-                  max={1000}
-                  step={50}
-                  value={config.search_debounce_ms}
-                  onChange={(e) => setSearchDebounceMs(parseInt(e.target.value, 10) || 150)}
-                  className="h-7 w-20 text-xs"
-                />
-                <span className="text-[10px] text-muted-foreground">{t('settings.general.milliseconds')}</span>
-              </div>
-            </div>
-
-            <Separator />
-
-            <div className="space-y-2">
-              <Label className="text-xs">{t('settings.general.language')}</Label>
-              <div className="flex items-center gap-2">
-                {SUPPORTED_LANGUAGES.map((lang) => (
-                  <button
-                    key={lang}
-                    className={cn(
-                      'h-7 px-3 rounded-md text-xs font-medium transition-colors',
-                      config.language === lang
-                        ? 'bg-accent text-accent-foreground'
-                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
-                    )}
-                    onClick={() => setLanguage(lang)}
-                  >
-                    {t(`language.${lang}`)}
-                  </button>
-                ))}
-              </div>
-              <p className="text-[10px] text-muted-foreground">{t('settings.general.languageHint')}</p>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'shortcuts' && (
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="hotkey-toggle-window" className="text-xs">{t('settings.shortcuts.toggleWindow')}</Label>
-              <select
-                id="hotkey-toggle-window"
-                value={config.hotkey_toggle_window}
-                onChange={(e) => setHotkeyToggleWindow(e.target.value)}
-                className="h-7 w-full rounded-md border border-input bg-card/60 px-3 font-mono text-xs text-foreground"
-              >
-                {TOGGLE_HOTKEY_OPTIONS.map((hotkey) => (
-                  <option key={hotkey} value={hotkey}>
-                    {hotkey}
-                  </option>
-                ))}
-              </select>
-              <p className="text-[10px] text-muted-foreground">
-                {t('settings.shortcuts.toggleWindowHint')}
-              </p>
-            </div>
-
-            <Separator />
-
-            <div className="space-y-2">
-              <Label htmlFor="hotkey-quick-paste-prefix" className="text-xs">{t('settings.shortcuts.quickPastePrefix')}</Label>
-              <select
-                id="hotkey-quick-paste-prefix"
-                value={config.hotkey_quick_paste_prefix}
-                onChange={(e) => setHotkeyQuickPastePrefix(e.target.value)}
-                className="h-7 w-full rounded-md border border-input bg-card/60 px-3 font-mono text-xs text-foreground"
-              >
-                {QUICK_PASTE_PREFIX_OPTIONS.map((prefix) => (
-                  <option key={prefix} value={prefix}>
-                    {prefix}
-                  </option>
-                ))}
-              </select>
-              <p className="text-[10px] text-muted-foreground">
-                {t('settings.shortcuts.quickPasteHint')}
-              </p>
-              <div className="flex flex-wrap gap-1 mt-1.5">
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
-                  <Badge key={n} variant="outline" className="font-mono text-[10px] py-0">
-                    {config.hotkey_quick_paste_prefix}+{n}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'behavior' && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label className="text-xs">{t('settings.behavior.autoStart')}</Label>
-                <p className="text-[10px] text-muted-foreground">
-                  {t('settings.behavior.autoStartDesc')}
+            {config.loadError ? (
+              <div className="rounded-lg border border-[var(--danger)]/35 bg-[var(--danger)]/8 px-3 py-2.5">
+                <p className="text-[11.5px] font-medium text-[var(--danger)]">
+                  {t('settings.loadFailed')}
                 </p>
+                <p className="mt-0.5 text-[10.5px] text-[var(--text)]">{config.loadError}</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-2 h-7 text-[11px]"
+                  onClick={() => void fetchConfig()}
+                >
+                  {t('settings.retry')}
+                </Button>
               </div>
-              <Switch
-                aria-label={t('settings.behavior.autoStart')}
-                checked={config.auto_start}
-                onCheckedChange={setAutoStart}
-              />
-            </div>
+            ) : (
+              <>
+                {activeTab === 'general' && (
+                  <GeneralPanel
+                    config={config.config}
+                    windowResetState={config.windowResetState}
+                    onMaxHistoryCount={config.setMaxHistoryCount}
+                    onSearchDebounceMs={config.setSearchDebounceMs}
+                    onLanguage={config.setLanguage}
+                    onAutoStart={(value) => void config.setAutoStart(value)}
+                    onShowWindowOnStartup={config.setShowWindowOnStartup}
+                    onResetWindowSize={() => void config.resetWindowSize()}
+                  />
+                )}
 
-            <Separator />
+                {activeTab === 'appearance' && (
+                  <AppearancePanel
+                    config={config.config}
+                    onThemeFamily={(family) => {
+                      config.setThemeFamily(family);
+                      void theme.setThemeFamily(family, false);
+                    }}
+                    onThemeMode={(mode) => {
+                      config.setThemeMode(mode);
+                      void theme.setThemeMode(mode, false);
+                    }}
+                  />
+                )}
 
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label className="text-xs">{t('settings.behavior.closeToTray')}</Label>
-                <p className="text-[10px] text-muted-foreground">
-                  {t('settings.behavior.closeToTrayDesc')}
-                </p>
-              </div>
-              <Switch
-                aria-label={t('settings.behavior.closeToTray')}
-                checked={config.close_to_tray}
-                onCheckedChange={setCloseToTray}
-              />
-            </div>
-          </div>
-        )}
+                {activeTab === 'shortcuts' && (
+                  <ShortcutsPanel
+                    bindings={shortcuts.bindings}
+                    issues={shortcuts.issues}
+                    occupied={shortcuts.occupied}
+                    captureAction={shortcuts.captureAction}
+                    loadError={shortcuts.loadError}
+                    onRetry={() => void fetchShortcuts()}
+                    onBeginCapture={shortcuts.beginCapture}
+                    onCancelCapture={shortcuts.cancelCapture}
+                    onAccelerator={shortcuts.setAccelerator}
+                    onEnabled={shortcuts.setEnabled}
+                  />
+                )}
 
-        {activeTab === 'data' && <DataManagementView />}
+                {activeTab === 'behavior' && (
+                  <BehaviorPanel
+                    config={config.config}
+                    onHideOnFocusLoss={config.setHideOnFocusLoss}
+                    onHideAfterPaste={config.setHideAfterPaste}
+                    onAlwaysOnTop={config.setAlwaysOnTop}
+                    onCloseToTray={config.setCloseToTray}
+                  />
+                )}
 
-        {activeTab === 'about' && (
-          <div className="space-y-3">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-sm">
-                K
-              </div>
-              <div>
-                <h3 className="text-sm font-semibold">Klip</h3>
-                <p className="text-[10px] text-muted-foreground">
-                  {t('settings.about.tagline')}
-                </p>
-              </div>
-            </div>
+                {activeTab === 'data' && (
+                  <div className="space-y-2.5">
+                    <StorageSection
+                      usage={config.storageUsage}
+                      usageError={config.storageUsageError}
+                      budgetBytes={config.config.image_budget_bytes ?? 2 * 1024 * 1024 * 1024}
+                      onBudgetBytes={config.setImageBudgetBytes}
+                      onRetryUsage={() => void fetchStorageUsage()}
+                    />
+                    <DataManagementView />
+                  </div>
+                )}
 
-            {systemInfo && (
-              <div className="space-y-1.5 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">{t('settings.about.version')}</span>
-                  <span className="font-mono">{systemInfo.app_version}</span>
-                </div>
-                <Separator />
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">{t('settings.about.platform')}</span>
-                  <span className="capitalize">{systemInfo.platform}</span>
-                </div>
-                <Separator />
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">{t('settings.about.system')}</span>
-                  <span className="font-mono text-[10px]">{systemInfo.version}</span>
-                </div>
-              </div>
-            )}
-
-            {diagnosticsInfo && (
-              <div className="space-y-1.5 rounded-md border bg-muted/30 p-2.5 text-[10px]">
-                <DiagnosticsPathRow
-                  label={t('settings.about.dataDir')}
-                  value={diagnosticsInfo.data_dir}
-                  copyLabel={t('settings.about.copyPath', { label: t('settings.about.dataDir') })}
-                  openLabel={t('settings.about.openPath', { label: t('settings.about.dataDir') })}
-                />
-                <Separator />
-                <DiagnosticsPathRow
-                  label={t('settings.about.database')}
-                  value={diagnosticsInfo.db_path}
-                  copyLabel={t('settings.about.copyPath', { label: t('settings.about.database') })}
-                  openLabel={t('settings.about.openPath', { label: t('settings.about.database') })}
-                />
-                <Separator />
-                <DiagnosticsPathRow
-                  label={t('settings.about.logDir')}
-                  value={diagnosticsInfo.log_dir}
-                  copyLabel={t('settings.about.copyPath', { label: t('settings.about.logDir') })}
-                  openLabel={t('settings.about.openPath', { label: t('settings.about.logDir') })}
-                />
-              </div>
+                {activeTab === 'about' && (
+                  <AboutPanel
+                    systemInfo={config.systemInfo}
+                    diagnosticsInfo={config.diagnosticsInfo}
+                    windowState={config.windowState}
+                  />
+                )}
+              </>
             )}
           </div>
-        )}
+
+          <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-[var(--border)] bg-[var(--surface)] px-3 py-2">
+            <div className="min-w-0">
+              {saveError ? (
+                <InlineMessage tone="danger">{saveError}</InlineMessage>
+              ) : saved ? (
+                <InlineMessage tone="success">{t('settings.savedHint')}</InlineMessage>
+              ) : dirty ? (
+                <p className="flex items-center gap-1.5 text-[10.5px] text-[var(--muted)]">
+                  <span
+                    aria-hidden="true"
+                    className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--warning)]"
+                  />
+                  {t('settings.unsavedHint')}
+                </p>
+              ) : null}
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-[11px]"
+                disabled={saving}
+                onClick={handleBack}
+              >
+                {t('settings.cancel')}
+              </Button>
+              <Button
+                size="sm"
+                className="h-7 gap-1 text-[11px]"
+                disabled={saving || !dirty}
+                onClick={() => void handleSave()}
+              >
+                {saving ? (
+                  <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+                ) : saved ? (
+                  <Check className="h-3 w-3" aria-hidden="true" />
+                ) : null}
+                {saving ? t('settings.saving') : t('settings.save')}
+              </Button>
+            </div>
+          </footer>
+        </main>
       </div>
 
-      {/* Footer */}
-      {error && (
-        <div className="mx-3 mb-2 rounded-md bg-destructive/10 px-3 py-1.5 text-[11px] text-destructive">
-          {error}
-        </div>
+      {guardOpen && (
+        <UnsavedChangesDialog
+          onSave={async () => {
+            const ok = await handleSave();
+            setGuardOpen(false);
+            if (ok) onBack();
+          }}
+          onDiscard={() => {
+            setGuardOpen(false);
+            void discardAndLeave();
+          }}
+          onKeepEditing={() => setGuardOpen(false)}
+        />
       )}
-      <div className="flex items-center justify-end gap-2 px-3 pb-2 pt-1 border-t border-[var(--glass-border)]">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleCancel}
-          disabled={loading}
-          className="h-7 text-xs"
-        >
-          {t('settings.cancel')}
-        </Button>
-        <Button
-          size="sm"
-          onClick={handleSave}
-          disabled={loading || !hasChanges}
-          className="h-7 text-xs"
-        >
-          {loading && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
-          {t('settings.save')}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-interface DiagnosticsPathRowProps {
-  label: string;
-  value: string;
-  copyLabel: string;
-  openLabel: string;
-}
-
-function DiagnosticsPathRow({ label, value, copyLabel, openLabel }: DiagnosticsPathRowProps) {
-  return (
-    <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="truncate font-mono" title={value}>
-        {value}
-      </span>
-      <span className="flex items-center gap-1">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-6"
-          aria-label={copyLabel}
-          onClick={() => void navigator.clipboard?.writeText(value)}
-        >
-          <ClipboardCopy className="h-3 w-3" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-6"
-          aria-label={openLabel}
-          onClick={() => void openPath(value)}
-        >
-          <ExternalLink className="h-3 w-3" />
-        </Button>
-      </span>
     </div>
   );
 }

@@ -134,7 +134,7 @@ export function HeaderMoreMenu({
             <Star
               className={cn(
                 'h-3.5 w-3.5',
-                showFavorites && 'fill-amber-500 text-amber-500'
+                showFavorites && 'fill-warning text-warning'
               )}
             />
             <span>{t('header.showFavorites')}</span>

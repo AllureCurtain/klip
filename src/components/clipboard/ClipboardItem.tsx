@@ -296,7 +296,7 @@ function MetaLine({
             className={cn(
               'inline-flex shrink-0 items-center gap-0.5',
               ocr.status === 'failed' && 'text-destructive',
-              ocr.status === 'completed' && 'text-emerald-600 dark:text-emerald-400'
+              ocr.status === 'completed' && 'text-success'
             )}
             title={ocr.error ?? (ocr.text.trim() || ocrLabel)}
             data-testid="ocr-status"
@@ -467,8 +467,8 @@ function RowActions({
           className={cn(
             'h-3 w-3',
             item.is_favorited
-              ? 'fill-amber-500 text-amber-500'
-              : 'text-muted-foreground hover:text-amber-500'
+              ? 'fill-warning text-warning'
+              : 'text-muted-foreground hover:text-warning'
           )}
         />
       </Button>

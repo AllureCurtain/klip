@@ -39,6 +39,7 @@ Foundation、核心剪贴板工作流和 Desktop E2E 稳定性改进均已合并
 |------|------|
 | [HTTP_ROUTE_AUDIT.md](HTTP_ROUTE_AUDIT.md) | 本地 HTTP API 的路由、OpenAPI、看板和测试覆盖矩阵 |
 | [MULTI_FORMAT_DESIGN.md](MULTI_FORMAT_DESIGN.md) | 文本、HTML、RTF、图片和文件剪贴板格式的设计依据 |
+| [UPGRADE_V8.md](UPGRADE_V8.md) | 数据库 v8 升级说明、备份与回滚路径、新旧配置键、图片容量策略和已知限制 |
 | [RELEASE_VALIDATION_v0.1.2.md](RELEASE_VALIDATION_v0.1.2.md) | 已发布 `v0.1.2` 的历史验收记录，不代表当前代码可直接发布 |
 
 阶段性实施计划、逐提交进度、handoff 和 worktree 操作记录已从当前文档集移除。

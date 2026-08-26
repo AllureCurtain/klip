@@ -6,6 +6,7 @@ use crate::database::types::{
 use crate::{AppError, Database};
 use rusqlite::{Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 
 const SUPPORTED_EXPORT_VERSION: u32 = 1;
@@ -211,6 +212,7 @@ pub fn import_csv(db: &Database, path: &str) -> Result<ImportSummary, AppError> 
                 .collect(),
             created_at: row.created_at,
             last_used_at: row.last_used_at,
+            media: None,
         });
     }
     import_items(db, items)
@@ -279,6 +281,13 @@ fn import_items(db: &Database, items: Vec<ClipboardItem>) -> Result<ImportSummar
     let mut imported = 0;
     let mut skipped = 0;
     for item in items {
+        if item.content_type == ContentType::Image {
+            // JSON/CSV exports intentionally carry image metadata only. A
+            // complete image restore requires the SQLite backup, which owns
+            // the BLOB and representation tables.
+            skipped += 1;
+            continue;
+        }
         let hash = hash_content(item.content_type.as_str(), &item.content);
         let result = tx.execute(
             "INSERT OR IGNORE INTO clipboard_items
@@ -426,6 +435,7 @@ struct BackupLayout {
     has_clipboard_ocr: bool,
     has_clipboard_source: bool,
     has_clipboard_annotations: bool,
+    has_productization_v8: bool,
 }
 
 fn validate_backup_database(path: &Path) -> Result<BackupLayout, AppError> {
@@ -571,11 +581,98 @@ fn validate_backup_database(path: &Path) -> Result<BackupLayout, AppError> {
         )?;
     }
 
+    let v8_tables = [
+        "shortcut_bindings",
+        "window_state",
+        "binary_blobs",
+        "clipboard_item_representations",
+    ];
+    let has_productization_v8 = v8_tables.iter().all(|table| {
+        conn.query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?1",
+            [table],
+            |row| row.get::<_, i64>(0),
+        )
+        .unwrap_or(0)
+            != 0
+    });
+    if backup_version >= 8 && !has_productization_v8 {
+        return Err(AppError::InvalidInput(
+            "backup database is missing v8 productization tables".into(),
+        ));
+    }
+    if has_productization_v8 {
+        require_table_columns(
+            &conn,
+            "shortcut_bindings",
+            &["action_id", "enabled", "accelerator", "updated_at"],
+        )?;
+        require_table_columns(
+            &conn,
+            "window_state",
+            &[
+                "window_label",
+                "width_dip",
+                "height_dip",
+                "x",
+                "y",
+                "monitor_id",
+                "scale_factor",
+                "updated_at",
+            ],
+        )?;
+        require_table_columns(
+            &conn,
+            "binary_blobs",
+            &["sha256", "byte_length", "content", "created_at"],
+        )?;
+        require_table_columns(
+            &conn,
+            "clipboard_item_representations",
+            &[
+                "item_id",
+                "blob_sha256",
+                "role",
+                "format_name",
+                "mime_type",
+                "width",
+                "height",
+                "byte_length",
+                "priority",
+                "metadata",
+            ],
+        )?;
+        let mut stmt = conn
+            .prepare("SELECT sha256, byte_length, content FROM binary_blobs")
+            .map_err(|e| AppError::InvalidInput(format!("invalid backup database: {}", e)))?;
+        let blobs = stmt
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, Vec<u8>>(2)?,
+                ))
+            })
+            .map_err(|e| AppError::InvalidInput(format!("invalid backup database: {}", e)))?;
+        for blob in blobs {
+            let (expected, length, content) = blob
+                .map_err(|e| AppError::InvalidInput(format!("invalid backup database: {}", e)))?;
+            let actual = format!("{:x}", Sha256::digest(&content));
+            if expected != actual || length != content.len() as i64 {
+                return Err(AppError::InvalidInput(format!(
+                    "backup BLOB integrity check failed for {}",
+                    expected
+                )));
+            }
+        }
+    }
+
     Ok(BackupLayout {
         has_clipboard_formats,
         has_clipboard_ocr,
         has_clipboard_source: has_source_application && has_source_window_title,
         has_clipboard_annotations: has_custom_title && has_note,
+        has_productization_v8,
     })
 }
 
@@ -662,9 +759,23 @@ fn restore_from_attached_database(
     } else {
         "NULL, NULL"
     };
+    let v8_restore_sql = if layout.has_productization_v8 {
+        "INSERT INTO binary_blobs (sha256, byte_length, content, created_at) SELECT sha256, byte_length, content, created_at FROM restore_db.binary_blobs;
+         INSERT INTO clipboard_item_representations (item_id, blob_sha256, role, format_name, mime_type, width, height, byte_length, priority, metadata)
+         SELECT item_id, blob_sha256, role, format_name, mime_type, width, height, byte_length, priority, metadata FROM restore_db.clipboard_item_representations;
+         INSERT INTO shortcut_bindings (action_id, enabled, accelerator, updated_at) SELECT action_id, enabled, accelerator, updated_at FROM restore_db.shortcut_bindings;
+         INSERT INTO window_state (window_label, width_dip, height_dip, x, y, monitor_id, scale_factor, updated_at)
+         SELECT window_label, width_dip, height_dip, x, y, monitor_id, scale_factor, updated_at FROM restore_db.window_state;"
+    } else {
+        ""
+    };
     let result = conn.execute_batch(&format!(
         "BEGIN IMMEDIATE;
          DELETE FROM clipboard_item_tags;
+         DELETE FROM clipboard_item_representations;
+         DELETE FROM binary_blobs;
+         DELETE FROM shortcut_bindings;
+         DELETE FROM window_state;
          DELETE FROM tags;
          DELETE FROM clipboard_formats;
          DELETE FROM clipboard_ocr;
@@ -690,6 +801,8 @@ fn restore_from_attached_database(
 
          {ocr_restore_sql}
 
+         {v8_restore_sql}
+
          INSERT INTO app_config (key, value, updated_at)
          SELECT key, value, updated_at FROM restore_db.app_config;
          COMMIT;"
@@ -709,10 +822,12 @@ fn restore_from_attached_database(
 mod tests {
     use super::*;
     use crate::database::{
-        ClipboardFormat, ClipboardFormatType, Database, NewClipboardItem, OcrStatus,
+        ClipboardFormat, ClipboardFormatType, Database, NewClipboardItem, NewImageRepresentation,
+        OcrStatus,
     };
     use rusqlite::Connection;
     use sha2::Digest;
+    use std::io::Cursor;
     use std::path::{Path, PathBuf};
 
     fn temp_dir(name: &str) -> PathBuf {
@@ -761,6 +876,7 @@ mod tests {
             size: content.len() as i64,
             metadata: None,
             formats: Vec::new(),
+            image_sources: Vec::new(),
         };
         crate::database::clipboard::insert_with_source(db, &item, Some(application), window_title)
             .unwrap()
@@ -778,21 +894,63 @@ mod tests {
                 format: ClipboardFormatType::Html,
                 content: html.to_string(),
             }],
+            image_sources: Vec::new(),
         };
         crate::database::clipboard::insert(db, &item).unwrap()
     }
 
     fn insert_image(db: &Database, hash: &str) -> ClipboardItem {
+        let data = include_bytes!("../../tests/fixtures/ocr/chinese-text.png").to_vec();
         let item = NewClipboardItem {
             content_type: ContentType::Image,
-            data: vec![1, 2, 3],
+            size: data.len() as i64,
+            data,
             preview: Some("image fixture".into()),
             hash: hash.into(),
-            size: 3,
             metadata: None,
             formats: Vec::new(),
+            image_sources: Vec::new(),
         };
         crate::database::clipboard::insert(db, &item).unwrap()
+    }
+
+    fn insert_encoded_image(db: &Database, hash: &str) -> (ClipboardItem, Vec<u8>, Vec<u8>) {
+        let mut pixels = image::RgbaImage::new(16, 12);
+        for (x, y, pixel) in pixels.enumerate_pixels_mut() {
+            *pixel = image::Rgba([(x * 13) as u8, (y * 17) as u8, ((x + y) * 9) as u8, 255]);
+        }
+        let mut jpeg = Vec::new();
+        image::DynamicImage::ImageRgba8(pixels)
+            .write_to(&mut Cursor::new(&mut jpeg), image::ImageFormat::Jpeg)
+            .unwrap();
+        let decoded = image::load_from_memory_with_format(&jpeg, image::ImageFormat::Jpeg)
+            .unwrap()
+            .to_rgba8();
+        let mut canonical = Vec::new();
+        image::DynamicImage::ImageRgba8(decoded)
+            .write_to(&mut Cursor::new(&mut canonical), image::ImageFormat::Png)
+            .unwrap();
+        let item = NewClipboardItem {
+            content_type: ContentType::Image,
+            size: canonical.len() as i64,
+            data: canonical.clone(),
+            preview: Some("encoded image fixture".into()),
+            hash: hash.into(),
+            metadata: None,
+            formats: Vec::new(),
+            image_sources: vec![NewImageRepresentation {
+                format_name: "jpeg".into(),
+                mime_type: Some("image/jpeg".into()),
+                clipboard_format: Some("JFIF".into()),
+                data: jpeg.clone(),
+                metadata: Some(r#"{"fixture":true}"#.into()),
+            }],
+        };
+        (
+            crate::database::clipboard::insert(db, &item).unwrap(),
+            jpeg,
+            canonical,
+        )
     }
 
     fn count_items(path: &Path) -> i64 {
@@ -1145,7 +1303,7 @@ mod tests {
         let version = crate::database::config::get(&current, "db_version")
             .unwrap()
             .unwrap();
-        assert_eq!(version, "7");
+        assert_eq!(version, "8");
     }
 
     #[test]
@@ -1282,6 +1440,62 @@ mod tests {
         assert_eq!(restored.len(), 1);
         assert_eq!(restored[0].custom_title.as_deref(), Some("Restored title"));
         assert_eq!(restored[0].note.as_deref(), Some("Restored note"));
+    }
+
+    #[test]
+    fn v8_backup_restore_preserves_every_image_representation_byte_for_byte() {
+        let dir = temp_dir("v8-image-representation-restore");
+        let current_path = dir.join("current.db");
+        let source_path = dir.join("source.db");
+        let backup_path = dir.join("source-backup.db");
+
+        let current = create_db(&current_path);
+        insert_text(&current, "current item replaced by restore");
+        let source = create_db(&source_path);
+        let (image, expected_source, expected_canonical) =
+            insert_encoded_image(&source, "v8-backup-image");
+        let expected_thumbnail =
+            crate::database::productization::get_image_thumbnail(&source, image.id).unwrap();
+        backup_database(&source, backup_path.to_str().unwrap()).unwrap();
+
+        restore_database(&current, &current_path, backup_path.to_str().unwrap()).unwrap();
+
+        let restored = crate::database::clipboard::get_list(&current, 10, 0).unwrap();
+        assert_eq!(restored.len(), 1);
+        assert_eq!(restored[0].content_type, ContentType::Image);
+        assert!(restored[0].content.is_empty());
+        assert_eq!(
+            crate::database::productization::get_image_representation(
+                &current,
+                restored[0].id,
+                Some("source"),
+            )
+            .unwrap(),
+            expected_source
+        );
+        assert_eq!(
+            crate::database::productization::get_image_representation(
+                &current,
+                restored[0].id,
+                Some("canonical"),
+            )
+            .unwrap(),
+            expected_canonical
+        );
+        assert_eq!(
+            crate::database::productization::get_image_thumbnail(&current, restored[0].id).unwrap(),
+            expected_thumbnail
+        );
+        let conn = current.get_connection().unwrap();
+        assert_eq!(
+            conn.query_row(
+                "SELECT COUNT(DISTINCT role) FROM clipboard_item_representations WHERE item_id = ?1",
+                [restored[0].id],
+                |row| row.get::<_, i64>(0),
+            )
+            .unwrap(),
+            3
+        );
     }
 
     #[test]

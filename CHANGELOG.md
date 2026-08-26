@@ -2,6 +2,71 @@
 
 ## [Unreleased]
 
+### Added
+
+- Four theme families (`ember`, `graphite`, `brick`, `rose`) with light/dark/system modes, driven
+  entirely by semantic CSS design tokens. A contrast gate (`pnpm check:contrast`) verifies 464 color
+  pairs across all 8 family/mode combinations against WCAG 4.5:1 / 3:1, and a token gate
+  (`pnpm check:tokens`) fails the build on palette names or color literals in components.
+- Ten independently configurable global shortcuts (`toggle_window` plus `quick_paste_1..9`) stored in
+  a new `shortcut_bindings` table. Each action can be enabled, disabled, and re-recorded on its own;
+  disabling slots does not renumber the remaining quick-paste indices.
+- Transactional shortcut registration: the full set is validated up front, only changed registrations
+  are touched, and any failure rolls back both the new registrations and the previously unregistered
+  ones. `unregister_all` is deliberately not used, so other applications' global shortcuts are never
+  collaterally released.
+- Window state persistence in a new `window_state` table, recorded in DIP alongside `scale_factor`
+  and `monitor_id` so size and position restore correctly across displays with different scaling.
+- Image fidelity storage: `binary_blobs` (SHA-256-deduplicated bytes) and
+  `clipboard_item_representations` with `source` / `canonical` / `thumbnail` roles. The
+  OS-provided original encoding is preserved when available, a canonical PNG covers bitmap-only
+  sources, and thumbnails are physically isolated preview copies that never affect paste or export.
+- On-demand image media IPC, so the clipboard list no longer transfers full-resolution originals.
+- Settings redesign with a navigation rail and General/Appearance/Shortcuts/Behavior/Data/About
+  panels,
+  including data capacity reporting, diagnostics, explicit save/cancel with unsaved-change guarding,
+  and per-field error states.
+- `docs/UPGRADE_V8.md` covering the v7→v8 upgrade, automatic backup and rollback paths, the
+  migration log reference, old/new config keys, image capacity policy, Windows shortcut conflicts and
+  `Win`-key limits, gate results, and known limitations.
+
+### Changed
+
+- Database schema is now `db_version = 8`. The v7→v8 migration runs in a single transaction, is
+  idempotent via `INSERT OR IGNORE`, and is preceded by an automatic
+  `klip.db.pre-v8-<millis>.bak` backup that is integrity-checked before use. If migration fails, the
+  backup is restored automatically and the failure names the backup path.
+- Legacy image data URLs migrate to `canonical` blob representations with generated thumbnails.
+  Images that cannot be parsed as PNG are left untouched and logged for diagnostics rather than
+  rewritten; images over 128 MiB are skipped without blocking migration.
+- Default window size is `680 x 720` DIP (was `560 x 760`), minimum `360 x 480`. Size is adjusted by
+  dragging the window and remembered automatically; the settings page now reports default, minimum,
+  and current size as read-only information instead of pixel inputs. Upgrades that still had the old
+  `560 x 760` default move to `680 x 720`; any user-modified size is preserved as-is.
+- Quick-paste shortcuts are seeded enabled on upgrade (preserving existing behavior) and disabled on
+  fresh installs.
+- Window hiding is split into independent `hide_on_focus_loss` and `hide_after_paste` settings, both
+  defaulting to the previous combined behavior.
+- The per-image `5 MiB` gate is removed. Single images are bounded by 40,000,000 pixels and 160 MiB
+  RGBA, so 1920x1080, 4K, and common 8K screenshots are no longer silently skipped. Total image
+  storage is bounded by the new `image_budget_bytes` setting (default 2 GiB), which evicts the oldest
+  unfavorited images first and never evicts favorites.
+- `pnpm verify` and `pnpm release:verify` now run the contrast, i18n, and token gates.
+
+### Fixed
+
+- Missing or corrupted image blobs now return locatable integrity errors instead of hiding the
+  affected clipboard entry.
+
+### Known Limitations
+
+- Installer real-machine verification (tray, autostart, window restore, clipboard formats on a clean
+  Windows install) has not been performed for this work. See `docs/UPGRADE_V8.md` section 10.
+- "Original preservation" means preserving the representation the OS actually provided; bytes that
+  were never in the clipboard cannot be recovered afterwards.
+- `Win` combinations can be recorded, but Windows may claim new combinations after system updates.
+  Klip defers to the actual registration result rather than promising a stable allowlist.
+
 ## [0.2.0] - 2026-08-10
 
 ### Added

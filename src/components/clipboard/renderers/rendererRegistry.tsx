@@ -14,8 +14,6 @@ import { ImageClipboardRenderer } from './ImageClipboardRenderer';
 import { FileClipboardRenderer } from './FileClipboardRenderer';
 
 export type ClipTone = {
-  border: string;
-  selected: string;
   iconBg: string;
   iconText: string;
   dot: string;
@@ -29,34 +27,31 @@ export type RendererProps = {
   onImageClick: (event: React.MouseEvent) => void;
 };
 
+/**
+ * Content-type identity comes from the semantic `--content-*` tokens, which each
+ * theme family redefines per mode. `folder` shares the file token: §7.2 freezes the
+ * vocabulary at text/image/file, and a folder is a filesystem entry.
+ */
 export const CLIP_TONES: Record<ClipKind, ClipTone> = {
   text: {
-    border: 'border-l-indigo-400/70',
-    selected: 'bg-indigo-500/8',
-    iconBg: 'bg-indigo-500/10',
-    iconText: 'text-indigo-500 dark:text-indigo-400',
-    dot: 'bg-indigo-400',
+    iconBg: 'bg-content-text/10',
+    iconText: 'text-content-text',
+    dot: 'bg-content-text/70',
   },
   image: {
-    border: 'border-l-emerald-400/70',
-    selected: 'bg-emerald-500/8',
-    iconBg: 'bg-emerald-500/10',
-    iconText: 'text-emerald-500 dark:text-emerald-400',
-    dot: 'bg-emerald-400',
+    iconBg: 'bg-content-image/10',
+    iconText: 'text-content-image',
+    dot: 'bg-content-image/70',
   },
   file: {
-    border: 'border-l-sky-400/70',
-    selected: 'bg-sky-500/8',
-    iconBg: 'bg-sky-500/10',
-    iconText: 'text-sky-500 dark:text-sky-400',
-    dot: 'bg-sky-400',
+    iconBg: 'bg-content-file/10',
+    iconText: 'text-content-file',
+    dot: 'bg-content-file/70',
   },
   folder: {
-    border: 'border-l-amber-400/70',
-    selected: 'bg-amber-500/8',
-    iconBg: 'bg-amber-500/10',
-    iconText: 'text-amber-500 dark:text-amber-400',
-    dot: 'bg-amber-400',
+    iconBg: 'bg-content-file/10',
+    iconText: 'text-content-file',
+    dot: 'bg-content-file/70',
   },
 };
 

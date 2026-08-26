@@ -115,6 +115,7 @@ mod tests {
                 format: ClipboardFormatType::Html,
                 content: "<b>plain</b>".into(),
             }],
+            image_sources: Vec::new(),
         };
 
         let saved = crate::database::clipboard::insert(&db, &item).unwrap();
@@ -148,6 +149,7 @@ mod tests {
                 format: ClipboardFormatType::Html,
                 content: "<b>same</b>".into(),
             }],
+            image_sources: Vec::new(),
         };
         crate::database::clipboard::insert(&db, &item).unwrap();
         item.formats.clear();

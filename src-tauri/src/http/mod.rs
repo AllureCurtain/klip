@@ -607,7 +607,9 @@ struct ThumbnailQuery {
     max: Option<u32>,
 }
 
-/// Full-size PNG for an image item, decoded from its stored data URL.
+/// Full-size PNG for an image item, read from the item's `canonical`
+/// representation (always PNG) rather than from `content` — image bytes live in
+/// `binary_blobs` since db v8, and `content` no longer carries a data URL.
 /// Content is addressed by the item hash, so ETag/If-None-Match lets repeat
 /// views skip the payload entirely (304).
 async fn get_clipboard_image(
@@ -620,8 +622,15 @@ async fn get_clipboard_image(
     if etag_matches(&headers, &etag) {
         return Ok(not_modified(etag));
     }
-    let bytes = images::decode_png_data_url(&item.content).map_err(ApiError)?;
+    let bytes = canonical_image_bytes(&state, id)?;
     Ok(png_response(bytes, Some(etag), None))
+}
+
+/// Canonical (PNG) bytes for an image item. A missing or corrupt blob surfaces
+/// as a locatable error instead of a silently empty response.
+fn canonical_image_bytes(state: &AppState, id: i64) -> Result<Vec<u8>, ApiError> {
+    database::productization::get_image_representation(&state.db, id, Some("canonical"))
+        .map_err(ApiError)
 }
 
 /// Thumbnail rendition for list views: longest side clamped by
@@ -629,6 +638,10 @@ async fn get_clipboard_image(
 /// disk under `<data_dir>/thumbnails/` so list scrolling does not re-encode
 /// images on every request; `x-klip-thumbnail-cache` exposes hit/miss for
 /// diagnostics.
+///
+/// Renders from the `canonical` representation. The stored `thumbnail`
+/// representation is deliberately not reused here: it is fixed at 192px for the
+/// desktop list, while this endpoint serves caller-chosen edges up to 512px.
 async fn get_clipboard_thumbnail(
     State(state): State<AppState>,
     Path(id): Path<i64>,
@@ -642,7 +655,7 @@ async fn get_clipboard_thumbnail(
     if etag_matches(&headers, &etag) {
         return Ok(not_modified(etag));
     }
-    let bytes = images::decode_png_data_url(&item.content).map_err(ApiError)?;
+    let bytes = canonical_image_bytes(&state, id)?;
     let cache_root = state.data_dir.clone();
     // Encoding off the async runtime; disk cache keeps repeat requests cheap.
     let generated = tokio::task::spawn_blocking(move || {
@@ -1031,6 +1044,12 @@ fn apply_config_values(state: &AppState, entries: Vec<(String, String)>) -> Resu
     {
         apply_runtime_effect(state, RuntimeEffect::HotkeyReload)?;
     }
+    if normalized
+        .iter()
+        .any(|(effect, _, _)| *effect == RuntimeEffect::AlwaysOnTop)
+    {
+        apply_runtime_effect(state, RuntimeEffect::AlwaysOnTop)?;
+    }
     for (_, key, value) in normalized {
         emit_config_changed(state, &key, &value);
     }
@@ -1044,6 +1063,13 @@ fn apply_runtime_effect(state: &AppState, effect: RuntimeEffect) -> Result<(), A
             #[cfg(not(test))]
             if let Some(app) = &state.app {
                 crate::window::controller::apply_configured_size(app, &state.db)?;
+            }
+            Ok(())
+        }
+        RuntimeEffect::AlwaysOnTop => {
+            #[cfg(not(test))]
+            if let Some(app) = &state.app {
+                crate::window::controller::apply_always_on_top(app, &state.db)?;
             }
             Ok(())
         }
@@ -1540,6 +1566,7 @@ mod tests {
             size: content.len() as i64,
             metadata: None,
             formats: Vec::new(),
+            image_sources: Vec::new(),
         };
         crate::database::clipboard::insert(db, &item).unwrap();
     }
@@ -1808,6 +1835,10 @@ mod tests {
             size: data.len() as i64,
             metadata: Some(r#"{"width":2,"height":2}"#.to_string()),
             formats: Vec::new(),
+            // Left empty on purpose: `insert` synthesizes the PNG source
+            // representation from the canonical bytes, so this also covers
+            // that default path.
+            image_sources: Vec::new(),
         };
         crate::database::clipboard::insert(db, &item).unwrap()
     }

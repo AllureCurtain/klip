@@ -147,9 +147,13 @@ INSERT INTO app_config (key, value, updated_at) VALUES
     ('hotkey_quick_paste_prefix', 'Ctrl+Alt', strftime('%s', 'now') * 1000),
     ('auto_start', 'false', strftime('%s', 'now') * 1000),
     ('close_to_tray', 'true', strftime('%s', 'now') * 1000),
+    ('hide_on_focus_loss', 'true', strftime('%s', 'now') * 1000),
+    ('hide_after_paste', 'true', strftime('%s', 'now') * 1000),
+    ('show_window_on_startup', 'false', strftime('%s', 'now') * 1000),
+    ('always_on_top', 'true', strftime('%s', 'now') * 1000),
     ('show_in_tray', 'true', strftime('%s', 'now') * 1000),
-    ('window_width', '560', strftime('%s', 'now') * 1000),
-    ('window_height', '760', strftime('%s', 'now') * 1000),
+    ('window_width', '680', strftime('%s', 'now') * 1000),
+    ('window_height', '720', strftime('%s', 'now') * 1000),
     ('search_debounce_ms', '150', strftime('%s', 'now') * 1000),
     ('language', 'zh-CN', strftime('%s', 'now') * 1000),
     ('sensitive_capture_policy', 'flag', strftime('%s', 'now') * 1000),
@@ -162,7 +166,15 @@ INSERT INTO app_config (key, value, updated_at) VALUES
     ('encryption_enabled', 'false', strftime('%s', 'now') * 1000),
     ('encryption_status', 'off', strftime('%s', 'now') * 1000),
     ('sync_folder', '', strftime('%s', 'now') * 1000),
-    ('plugin_folder', '', strftime('%s', 'now') * 1000);
+    ('plugin_folder', '', strftime('%s', 'now') * 1000),
+    ('theme_family', 'brick', strftime('%s', 'now') * 1000),
+    ('theme_mode', 'system', strftime('%s', 'now') * 1000),
+    ('image_budget_bytes', '2147483648', strftime('%s', 'now') * 1000),
+    ('llm_provider', 'fake', strftime('%s', 'now') * 1000),
+    ('llm_api_key', '', strftime('%s', 'now') * 1000),
+    ('llm_model', 'gpt-4o-mini', strftime('%s', 'now') * 1000),
+    ('llm_base_url', 'https://api.openai.com/v1', strftime('%s', 'now') * 1000),
+    ('llm_max_context_items', '8', strftime('%s', 'now') * 1000);
 ```
 
 #### 配置项说明
@@ -174,9 +186,13 @@ INSERT INTO app_config (key, value, updated_at) VALUES
 | hotkey_quick_paste_prefix | string | Ctrl+Alt | 快速粘贴前缀；当前运行时固定派生为 `Ctrl+Alt+1..9` |
 | auto_start | boolean | false | 开机自启动开关；启动时会与系统层面的自启状态同步 |
 | close_to_tray | boolean | true | 关闭主窗口时隐藏到托盘；设为 false 时关闭会退出应用 |
+| hide_on_focus_loss | boolean | true | 失焦时自动隐藏窗口 |
+| hide_after_paste | boolean | true | 粘贴后隐藏窗口 |
+| show_window_on_startup | boolean | false | 启动时显示主窗口；默认静默驻留托盘 |
+| always_on_top | boolean | true | 窗口置顶；改动会立即作用于运行中的窗口 |
 | show_in_tray | boolean | true | 遗留键；当前运行时不消费，前端不再保存 |
-| window_width | number | 560 | 窗口宽度 |
-| window_height | number | 760 | 窗口高度 |
+| window_width | number | 680 | 窗口宽度（DIP）；v8 起最小 360 |
+| window_height | number | 720 | 窗口高度（DIP）；v8 起最小 480 |
 | search_debounce_ms | number | 150 | 搜索防抖时间 |
 | language | string | zh-CN | UI 语言 |
 | sensitive_capture_policy | flag/skip | flag | 敏感内容保存策略；`skip` 会跳过新捕获的敏感文本 |
@@ -190,6 +206,14 @@ INSERT INTO app_config (key, value, updated_at) VALUES
 | encryption_status | string | off | 加密状态显示字段 |
 | sync_folder | string | 空 | 同步目录配置；当前不包含同步服务 |
 | plugin_folder | string | 空 | 插件目录配置；当前不包含插件运行时或市场 |
+| theme_family | brick/ember/graphite/rose | brick | 配色家族 |
+| theme_mode | light/dark/system | system | 明暗模式；`system` 跟随 Windows 设置 |
+| image_budget_bytes | number | 2147483648 | 图片存储总预算（字节，默认 2 GiB）；`-1` 表示不限制 |
+| llm_provider | string | fake | LLM 提供方；`fake` 为本地占位实现 |
+| llm_api_key | string | 空 | LLM API Key |
+| llm_model | string | gpt-4o-mini | LLM 模型名 |
+| llm_base_url | string | https://api.openai.com/v1 | LLM API 基址 |
+| llm_max_context_items | number | 8 | 送入 LLM 的最大历史条数 |
 
 ---
 
@@ -253,6 +277,95 @@ CREATE TABLE clipboard_item_tags (
 CREATE INDEX idx_clipboard_item_tags_tag_id
 ON clipboard_item_tags(tag_id, item_id);
 ```
+
+### 2.6 shortcut_bindings (快捷键绑定表)
+
+`db_version = 8` 引入。十个动作（`toggle_window` 与 `quick_paste_1..9`）各自独立启用，不再共用一个前缀。
+
+```sql
+CREATE TABLE shortcut_bindings (
+    action_id   TEXT PRIMARY KEY,
+    enabled     INTEGER NOT NULL CHECK (enabled IN (0, 1)),
+    accelerator TEXT,
+    updated_at  INTEGER NOT NULL,
+    -- 启用的绑定必须有组合键；禁用时允许保留 NULL
+    CHECK (enabled = 0 OR accelerator IS NOT NULL)
+);
+
+-- 只对已启用的绑定去重，禁用的行可以留着相同组合键备用
+CREATE UNIQUE INDEX idx_shortcut_enabled_accelerator
+ON shortcut_bindings(accelerator)
+WHERE enabled = 1 AND accelerator IS NOT NULL;
+```
+
+| 字段 | 说明 |
+|------|------|
+| `action_id` | 动作标识，取值 `toggle_window`、`quick_paste_1` … `quick_paste_9` |
+| `enabled` | 是否注册到系统。禁用的行仍保留组合键，便于重新开启 |
+| `accelerator` | 形如 `Ctrl+Alt+K` 的组合键 |
+
+部分唯一索引把"同一组合键不能被两个启用中的动作占用"变成数据库约束，应用层的重复校验只负责提前给出可读提示。
+
+### 2.7 window_state (窗口状态表)
+
+`db_version = 8` 引入。按窗口 label 记录尺寸与位置，用于下次启动恢复。
+
+```sql
+CREATE TABLE window_state (
+    window_label TEXT PRIMARY KEY,
+    width_dip    INTEGER NOT NULL,
+    height_dip   INTEGER NOT NULL,
+    x            INTEGER,
+    y            INTEGER,
+    monitor_id   TEXT,
+    scale_factor REAL,
+    updated_at   INTEGER NOT NULL
+);
+```
+
+尺寸以 DIP（设备无关像素）存储，跨不同 DPI 的显示器迁移时无需换算。`x` / `y` 为 NULL 表示"在当前活动显示器居中"。恢复前会校验目标位置是否仍落在某个显示器内，否则退回居中。
+
+### 2.8 binary_blobs / clipboard_item_representations (图片表示表)
+
+`db_version = 8` 引入，实现图片保真：原始字节按 SHA-256 去重存储，一个条目可以挂多个表示。
+
+```sql
+CREATE TABLE binary_blobs (
+    sha256      TEXT PRIMARY KEY,
+    byte_length INTEGER NOT NULL,
+    content     BLOB NOT NULL,
+    created_at  INTEGER NOT NULL
+);
+
+CREATE TABLE clipboard_item_representations (
+    item_id     INTEGER NOT NULL,
+    blob_sha256 TEXT NOT NULL,
+    role        TEXT NOT NULL CHECK (role IN ('source', 'canonical', 'thumbnail')),
+    format_name TEXT NOT NULL,
+    mime_type   TEXT,
+    width       INTEGER,
+    height      INTEGER,
+    byte_length INTEGER NOT NULL,
+    priority    INTEGER NOT NULL DEFAULT 0,
+    metadata    TEXT,
+    PRIMARY KEY (item_id, role, format_name),
+    FOREIGN KEY (item_id) REFERENCES clipboard_items(id) ON DELETE CASCADE,
+    FOREIGN KEY (blob_sha256) REFERENCES binary_blobs(sha256)
+);
+
+CREATE INDEX idx_clipboard_item_representations_item
+ON clipboard_item_representations(item_id, role, priority);
+```
+
+| `role` | 含义 |
+|--------|------|
+| `source` | 剪贴板给出的原始字节，原样保存，复制回系统时优先使用 |
+| `canonical` | 位图来源的无损 PNG 回退，像素与原图一致 |
+| `thumbnail` | 仅供列表预览，**永不**参与复制或导出 |
+
+`binary_blobs` 以内容哈希为主键，同一张图重复入库只占一份空间。`thumbnail` 与其他角色物理隔离在不同 blob 中，避免预览数据污染粘贴结果。
+
+> `binary_blobs` 被 `clipboard_item_representations` 以外键引用，删除条目时先级联清掉表示行，再回收不再被引用的 blob。
 
 ---
 
@@ -377,7 +490,7 @@ VALUES (?, ?, ?);
 
 ```sql
 INSERT INTO app_config (key, value, updated_at)
-VALUES ('db_version', '7', strftime('%s', 'now') * 1000);
+VALUES ('db_version', '8', strftime('%s', 'now') * 1000);
 ```
 
 ### 4.2 迁移流程
@@ -391,6 +504,8 @@ VALUES ('db_version', '7', strftime('%s', 'now') * 1000);
 - v4 -> v5 会创建 `clipboard_ocr`，并把既有图片记录初始化为 `pending`。
 - v5 -> v6 会给 `clipboard_items` 增加两个可空来源字段；既有记录保持 `NULL`。
 - v6 -> v7 会给 `clipboard_items` 增加可空 `custom_title` 与 `note`；既有记录保持 `NULL`。
+- v7 -> v8 建 `shortcut_bindings`、`window_state`、`binary_blobs` 与
+  `clipboard_item_representations`，迁移快捷键、窗口尺寸和旧图片数据（详见 4.3）。
 - 完成后写回当前 `db_version`。
 
 ```rust
@@ -415,6 +530,9 @@ fn run_migrations(db: &Connection) -> Result<()> {
     if version < 7 {
         migrate_v6_to_v7(db)?;
     }
+    if version < 8 {
+        migrate_v7_to_v8(db)?;
+    }
 
     Ok(())
 }
@@ -425,6 +543,38 @@ fn migrate_v1_to_v2(db: &Connection) -> Result<()> {
     Ok(())
 }
 ```
+
+### 4.3 v7 -> v8 迁移细节
+
+v8 是首个会重排既有数据的迁移，因此整体包在一个事务里，并在迁移前自动备份。
+
+**迁移前备份。** 打开数据库时，只要检测到 `db_version` 低于当前版本，就先用 SQLite 的
+在线备份 API 复制一份 `klip.db.pre-v8-<毫秒时间戳>.bak`，与数据库同目录。仅当原库存在、
+非空且 `PRAGMA quick_check` 通过时才备份——损坏的库走另一条保留分支。迁移过程中任何一步
+失败都会自动回滚到这份备份并向上报错，不会留下半迁移状态。
+
+**快捷键。** `hotkey_toggle_window` 的现值迁移到 `toggle_window` 并保持启用。
+`quick_paste_1..9` 按 `hotkey_quick_paste_prefix` 生成组合键，但只有**升级**安装才默认启用；
+全新安装写入 `enabled = 0`，避免第一次启动就抢占九组全局快捷键。
+
+**窗口尺寸。** 按 §13 规则处理：
+
+| 原有尺寸 | 迁移结果 |
+|----------|----------|
+| 全新安装 | `680 x 720` |
+| 恰为旧默认值 `560 x 760` | `680 x 720`（视作从未自定义） |
+| 其他任何值 | 原样保留，视为用户有意设置 |
+
+**旧图片数据。** 扫描 `content_type = 'image'` 且 `content` 仍为 `data:image/%` 的记录：
+
+1. 解码 base64；超过 128 MiB 的跳过，不阻塞迁移。
+2. 按 PNG 解析；解析失败只记 `warn` 日志并保留原记录，便于事后诊断。
+3. 原始字节写入 `binary_blobs`，挂一条 `canonical` / `png` 表示，
+   并在表示的 `metadata` 里打上 `legacyReencoded: true`——标明这份数据来自旧的
+   base64 存储，无法再断言与系统剪贴板给出的原始字节完全一致。
+4. 生成 192x192 缩略图，作为独立 blob 写入 `thumbnail` 表示。
+
+`INSERT OR IGNORE` 让这一步幂等：迁移中断后重跑不会产生重复 blob 或重复表示。
 
 ---
 

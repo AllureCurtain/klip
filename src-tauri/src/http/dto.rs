@@ -137,6 +137,7 @@ mod tests {
             sensitivity_reason: None,
             formats: Vec::new(),
             ocr: None,
+            media: None,
             tags: Vec::new(),
             created_at: 1,
             last_used_at: 2,

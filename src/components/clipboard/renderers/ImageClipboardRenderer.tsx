@@ -1,5 +1,7 @@
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { RendererProps } from './rendererRegistry';
+import { systemApi } from '@/lib/tauri';
 
 export function ImageClipboardRenderer({
   item,
@@ -7,8 +9,22 @@ export function ImageClipboardRenderer({
   onImageClick,
 }: RendererProps) {
   const { t } = useTranslation();
+  const [thumbnailUrl, setThumbnailUrl] = useState(item.content || '');
   const recognizedText = item.ocr?.status === 'completed' ? item.ocr.text.trim() : '';
   const previewText = recognizedText || item.preview || t('clipboard.types.image');
+
+  useEffect(() => {
+    if (item.content) {
+      setThumbnailUrl(item.content);
+      return;
+    }
+    let url = '';
+    void systemApi.getImageThumbnail(item.id).then((bytes) => {
+      url = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: 'image/png' }));
+      setThumbnailUrl(url);
+    }).catch(() => setThumbnailUrl(''));
+    return () => { if (url) URL.revokeObjectURL(url); };
+  }, [item.content, item.id]);
 
   if (shouldMaskPreview) {
     return (
@@ -27,11 +43,11 @@ export function ImageClipboardRenderer({
         aria-label={t('clipboard.previewImage')}
         title={t('clipboard.previewImage')}
       >
-        <img
-          src={item.content}
-          alt=""
-          className="h-8 w-8 rounded border border-border object-cover transition-colors group-hover/img:border-primary/40"
-        />
+        {thumbnailUrl ? (
+          <img src={thumbnailUrl} alt="" className="h-8 w-8 rounded border border-border object-cover transition-colors group-hover/img:border-primary/40" />
+        ) : (
+          <span className="flex h-8 w-8 items-center justify-center rounded border border-border bg-muted text-[9px] text-muted-foreground">IMG</span>
+        )}
       </button>
       <div className="flex min-w-0 flex-col">
         <span

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { open, save } from '@tauri-apps/plugin-dialog';
+import { systemApi } from '@/lib/tauri';
 
 export const DEFAULT_TAG_COLOR = '#14b8a6';
 
@@ -39,7 +40,7 @@ export async function chooseSavePath(
   defaultPath: string,
   filters: DialogFilter[]
 ) {
-  const selected = await save({ defaultPath, filters });
+  const selected = await withFocusLossSuppressed(() => save({ defaultPath, filters }));
   if (selected) setter(selected);
 }
 
@@ -47,8 +48,25 @@ export async function chooseOpenPath(
   setter: (value: string) => void,
   filters: DialogFilter[]
 ) {
-  const selected = await open({ multiple: false, filters });
+  const selected = await withFocusLossSuppressed(() => open({ multiple: false, filters }));
   if (typeof selected === 'string') setter(selected);
+}
+
+async function withFocusLossSuppressed<T>(operation: () => Promise<T>): Promise<T> {
+  try {
+    await systemApi.beginFocusLossSuppression?.();
+  } catch {
+    // The dialog remains usable in browser-based tests and unsupported shells.
+  }
+  try {
+    return await operation();
+  } finally {
+    try {
+      await systemApi.endFocusLossSuppression?.();
+    } catch {
+      // The backend counter is saturating, so an unavailable begin/end pair is harmless.
+    }
+  }
 }
 
 export function formatBytes(value: number): string {

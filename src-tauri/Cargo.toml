@@ -19,7 +19,7 @@ tauri-plugin-autostart = "2"
 tauri-plugin-shell = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-rusqlite = { version = "0.31", features = ["bundled"] }
+rusqlite = { version = "0.31", features = ["bundled", "backup"] }
 # Single clipboard library for every platform and every content type.
 # The `wayland` feature keeps Linux parity with the previous wl-copy path;
 # without it clipboard-rs is X11-only. See src/clipboard/backend.rs.
@@ -84,6 +84,7 @@ objc2-app-kit = { version = "0.3.2", default-features = false, features = [
 ort = { version = "=2.0.0-rc.12", default-features = false, features = ["api-24", "load-dynamic"] }
 windows = { version = "0.59", features = [
     "Win32_System_DataExchange",
+    "Win32_System_Memory",
     "Win32_System_Threading",
     "Win32_UI_WindowsAndMessaging",
     "Win32_Foundation",

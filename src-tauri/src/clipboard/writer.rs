@@ -60,6 +60,41 @@ pub fn copy_to_clipboard(
     result
 }
 
+pub fn copy_image_bytes_to_clipboard(bytes: &[u8], content_hash: &str) -> Result<(), AppError> {
+    suppress::arm(content_hash.to_string());
+    let result = backend::write_image(bytes).map_err(AppError::from);
+    if result.is_err() {
+        suppress::disarm();
+    }
+    result
+}
+
+pub(crate) fn copy_image_bundle_to_clipboard(
+    bundle: &crate::database::productization::ImageWriteBundle,
+    content_hash: &str,
+) -> Result<(), AppError> {
+    suppress::arm(content_hash.to_string());
+    let sources = bundle
+        .sources
+        .iter()
+        .map(|source| backend::ImageWriteRepresentation {
+            format_name: &source.format_name,
+            clipboard_format: source.clipboard_format.as_deref(),
+            data: &source.bytes,
+        })
+        .collect::<Vec<_>>();
+    let result = backend::write_image_representations(
+        &bundle.canonical_png,
+        &sources,
+        content_hash.as_bytes(),
+    )
+    .map_err(AppError::from);
+    if result.is_err() {
+        suppress::disarm();
+    }
+    result
+}
+
 fn write_text(
     content: &str,
     formats: &[ClipboardFormat],

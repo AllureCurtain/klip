@@ -13,8 +13,18 @@ pub struct Database {
 
 impl Database {
     pub fn new(path: &Path) -> Result<Self, AppError> {
+        let migration_backup = create_pre_migration_backup_if_needed(path)?;
         match Self::open_initialized(path) {
             Ok(db) => Ok(db),
+            Err(error) if migration_backup.is_some() => {
+                let backup_path = migration_backup.expect("checked above");
+                restore_pre_migration_backup(path, &backup_path)?;
+                Err(AppError::Database(format!(
+                    "database migration failed and the pre-migration backup was restored from {}: {}",
+                    backup_path.display(),
+                    error
+                )))
+            }
             Err(error) if path.exists() && is_recoverable_database_error(&error) => {
                 let backup_path = preserve_corrupt_database(path)?;
                 tracing::warn!(
@@ -78,9 +88,14 @@ impl Database {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_millis() as i64;
+        let is_new_install = conn.query_row(
+            "SELECT NOT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'app_config')",
+            [],
+            |row| row.get::<_, bool>(0),
+        )?;
 
         crate::database::schema::initialize_base_schema(&conn, now)?;
-        crate::database::migrations::run_pending_migrations(&conn, now)?;
+        crate::database::migrations::run_pending_migrations(&conn, now, is_new_install)?;
 
         Ok(())
     }
@@ -94,6 +109,113 @@ impl Database {
     pub(crate) fn search_index(&self) -> Option<&Arc<crate::search::SearchIndex>> {
         self.search_index.as_ref()
     }
+}
+
+fn create_pre_migration_backup_if_needed(path: &Path) -> Result<Option<PathBuf>, AppError> {
+    if !path.exists()
+        || path
+            .metadata()
+            .map(|metadata| metadata.len() == 0)
+            .unwrap_or(true)
+    {
+        return Ok(None);
+    }
+    let source = match Connection::open(path) {
+        Ok(connection) => connection,
+        Err(_) => return Ok(None),
+    };
+    let source_integrity =
+        match source.query_row("PRAGMA quick_check", [], |row| row.get::<_, String>(0)) {
+            Ok(result) => result,
+            Err(_) => return Ok(None),
+        };
+    if source_integrity != "ok" {
+        return Ok(None);
+    }
+    let has_config = source
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'app_config')",
+            [],
+            |row| row.get::<_, bool>(0),
+        )
+        .unwrap_or(false);
+    let stored_version = if has_config {
+        source
+            .query_row(
+                "SELECT value FROM app_config WHERE key = 'db_version'",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+            .ok()
+            .and_then(|value| value.parse::<i64>().ok())
+            .unwrap_or(0)
+    } else {
+        0
+    };
+    if stored_version >= crate::database::CURRENT_DB_VERSION {
+        return Ok(None);
+    }
+
+    let backup_path = next_pre_migration_backup_path(path);
+    source
+        .backup(rusqlite::DatabaseName::Main, &backup_path, None)
+        .map_err(|error| {
+            AppError::Database(format!(
+                "failed to create pre-migration backup at {}: {}",
+                backup_path.display(),
+                error
+            ))
+        })?;
+    let backup = Connection::open(&backup_path)?;
+    let integrity: String = backup.query_row("PRAGMA quick_check", [], |row| row.get(0))?;
+    if integrity != "ok" {
+        return Err(AppError::Database(format!(
+            "pre-migration backup integrity check failed at {}: {}",
+            backup_path.display(),
+            integrity
+        )));
+    }
+    tracing::info!(
+        "Created database migration backup at {}",
+        backup_path.display()
+    );
+    Ok(Some(backup_path))
+}
+
+fn restore_pre_migration_backup(path: &Path, backup_path: &Path) -> Result<(), AppError> {
+    for suffix in ["-wal", "-shm"] {
+        let sidecar = PathBuf::from(format!("{}{}", path.display(), suffix));
+        if sidecar.exists() {
+            std::fs::remove_file(&sidecar).map_err(|error| {
+                AppError::System(format!(
+                    "failed to remove migration sidecar {}: {}",
+                    sidecar.display(),
+                    error
+                ))
+            })?;
+        }
+    }
+    std::fs::copy(backup_path, path).map_err(|error| {
+        AppError::System(format!(
+            "failed to restore pre-migration backup {} to {}: {}",
+            backup_path.display(),
+            path.display(),
+            error
+        ))
+    })?;
+    Ok(())
+}
+
+fn next_pre_migration_backup_path(path: &Path) -> PathBuf {
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("klip.db");
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    path.with_file_name(format!("{}.pre-v8-{}.bak", file_name, now))
 }
 
 fn is_recoverable_database_error(error: &AppError) -> bool {
@@ -178,6 +300,7 @@ pub fn init(app_handle: tauri::AppHandle) -> Result<(), AppError> {
 mod tests {
     use super::Database;
     use crate::AppError;
+    use base64::Engine as _;
     use std::path::PathBuf;
 
     fn temp_dir(name: &str) -> PathBuf {
@@ -315,7 +438,7 @@ mod tests {
             .unwrap()
             .unwrap();
 
-        assert_eq!(version, "7");
+        assert_eq!(version, "8");
     }
 
     #[test]
@@ -410,7 +533,7 @@ mod tests {
             )
             .unwrap();
 
-        assert_eq!(version, "7");
+        assert_eq!(version, "8");
         assert_eq!(format, ("text".into(), "legacy text".into()));
         assert_eq!(image_ocr_status, "pending");
     }
@@ -452,7 +575,7 @@ mod tests {
             )
             .unwrap();
 
-        assert_eq!(version, "7");
+        assert_eq!(version, "8");
         assert_eq!(status, "pending");
     }
 
@@ -506,7 +629,7 @@ mod tests {
             )
             .unwrap();
 
-        assert_eq!(version, "7");
+        assert_eq!(version, "8");
         assert_eq!(source, (None, None));
     }
 
@@ -562,7 +685,7 @@ mod tests {
             )
             .unwrap();
 
-        assert_eq!(version, "7");
+        assert_eq!(version, "8");
         assert_eq!(annotations, (None, None));
     }
 
@@ -602,7 +725,7 @@ mod tests {
         let version = crate::database::config::get(&db, "db_version")
             .unwrap()
             .unwrap();
-        assert_eq!(version, "7");
+        assert_eq!(version, "8");
         drop(db);
 
         let backups = std::fs::read_dir(&dir)
@@ -624,5 +747,188 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM clipboard_items", [], |row| row.get(0))
             .unwrap();
         assert_eq!(item_count, 0);
+    }
+
+    fn v7_connection() -> rusqlite::Connection {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch("PRAGMA foreign_keys=ON;").unwrap();
+        crate::database::schema::initialize_base_schema(&conn, 1).unwrap();
+        conn.execute(
+            "INSERT INTO app_config (key, value, updated_at) VALUES ('db_version', '7', 1)",
+            [],
+        )
+        .unwrap();
+        conn
+    }
+
+    #[test]
+    fn new_install_seeds_safe_shortcut_defaults() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        let db = Database::from_conn(conn);
+        db.init_schema().unwrap();
+
+        let bindings = crate::database::productization::list_shortcut_bindings(&db).unwrap();
+        assert_eq!(bindings.len(), 10);
+        assert!(bindings[0].enabled);
+        assert_eq!(bindings[0].accelerator.as_deref(), Some("Ctrl+Alt+K"));
+        assert!(bindings[1..].iter().all(|binding| !binding.enabled));
+    }
+
+    #[test]
+    fn v7_upgrade_preserves_legacy_quick_paste_behavior() {
+        let db = Database::from_conn(v7_connection());
+        db.init_schema().unwrap();
+
+        let bindings = crate::database::productization::list_shortcut_bindings(&db).unwrap();
+        assert!(bindings.iter().all(|binding| binding.enabled));
+        assert_eq!(bindings[9].accelerator.as_deref(), Some("Ctrl+Alt+9"));
+    }
+
+    #[test]
+    fn v7_default_window_size_upgrades_as_a_pair() {
+        let conn = v7_connection();
+        conn.execute(
+            "UPDATE app_config SET value = '560' WHERE key = 'window_width'",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "UPDATE app_config SET value = '760' WHERE key = 'window_height'",
+            [],
+        )
+        .unwrap();
+        let db = Database::from_conn(conn);
+        db.init_schema().unwrap();
+
+        let state = crate::database::productization::get_window_state(&db, "main")
+            .unwrap()
+            .unwrap();
+        assert_eq!((state.width_dip, state.height_dip), (680, 720));
+    }
+
+    #[test]
+    fn v7_custom_window_size_is_not_partially_rewritten() {
+        let conn = v7_connection();
+        conn.execute(
+            "UPDATE app_config SET value = '640' WHERE key = 'window_width'",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "UPDATE app_config SET value = '760' WHERE key = 'window_height'",
+            [],
+        )
+        .unwrap();
+        let db = Database::from_conn(conn);
+        db.init_schema().unwrap();
+
+        let state = crate::database::productization::get_window_state(&db, "main")
+            .unwrap()
+            .unwrap();
+        assert_eq!((state.width_dip, state.height_dip), (640, 760));
+    }
+
+    #[test]
+    fn v7_png_data_url_migrates_to_canonical_blob_and_isolated_thumbnail() {
+        let conn = v7_connection();
+        let png = include_bytes!("../../tests/fixtures/ocr/chinese-text.png");
+        let data_url = format!(
+            "data:image/png;base64,{}",
+            base64::engine::general_purpose::STANDARD.encode(png)
+        );
+        conn.execute(
+            "INSERT INTO clipboard_items
+             (content_type, content, preview, hash, size, created_at, last_used_at)
+             VALUES ('image', ?1, 'legacy image', 'legacy-image-v7', ?2, 1, 1)",
+            rusqlite::params![data_url, png.len() as i64],
+        )
+        .unwrap();
+        let item_id = conn.last_insert_rowid();
+        let db = Database::from_conn(conn);
+
+        db.init_schema().unwrap();
+
+        let conn = db.get_connection().unwrap();
+        let (canonical, width, height, metadata): (Vec<u8>, i64, i64, String) = conn
+            .query_row(
+                "SELECT b.content, r.width, r.height, r.metadata
+                 FROM clipboard_item_representations r
+                 JOIN binary_blobs b ON b.sha256 = r.blob_sha256
+                 WHERE r.item_id = ?1 AND r.role = 'canonical'",
+                [item_id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .unwrap();
+        let decoded = image::load_from_memory(png).unwrap();
+        assert_eq!(canonical, png);
+        assert_eq!(
+            (width, height),
+            (decoded.width() as i64, decoded.height() as i64)
+        );
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&metadata).unwrap()["legacyReencoded"],
+            true
+        );
+
+        let (thumbnail, thumb_width, thumb_height): (Vec<u8>, i64, i64) = conn
+            .query_row(
+                "SELECT b.content, r.width, r.height
+                 FROM clipboard_item_representations r
+                 JOIN binary_blobs b ON b.sha256 = r.blob_sha256
+                 WHERE r.item_id = ?1 AND r.role = 'thumbnail'",
+                [item_id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert!(thumb_width <= 192 && thumb_height <= 192);
+        assert!(image::load_from_memory(&thumbnail).is_ok());
+        assert_eq!(
+            conn.query_row(
+                "SELECT COUNT(*) FROM clipboard_item_representations WHERE item_id = ?1",
+                [item_id],
+                |row| row.get::<_, i64>(0),
+            )
+            .unwrap(),
+            2
+        );
+    }
+
+    #[test]
+    fn failed_v8_migration_restores_the_pre_migration_database() {
+        let dir = temp_dir("v8-migration-rollback");
+        let db_path = dir.join("klip.db");
+        let conn = rusqlite::Connection::open(&db_path).unwrap();
+        crate::database::schema::initialize_base_schema(&conn, 1).unwrap();
+        conn.execute(
+            "INSERT INTO app_config (key, value, updated_at) VALUES ('db_version', '7', 1)",
+            [],
+        )
+        .unwrap();
+        conn.execute_batch(
+            "CREATE TRIGGER fail_v8_shortcuts
+             BEFORE INSERT ON shortcut_bindings
+             BEGIN SELECT RAISE(ABORT, 'injected v8 migration failure'); END;",
+        )
+        .unwrap();
+        drop(conn);
+
+        let error = Database::new(&db_path).err().expect("migration must fail");
+        assert!(error.to_string().contains("backup was restored"));
+
+        let restored = rusqlite::Connection::open(&db_path).unwrap();
+        let version: String = restored
+            .query_row(
+                "SELECT value FROM app_config WHERE key = 'db_version'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(version, "7");
+        let backups = std::fs::read_dir(&dir)
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|entry| entry.file_name().to_string_lossy().contains(".pre-v8-"))
+            .count();
+        assert_eq!(backups, 1);
     }
 }
