@@ -1,9 +1,12 @@
 name: Desktop E2E
 
+# Manual trigger only. The desktop E2E suite drives a real Tauri window and the
+# Windows clipboard through WebDriver, which is inherently flaky on hosted
+# runners (DIB image timing, focus/paste races). A nightly schedule turned that
+# flakiness into daily failure mail without ever gating a change, so the suite
+# is now run on demand — before a release, or when touching clipboard/paste code.
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 18 * * *"
 
 jobs:
   windows-e2e:
