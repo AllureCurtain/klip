@@ -73,7 +73,7 @@ function renderFilePreview(
             </span>
           )}
           {sampleLine && (
-            <span className="truncate text-[10px] text-muted-foreground/70">
+            <span className="truncate text-[10px] text-muted-foreground">
               {sampleLine}
               {moreCount > 0 ? t('clipboard.moreItems', { count: moreCount }) : ''}
             </span>

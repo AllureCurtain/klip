@@ -11,15 +11,15 @@ export function EmptyState({ showFavorites = false }: EmptyStateProps) {
       <div className="rounded-2xl bg-[var(--glass-bg)] backdrop-blur-sm border border-[var(--glass-border)] px-6 py-5 shadow-[var(--shadow-card)]">
         {showFavorites ? (
           <>
-            <p className="text-sm font-medium text-foreground/80">{t('emptyState.noFavorites')}</p>
-            <p className="mt-1.5 text-xs text-muted-foreground/60">
+            <p className="text-sm font-medium text-foreground">{t('emptyState.noFavorites')}</p>
+            <p className="mt-1.5 text-xs text-muted-foreground">
               {t('emptyState.noFavoritesHint')}
             </p>
           </>
         ) : (
           <>
-            <p className="text-sm font-medium text-foreground/80">{t('emptyState.noHistory')}</p>
-            <p className="mt-1.5 text-xs text-muted-foreground/60">
+            <p className="text-sm font-medium text-foreground">{t('emptyState.noHistory')}</p>
+            <p className="mt-1.5 text-xs text-muted-foreground">
               {t('emptyState.noHistoryHint')}
             </p>
           </>

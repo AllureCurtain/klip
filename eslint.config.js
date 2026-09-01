@@ -49,7 +49,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['e2e/**/*.js', 'scripts/**/*.mjs'],
+    files: ['e2e/**/*.{js,mjs}', 'scripts/**/*.mjs'],
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',

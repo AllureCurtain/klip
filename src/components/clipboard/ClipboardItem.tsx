@@ -255,7 +255,7 @@ function MetaLine({
     .join(' - ');
 
   return (
-    <div className="mt-0.5 flex min-w-0 items-center gap-1.5 overflow-hidden text-[10px] text-muted-foreground/70">
+    <div className="mt-0.5 flex min-w-0 items-center gap-1.5 overflow-hidden text-[10px] text-muted-foreground">
       <span className="inline-flex shrink-0 items-center gap-1 text-muted-foreground">
         <span className={cn('size-1.5 rounded-full', toneDot)} />
         <span>{typeLabel}</span>
