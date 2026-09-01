@@ -150,13 +150,13 @@ pub const CONFIG_REGISTRY: &[ConfigDescriptor] = &[
     },
     ConfigDescriptor {
         key: KEY_WINDOW_WIDTH,
-        default_value: "680",
+        default_value: "420",
         kind: ConfigValueKind::Integer,
         effect: RuntimeEffect::WindowSize,
     },
     ConfigDescriptor {
         key: KEY_WINDOW_HEIGHT,
-        default_value: "720",
+        default_value: "560",
         kind: ConfigValueKind::Integer,
         effect: RuntimeEffect::WindowSize,
     },

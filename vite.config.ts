@@ -32,6 +32,11 @@ export default defineConfig({
     },
   },
   clearScreen: false,
+  // Without this, the dep scanner globs every .html in the repo (docs prototypes,
+  // 软著 screenshots, src-tauri/target build artifacts) and esbuild dies.
+  optimizeDeps: {
+    entries: ['index.html'],
+  },
   server: {
     port: 1420,
     strictPort: true,

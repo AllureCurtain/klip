@@ -426,9 +426,12 @@ describe('ClipboardDetailDialog', () => {
     );
 
     const dialog = screen.getByRole('dialog');
-    expect(dialog.className).toContain('max-h-[calc(100vh-1rem)]');
-    expect(dialog.className).toContain('max-w-[calc(100vw-1rem)]');
-    expect(dialog.className).toContain('h-[min(36rem,calc(100vh-1rem))]');
+    // Inset on every side rather than a fixed rem width: at the default 420px
+    // window a 44rem dialog was clamped to the viewport and went edge-to-edge.
+    expect(dialog.className).toContain('max-h-[calc(100vh-3rem)]');
+    expect(dialog.className).toContain('w-[calc(100vw-2.5rem)]');
+    expect(dialog.className).toContain('max-w-[32rem]');
+    expect(dialog.className).toContain('h-[min(32rem,calc(100vh-3rem))]');
     expect(document.querySelectorAll('[data-base-ui-focus-guard]').length).toBeGreaterThan(0);
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(onOpenChange.mock.calls[0]?.[0]).toBe(false);
