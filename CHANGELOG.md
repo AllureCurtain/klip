@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-01
+
 ### Added
 
 - Four theme families (`ember`, `graphite`, `brick`, `rose`) with light/dark/system modes, driven
