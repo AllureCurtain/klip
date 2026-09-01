@@ -174,7 +174,12 @@ README 中出现配置、接口或代码基础，不等于对应能力已经成�
 
 Klip 在 `127.0.0.1:27717` 提供本地 HTTP API、SSE 事件流和 OpenAPI 3.1 描述。仓库中的 [`web-klip`](web-klip/README.md) 是独立的浏览器开发者看板，可用于检查历史、搜索、标签、片段、来源规则、统计、事件和 API 行为；它不是当前桌面安装包的一部分。
 
-HTTP 服务仅监听回环地址，不启动桌面界面也能用 curl/脚本操作（`src-tauri/src/bin/klip_http_check.rs` 提供无桌面的独立服务用于验证）：
+HTTP 服务仅监听回环地址，不启动桌面界面也能用 curl/脚本操作。`src-tauri/src/bin/klip_http_check.rs` 提供无桌面的独立服务用于本地验证，它由 `http-check-bin` feature 门控，**不随安装包分发**——该二进制会对任意指定的数据目录提供完整生产路由，而访问令牌默认关闭，打包出去等于让本机任意进程无凭据读取剪贴板历史。需要时显式构建：
+
+```bash
+cd src-tauri && cargo run --bin klip_http_check --features http-check-bin -- <DATA_DIR> <PORT>
+```
+
 
 - 剪贴板列表/搜索/详情，图片条目按需加载原图与缩略图（列表不再传 base64；缩略图带磁盘缓存与 `ETag`/`If-None-Match` 304）。
 - 图片 OCR：查看状态、手动触发、失败返回明确错误（桌面 worker 不可用时 503）。

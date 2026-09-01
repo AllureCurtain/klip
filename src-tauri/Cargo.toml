@@ -11,6 +11,23 @@ default-run = "klip"
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
+# Gates the `klip_http_check` helper binary. It serves the full production HTTP
+# router against any data directory it is pointed at, and the router's bearer
+# gate is disabled by default (empty `http_access_token`), so shipping it would
+# hand every local process an unauthenticated read of the user's clipboard
+# history. Kept out of release bundles; enable explicitly for local debugging.
+http-check-bin = []
+
+# Auto-discovery would build `src/bin/klip_http_check.rs` in every release, and
+# the Windows bundlers copy whatever executables land in the output directory.
+[[bin]]
+name = "klip_http_check"
+path = "src/bin/klip_http_check.rs"
+required-features = ["http-check-bin"]
+
+[[bin]]
+name = "klip"
+path = "src/main.rs"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
