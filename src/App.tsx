@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, useEffect, useMemo } from 'react';
+import { lazy, Suspense, useState, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { listen } from '@tauri-apps/api/event';
 import { motion } from 'framer-motion';
@@ -68,6 +68,7 @@ function App() {
   const [searchDebounceMs, setSearchDebounceMs] = useState(DEFAULT_SEARCH_DEBOUNCE_MS);
   const [searchResultsRevision, setSearchResultsRevision] = useState(0);
   const [view, setView] = useState<AppView>('clipboard');
+  const isFirstQueryRef = useRef(true);
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('general');
   const [imageWarning, setImageWarning] = useState<ImageStorageWarning | null>(null);
   const fetchProductivity = useProductivityStore((state) => state.fetchProductivity);
@@ -97,7 +98,8 @@ function App() {
   );
 
   useEffect(() => {
-    fetchItems();
+    // Items are loaded by the query effect below (immediately on its first pass),
+    // so fetching here too would run the same query twice at startup.
     fetchTags();
     fetchProductivity();
     void hydrateTheme();
@@ -206,13 +208,17 @@ function App() {
 
   useEffect(() => {
     const trimmed = searchQuery.trim();
+    // The very first pass is the initial load, not a user keystroke -- debouncing
+    // it would just delay first paint by searchDebounceMs.
+    const delay = isFirstQueryRef.current ? 0 : searchDebounceMs;
+    isFirstQueryRef.current = false;
     const handle = window.setTimeout(() => {
       if (trimmed === '') {
         fetchItems(queryOptions);
       } else {
         searchItems(trimmed, queryOptions);
       }
-    }, searchDebounceMs);
+    }, delay);
 
     return () => window.clearTimeout(handle);
   }, [

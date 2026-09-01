@@ -39,10 +39,17 @@
 - Legacy image data URLs migrate to `canonical` blob representations with generated thumbnails.
   Images that cannot be parsed as PNG are left untouched and logged for diagnostics rather than
   rewritten; images over 128 MiB are skipped without blocking migration.
-- Default window size is `680 x 720` DIP (was `560 x 760`), minimum `360 x 480`. Size is adjusted by
-  dragging the window and remembered automatically; the settings page now reports default, minimum,
-  and current size as read-only information instead of pixel inputs. Upgrades that still had the old
-  `560 x 760` default move to `680 x 720`; any user-modified size is preserved as-is.
+- Default window size is `420 x 560` DIP (was `560 x 760`), minimum `360 x 480`, sized to read as a
+  clipboard utility rather than a document window. Size is adjusted by dragging the window and
+  remembered automatically; the settings page now reports default, minimum, and current size as
+  read-only information instead of pixel inputs. Any user-modified size is preserved as-is, so
+  shrinking to the new default requires clearing the saved `window_state` row. Note that
+  `window_state` (startup restore) and `app_config` (runtime changes from the settings panel) remain
+  separate sources of truth and can still drift.
+- Replaced the scaffold placeholder application icon with a brand-aligned design in the terracotta
+  accent family. The source lives at `src-tauri/icons/source/klip-icon.svg`; regenerate with
+  `pnpm tauri icon`. Features are sized for the 16px tray, where one device pixel spans 32 canvas
+  units, so an earlier stacked-card version with three thin rules washed out into a blank rectangle.
 - Quick-paste shortcuts are seeded enabled on upgrade (preserving existing behavior) and disabled on
   fresh installs.
 - Window hiding is split into independent `hide_on_focus_loss` and `hide_after_paste` settings, both
@@ -57,6 +64,19 @@
 
 - Missing or corrupted image blobs now return locatable integrity errors instead of hiding the
   affected clipboard entry.
+- `pnpm tauri:dev` failed outright: the `klip_http_check` helper binary made bare `cargo run`
+  ambiguous. `default-run = "klip"` in `Cargo.toml` resolves it.
+- Vite's dependency scanner globbed every `.html` in the repository (documentation prototypes,
+  软著 screenshots, `src-tauri/target` build artifacts) and crashed esbuild. `optimizeDeps.entries`
+  now pins the scan to `index.html`.
+- The Geist sans font was declared first in `--font-sans` and installed as a dependency, but never
+  imported, so all body text silently fell back to the system UI font. Only the mono face was loaded.
+- Startup issued the clipboard list query twice: once on mount and again when the search debounce
+  effect first ran. The debounce now skips its initial pass instead of delaying first paint.
+- The clipboard detail dialog was a fixed `44rem` wide, which exceeded the window itself and was
+  clamped to the viewport, rendering as a full-bleed page. It is now inset on all sides, with the
+  max width applying only once the window is enlarged.
+
 
 ### Known Limitations
 

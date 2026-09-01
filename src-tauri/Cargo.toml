@@ -4,6 +4,9 @@ version = "0.2.0"
 description = "A Windows-first local clipboard manager"
 authors = ["Klip Team"]
 edition = "2021"
+# `src/bin/klip_http_check.rs` is a second binary target, so bare `cargo run`
+# (used by `tauri dev`) is ambiguous without this.
+default-run = "klip"
 
 [features]
 default = ["custom-protocol"]

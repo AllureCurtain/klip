@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="plate" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#b0573f"/>
+      <stop offset="1" stop-color="#8e4433"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Plate in the brand terracotta (accent token #9e4d3b family) -->
+  <rect width="512" height="512" rx="112" fill="url(#plate)"/>
+
+  <!--
+    Sized for the 16px tray, where 1 device pixel covers 32 canvas units.
+    Every feature is therefore >= 44 units thick, and there are only three of
+    them: board, clip, two bars. An earlier version had a stacked back card and
+    three 20-unit lines; below 32px those washed out into a blank rectangle.
+  -->
+
+  <!-- Board -->
+  <rect x="112" y="132" width="288" height="288" rx="40" fill="#fcfbf7"/>
+
+  <!-- Clip: sits above the board and breaks its outline, so the silhouette
+       still reads as a clipboard when the bars are gone -->
+  <rect x="196" y="92" width="120" height="76" rx="30" fill="#7d3b2c"/>
+
+  <!-- Two bars, 48 units thick -->
+  <g fill="#a4523d">
+    <rect x="168" y="228" width="176" height="48" rx="24"/>
+    <rect x="168" y="304" width="112" height="48" rx="24"/>
+  </g>
+</svg>

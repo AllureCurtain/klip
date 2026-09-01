@@ -122,8 +122,12 @@ export function ClipboardDetailDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
+      {/* Inset from the window on every side. A fixed rem width went
+          edge-to-edge in the default 420px window, which is what made this read
+          as a full-bleed page rather than a dialog; max-w only applies once the
+          user enlarges the window. */}
       <DialogContent
-        className="flex h-[min(36rem,calc(100vh-1rem))] max-h-[calc(100vh-1rem)] w-[44rem] max-w-[calc(100vw-1rem)] grid-rows-none flex-col gap-0 overflow-hidden rounded-lg p-0 sm:max-w-[44rem]"
+        className="flex h-[min(32rem,calc(100vh-3rem))] max-h-[calc(100vh-3rem)] w-[calc(100vw-2.5rem)] max-w-[32rem] grid-rows-none flex-col gap-0 overflow-hidden rounded-lg p-0 sm:max-w-[32rem]"
         closeLabel={t('common.close')}
       >
         <DialogHeader className="shrink-0 border-b border-border/60 px-4 py-3 pr-10">
@@ -801,7 +805,10 @@ function DetailFacts({ item }: { item: ClipboardItem }) {
   const createdAt = new Date(item.created_at).toLocaleString(i18n.language);
 
   return (
-    <div className="grid shrink-0 grid-cols-2 gap-x-4 gap-y-2 border-t border-border/60 bg-muted/25 px-4 py-3 text-[10px] sm:grid-cols-4">
+    // 2 columns regardless of viewport: the dialog is capped at 32rem, so a
+    // `sm:`-driven 4-column split would crowd four truncated facts into 512px
+    // once the window itself grew past the sm breakpoint.
+    <div className="grid shrink-0 grid-cols-2 gap-x-4 gap-y-2 border-t border-border/60 bg-muted/25 px-4 py-3 text-[10px]">
       <Fact
         icon={AppWindow}
         label={t('clipboard.detail.source')}
