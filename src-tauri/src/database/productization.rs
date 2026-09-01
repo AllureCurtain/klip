@@ -694,18 +694,29 @@ pub fn detect_sensitive(content_type: &str, content: &str) -> Option<String> {
         return None;
     }
     let lower = content.to_ascii_lowercase();
+    // Collapse separators so `api-key`, `API KEY`, and `api_key` all match one entry.
+    // The assignment check below stays on `lower`, since normalization eats `=` and `:`.
+    let normalized: String = lower
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+        .collect();
     let secret_keys = [
         "password",
         "passwd",
+        "passphrase",
         "api_key",
         "apikey",
         "secret",
         "access_token",
+        "auth_token",
+        "refresh_token",
+        "session_token",
+        "bearer",
         "private_key",
     ];
     if secret_keys
         .iter()
-        .any(|key| lower.contains(key) && (lower.contains('=') || lower.contains(':')))
+        .any(|key| normalized.contains(key) && (lower.contains('=') || lower.contains(':')))
     {
         return Some("credential keyword".into());
     }
@@ -921,6 +932,39 @@ mod tests {
         assert_eq!(rule.match_type, "process");
         assert_eq!(rule.pattern, "1Password.exe");
         assert!(rule.enabled);
+    }
+
+    #[test]
+    fn detect_sensitive_covers_credential_keyword_variants() {
+        // The case that leaked in real use: an env export whose key is AUTH_TOKEN,
+        // with a placeholder value too short for the entropy heuristic to catch.
+        assert_eq!(
+            detect_sensitive("text", "export ANTHROPIC_AUTH_TOKEN=sk-xxx"),
+            Some("credential keyword".into())
+        );
+        // Separator variants must all resolve to the same keyword.
+        for content in [
+            "api-key: abc",
+            "API KEY = abc",
+            "api_key=abc",
+            "Authorization: Bearer abc",
+            "refresh_token=abc",
+            "passphrase: abc",
+        ] {
+            assert_eq!(
+                detect_sensitive("text", content),
+                Some("credential keyword".into()),
+                "expected {content:?} to be flagged"
+            );
+        }
+
+        // A keyword without an assignment is prose, not a credential.
+        assert_eq!(
+            detect_sensitive("text", "rotate the auth token later"),
+            None
+        );
+        // Non-text content is never scanned.
+        assert_eq!(detect_sensitive("image", "password=hunter2"), None);
     }
 
     #[test]

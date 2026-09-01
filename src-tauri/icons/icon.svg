@@ -1,4 +1,28 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect width="32" height="32" rx="6" fill="#3B82F6"/>
-  <path d="M8 10h16v2H8zM8 15h12v2H8zM8 20h14v2H8z" fill="white"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!--
+    Favicon for index.html. `pnpm tauri icon` regenerates the raster set but
+    leaves this file alone, so it has to be kept in sync with
+    icons/source/klip-icon.svg by hand or the window icon and the tray icon
+    drift apart.
+  -->
+  <defs>
+    <linearGradient id="plate" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#b0573f"/>
+      <stop offset="1" stop-color="#8e4433"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="32" height="32" rx="7" fill="url(#plate)"/>
+
+  <!-- Board -->
+  <rect x="7" y="8.25" width="18" height="18" rx="2.5" fill="#fcfbf7"/>
+
+  <!-- Clip -->
+  <rect x="12.25" y="5.75" width="7.5" height="4.75" rx="1.875" fill="#7d3b2c"/>
+
+  <!-- Two bars -->
+  <g fill="#a4523d">
+    <rect x="10.5" y="14.25" width="11" height="3" rx="1.5"/>
+    <rect x="10.5" y="19" width="7" height="3" rx="1.5"/>
+  </g>
 </svg>
