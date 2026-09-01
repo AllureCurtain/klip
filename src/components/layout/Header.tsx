@@ -150,7 +150,7 @@ export function Header({
               autoFocus
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
-              className="h-7 pl-8 pr-3 text-xs bg-transparent border-[var(--glass-border)] placeholder:text-muted-foreground/50"
+              className="h-7 pl-8 pr-3 text-xs bg-transparent border-[var(--glass-border)] placeholder:text-muted-foreground"
             />
           </div>
           <button

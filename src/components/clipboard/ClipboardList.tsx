@@ -217,7 +217,7 @@ export function ClipboardList({ items, selectionMode = false }: ClipboardListPro
                     }}
                     className="flex items-center px-4 pt-2 pb-0.5"
                   >
-                    <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium text-muted-foreground/70 uppercase tracking-wider bg-[var(--glass-bg)] backdrop-blur-sm border border-[var(--glass-border)]">
+                    <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wider bg-[var(--glass-bg)] backdrop-blur-sm border border-[var(--glass-border)]">
                       {row.label}
                     </span>
                   </div>
