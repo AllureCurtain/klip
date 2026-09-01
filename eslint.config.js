@@ -11,6 +11,8 @@ export default tseslint.config(
       '.claude/**',
       '.worktrees/**',
       'e2e/.tmp/**',
+      // Local scratch dir for one-off verification scripts (git-ignored).
+      '.temp/**',
       'coverage/**',
       'outputs/**',
       '软件著作权申请资料/**',
