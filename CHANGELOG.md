@@ -78,6 +78,18 @@
 - The clipboard detail dialog was a fixed `44rem` wide, which exceeded the window itself and was
   clamped to the viewport, rendering as a full-bleed page. It is now inset on all sides, with the
   max width applying only once the window is enlarged.
+- Credential keyword detection matched `API_KEY` but missed `AUTH_TOKEN`, `ACCESS_TOKEN`,
+  `REFRESH_TOKEN`, `CLIENT_SECRET`, `PRIVATE_KEY`, and bare `PASSWORD` / `PASSWD`, so common
+  `.env` lines were captured without a sensitivity flag. The keyword set is widened and covered by
+  tests.
+- The window favicon still resolved to the scaffold placeholder in generic blue. `pnpm tauri icon`
+  regenerates only the bitmap set, leaving `src-tauri/icons/icon.svg` untouched, so the tray showed
+  the new terracotta mark while the window title bar showed the old one.
+- Text using Tailwind's alpha modifiers (`text-foreground/80` and similar) computed to `oklab()`,
+  which the static contrast gate does not evaluate — it checks token pairs, not resolved alpha. The
+  effective ratios fell below WCAG 4.5:1. Alpha modifiers are removed from body text, and a runtime
+  audit (`e2e/contrast-audit.mjs`) now composites real computed colors over the actual opaque base
+  and fails when it samples nothing, so it can no longer pass vacuously.
 
 
 ### Known Limitations
