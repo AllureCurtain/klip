@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Release tag, for example v0.2.0
+        description: Release tag, for example v0.3.1
         required: true
         type: string
       draft:
@@ -64,3 +64,17 @@ jobs:
           releaseName: Klip ${{ inputs.tag || github.ref_name }}
           releaseDraft: ${{ github.event_name != 'workflow_dispatch' || inputs.draft }}
           prerelease: false
+
+      - name: Package standalone ZIP and checksums
+        shell: pwsh
+        run: ./scripts/package-windows-zip.ps1
+
+      - name: Upload standalone ZIP and checksums
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          KLIP_RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          $archives = @(Get-ChildItem src-tauri/target/release/bundle/zip/*.zip | ForEach-Object FullName)
+          gh release upload $env:KLIP_RELEASE_TAG @archives src-tauri/target/release/bundle/SHA256SUMS.txt --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'Failed to upload release archives.' }

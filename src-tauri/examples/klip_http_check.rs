@@ -6,7 +6,7 @@
 //! with explicit messages; everything else — clipboard list/search, images,
 //! OCR state, QA streaming, diagnostics, token auth — is fully functional.
 //!
-//! Usage: `klip_http_check [DATA_DIR] [PORT]`
+//! Usage: `cargo run --example klip_http_check --features http-check-bin -- [DATA_DIR] [PORT]`
 //! Defaults: `$TEMP/klip-http-check` and `27718` (avoids clashing with a
 //! desktop app on 27717).
 

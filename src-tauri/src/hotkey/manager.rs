@@ -69,6 +69,21 @@ mod tests {
     }
 
     #[test]
+    fn every_letter_can_be_used_as_a_shortcut_trigger() {
+        for letter in 'A'..='Z' {
+            let accelerator = format!("Ctrl+Shift+{letter}");
+            let (normalized, shortcut) = parse_accelerator(&accelerator).unwrap();
+            assert_eq!(normalized, accelerator);
+            if letter == 'F' {
+                assert_eq!(
+                    shortcut,
+                    Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyF)
+                );
+            }
+        }
+    }
+
+    #[test]
     fn rejects_reserved_and_unsafe_shortcuts() {
         for shortcut in [
             "Win+L",
@@ -102,10 +117,32 @@ mod tests {
 
         let normalized = normalize_bindings_for_command(&bindings).unwrap();
 
+        assert_eq!(normalized.len(), bindings.len());
+        assert!(normalized[1..]
+            .iter()
+            .all(|binding| !binding.enabled && binding.accelerator.is_none()));
         assert_eq!(
             normalized[0].accelerator.as_deref(),
             Some("Ctrl+Win+PageDown")
         );
+    }
+
+    #[test]
+    fn cleared_shortcut_survives_a_storage_round_trip() {
+        let db = crate::Database::from_conn(rusqlite::Connection::open_in_memory().unwrap());
+        db.init_schema().unwrap();
+        let mut bindings = crate::database::productization::list_shortcut_bindings(&db).unwrap();
+        bindings[0].enabled = false;
+        bindings[0].accelerator = None;
+
+        let normalized = normalize_bindings_for_command(&bindings).unwrap();
+        crate::database::productization::replace_shortcut_bindings(&db, &normalized).unwrap();
+        let restored = crate::database::productization::list_shortcut_bindings(&db).unwrap();
+
+        assert_eq!(restored.len(), 10);
+        assert!(!restored[0].enabled);
+        assert!(restored[0].accelerator.is_none());
+        assert!(normalize_bindings_for_command(&restored).is_ok());
     }
 }
 
@@ -133,7 +170,7 @@ pub fn apply_bindings(
     let target = parsed
         .into_iter()
         .filter(|(binding, _)| binding.enabled)
-        .map(|(binding, shortcut)| (binding.action_id, shortcut))
+        .filter_map(|(binding, shortcut)| shortcut.map(|shortcut| (binding.action_id, shortcut)))
         .collect::<HashMap<_, _>>();
     let changed_old = old
         .iter()
@@ -248,7 +285,7 @@ fn rollback_message(message: String, rollback_errors: Vec<String>) -> String {
 
 fn validate_bindings(
     bindings: &[crate::database::types::ShortcutBinding],
-) -> Result<Vec<(crate::database::types::ShortcutBinding, Shortcut)>, AppError> {
+) -> Result<Vec<(crate::database::types::ShortcutBinding, Option<Shortcut>)>, AppError> {
     if bindings.len() != crate::database::productization::SHORTCUT_ACTIONS.len() {
         return Err(AppError::Hotkey(
             "all 10 shortcut actions are required".into(),
@@ -281,12 +318,14 @@ fn validate_bindings(
             }
             let mut normalized_binding = binding.clone();
             normalized_binding.accelerator = Some(normalized);
-            parsed.push((normalized_binding, shortcut));
+            parsed.push((normalized_binding, Some(shortcut)));
         } else if binding.enabled {
             return Err(AppError::Hotkey(format!(
                 "shortcut {} is enabled without a key",
                 binding.action_id
             )));
+        } else {
+            parsed.push((binding.clone(), None));
         }
     }
     Ok(parsed)
@@ -429,20 +468,22 @@ fn parse_code(key: &str) -> Result<Code, AppError> {
         "Pagedown" | "PageDown" => Code::PageDown,
         "Insert" => Code::Insert,
         "Delete" => Code::Delete,
-        value if value.starts_with('F') => match value[1..].parse::<u8>().unwrap() {
-            1 => Code::F1,
-            2 => Code::F2,
-            3 => Code::F3,
-            4 => Code::F4,
-            5 => Code::F5,
-            6 => Code::F6,
-            7 => Code::F7,
-            8 => Code::F8,
-            9 => Code::F9,
-            10 => Code::F10,
-            11 => Code::F11,
-            _ => return Err(AppError::Hotkey("unsupported function key".into())),
-        },
+        value if value.len() > 1 && value.starts_with('F') => {
+            match value[1..].parse::<u8>().unwrap() {
+                1 => Code::F1,
+                2 => Code::F2,
+                3 => Code::F3,
+                4 => Code::F4,
+                5 => Code::F5,
+                6 => Code::F6,
+                7 => Code::F7,
+                8 => Code::F8,
+                9 => Code::F9,
+                10 => Code::F10,
+                11 => Code::F11,
+                _ => return Err(AppError::Hotkey("unsupported function key".into())),
+            }
+        }
         value if value.len() == 1 && value.chars().next().unwrap().is_ascii_digit() => {
             match value {
                 "0" => Code::Digit0,

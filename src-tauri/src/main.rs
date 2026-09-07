@@ -66,8 +66,20 @@ fn main() {
 
             // 注册快捷键
             tracing::info!("Registering hotkeys...");
-            klip::hotkey::register_hotkeys(app.handle())?;
-            tracing::info!("Hotkeys registered");
+            let hotkey_registration_failed = match klip::hotkey::register_hotkeys(app.handle()) {
+                Ok(()) => {
+                    tracing::info!("Hotkeys registered");
+                    false
+                }
+                Err(klip::AppError::Hotkey(error)) => {
+                    tracing::warn!(
+                        "Hotkeys unavailable; open settings to change them: {}",
+                        error
+                    );
+                    true
+                }
+                Err(error) => return Err(error.into()),
+            };
 
             // 设置托盘
             tracing::info!("Setting up tray...");
@@ -191,8 +203,8 @@ fn main() {
                 .ok()
                 .flatten()
                 .is_some_and(|value| value == "true");
-                if show_on_startup {
-                    tracing::info!("Showing main window because show_window_on_startup is enabled");
+                if show_on_startup || hotkey_registration_failed {
+                    tracing::info!("Showing main window for startup preference or hotkey recovery");
                     if let Err(error) =
                         klip::window::controller::show_main_window_and_focus(app.handle())
                     {

@@ -1,28 +1,19 @@
 [package]
 name = "klip"
-version = "0.3.0"
+version = "0.3.1"
 description = "A Windows-first local clipboard manager"
 authors = ["Klip Team"]
 edition = "2021"
-# `src/bin/klip_http_check.rs` is a second binary target, so bare `cargo run`
-# (used by `tauri dev`) is ambiguous without this.
 default-run = "klip"
 
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
-# Gates the `klip_http_check` helper binary. It serves the full production HTTP
-# router against any data directory it is pointed at, and the router's bearer
-# gate is disabled by default (empty `http_access_token`), so shipping it would
-# hand every local process an unauthenticated read of the user's clipboard
-# history. Kept out of release bundles; enable explicitly for local debugging.
 http-check-bin = []
 
-# Auto-discovery would build `src/bin/klip_http_check.rs` in every release, and
-# the Windows bundlers copy whatever executables land in the output directory.
-[[bin]]
+[[example]]
 name = "klip_http_check"
-path = "src/bin/klip_http_check.rs"
+path = "examples/klip_http_check.rs"
 required-features = ["http-check-bin"]
 
 [[bin]]

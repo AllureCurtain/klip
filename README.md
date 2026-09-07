@@ -46,15 +46,15 @@
 
 | 项目状态 | 当前情况 |
 |---|---|
-| 最新公开版本 | [`v0.1.2`](https://github.com/AllureCurtain/klip/releases/tag/v0.1.2) |
-| 当前代码基线 | `v0.2.0` 发布候选 |
+| 最新公开版本 | [`v0.3.1`](https://github.com/AllureCurtain/klip/releases/tag/v0.3.1) |
+| 当前代码基线 | `v0.3.1` |
 | 主要平台 | Windows 10+ |
 | 产品形态 | 本地单机桌面应用 |
 | 数据存储 | SQLite + 本地全文索引 |
 | 账号 / 云上传 | 不需要 / 不包含 |
 | 项目阶段 | 核心闭环完成，暂不继续扩大功能面 |
 
-> `v0.2.0` 已完成代码、CI、桌面 E2E 和候选安装包构建验证，目前仍是 draft release。公开前还需完成干净 Windows 用户或虚拟机上的安装、自启动和升级验收。
+> Windows Release 提供 EXE 安装包、MSI、免安装 ZIP 和 SHA-256 校验文件。安装包尚未签名；干净 Windows 用户或虚拟机上的安装、自启动和升级验收仍需人工确认。
 
 ## 为什么是 Klip
 
@@ -75,6 +75,8 @@
 2. 安装并启动 Klip；程序会驻留在系统托盘。
 3. 复制任意文本、图片或文件，然后按 `Ctrl+Alt+K` 打开历史窗口。
 
+推荐下载 `Klip_0.3.1_x64-setup.exe`。ZIP 版需完整解压后运行 `klip.exe`，保留同目录的 DLL 和 `resources`；详细说明见 [Windows ZIP 使用说明](docs/WINDOWS_ZIP.md)。两种分发方式都包含 Visual C++ 运行库和离线 OCR 资源。安装包会在缺少 WebView2 时下载安装，ZIP 用户需自行安装 WebView2。
+
 当前安装包尚未绑定公开代码签名证书，Windows 可能显示 SmartScreen 或“未知发布者”提示。这是现阶段的已知分发边界，不代表 Klip 需要联网或登录账号。
 
 ### 使用
@@ -90,7 +92,7 @@
 | `Ctrl+Alt+K` | 显示或隐藏 Klip |
 | `Ctrl+Alt+1` 至 `Ctrl+Alt+9` | 粘贴当前列表前 9 条可见记录 |
 
-窗口快捷键可以在设置中修改为 `Ctrl+Alt+<A-Z>`。快速粘贴目前固定使用 `Ctrl+Alt` 加数字键。
+在设置的快捷键页面中，窗口唤起和 9 个快速粘贴槽位都可以独立修改、启用或关闭，保存后立即生效。全新安装默认关闭快速粘贴槽位，使用前需启用。快捷键支持 `Ctrl`、`Alt`、`Shift`、`Win` 与字母、数字、空格、方向键或 `F1` 到 `F11` 的组合；系统保留组合不能使用。
 
 ## 功能一览
 
@@ -174,10 +176,10 @@ README 中出现配置、接口或代码基础，不等于对应能力已经成�
 
 Klip 在 `127.0.0.1:27717` 提供本地 HTTP API、SSE 事件流和 OpenAPI 3.1 描述。仓库中的 [`web-klip`](web-klip/README.md) 是独立的浏览器开发者看板，可用于检查历史、搜索、标签、片段、来源规则、统计、事件和 API 行为；它不是当前桌面安装包的一部分。
 
-HTTP 服务仅监听回环地址，不启动桌面界面也能用 curl/脚本操作。`src-tauri/src/bin/klip_http_check.rs` 提供无桌面的独立服务用于本地验证，它由 `http-check-bin` feature 门控，**不随安装包分发**——该二进制会对任意指定的数据目录提供完整生产路由，而访问令牌默认关闭，打包出去等于让本机任意进程无凭据读取剪贴板历史。需要时显式构建：
+HTTP 服务仅监听回环地址，不启动桌面界面也能用 curl/脚本操作。`src-tauri/examples/klip_http_check.rs` 提供无桌面的独立服务用于本地验证，它是由 `http-check-bin` feature 门控的 Cargo example，**不随安装包分发**。需要时显式构建：
 
 ```bash
-cd src-tauri && cargo run --bin klip_http_check --features http-check-bin -- <DATA_DIR> <PORT>
+cd src-tauri && cargo run --example klip_http_check --features http-check-bin -- <DATA_DIR> <PORT>
 ```
 
 

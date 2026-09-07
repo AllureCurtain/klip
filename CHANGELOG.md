@@ -2,6 +2,28 @@
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-09-07
+
+### Fixed
+
+- Windows installers no longer reference the unbuilt HTTP inspection helper. The helper is now
+  an explicitly enabled Cargo example and is excluded from application bundles.
+- Letter `F` shortcut combinations no longer panic when saved.
+- Clearing and disabling a shortcut preserves all ten actions when saving and restarting.
+- Shortcut conflicts at startup keep the tray and window available so bindings can be changed.
+- Windows packages include the redistributable Visual C++ runtime beside the application and OCR
+  runtime, removing the dependency on development tools being installed on the destination PC.
+
+### Added
+
+- Standalone Windows ZIP archive and SHA-256 checksums alongside the EXE and MSI installers.
+
+### Known Limitations
+
+- Packages are unsigned. Windows may display SmartScreen or unknown publisher prompts.
+- WebView2 is required. Installers obtain it when missing; ZIP users must install it separately.
+- Login/reboot autostart and clean Windows VM acceptance remain manual checks.
+
 ## [0.3.0] - 2026-09-01
 
 ### Added

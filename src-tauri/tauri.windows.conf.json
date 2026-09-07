@@ -1,8 +1,12 @@
 {
+  "build": {
+    "beforeBuildCommand": "pnpm run build && powershell -NoProfile -ExecutionPolicy Bypass -File scripts/prepare-windows-runtime.ps1"
+  },
   "bundle": {
-    "resources": [
-      "resources/ocr/*",
-      "resources/onnxruntime/windows-x86_64/*"
-    ]
+    "resources": {
+      "resources/ocr/*": "resources/ocr/",
+      "resources/onnxruntime/windows-x86_64/*": "resources/onnxruntime/windows-x86_64/",
+      "resources/vcredist/*": ""
+    }
   }
 }

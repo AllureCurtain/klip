@@ -24,6 +24,7 @@ src-tauri/icons/android/
 src-tauri/icons/ios/
 e2e/.tmp/
 .temp/
+src-tauri/resources/vcredist/*.dll
 .worktrees/
 .finesse/
 软著补正重做/
