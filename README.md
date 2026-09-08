@@ -46,8 +46,8 @@
 
 | 项目状态 | 当前情况 |
 |---|---|
-| 最新公开版本 | [`v0.3.1`](https://github.com/AllureCurtain/klip/releases/tag/v0.3.1) |
-| 当前代码基线 | `v0.3.1` |
+| 最新公开版本 | [`v0.3.2`](https://github.com/AllureCurtain/klip/releases/tag/v0.3.2) |
+| 当前代码基线 | `v0.3.2` |
 | 主要平台 | Windows 10+ |
 | 产品形态 | 本地单机桌面应用 |
 | 数据存储 | SQLite + 本地全文索引 |
@@ -75,7 +75,7 @@
 2. 安装并启动 Klip；程序会驻留在系统托盘。
 3. 复制任意文本、图片或文件，然后按 `Ctrl+Alt+K` 打开历史窗口。
 
-推荐下载 `Klip_0.3.1_x64-setup.exe`。ZIP 版需完整解压后运行 `klip.exe`，保留同目录的 DLL 和 `resources`；详细说明见 [Windows ZIP 使用说明](docs/WINDOWS_ZIP.md)。两种分发方式都包含 Visual C++ 运行库和离线 OCR 资源。安装包会在缺少 WebView2 时下载安装，ZIP 用户需自行安装 WebView2。
+推荐下载 `Klip_0.3.2_x64-setup.exe`。ZIP 版需完整解压后运行 `klip.exe`，保留同目录的 DLL 和 `resources`；详细说明见 [Windows ZIP 使用说明](docs/WINDOWS_ZIP.md)。两种分发方式都包含 Visual C++ 运行库和离线 OCR 资源。安装包会在缺少 WebView2 时下载安装，ZIP 用户需自行安装 WebView2。
 
 当前安装包尚未绑定公开代码签名证书，Windows 可能显示 SmartScreen 或“未知发布者”提示。这是现阶段的已知分发边界，不代表 Klip 需要联网或登录账号。
 

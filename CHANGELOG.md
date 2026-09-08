@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-09-08
+
+### Fixed
+
+- Delayed shortcut reads no longer overwrite edits, cleared slots, or newly saved bindings.
+- Refreshing shortcut settings preserves unsaved changes while editing or saving.
+
 ## [0.3.1] - 2026-09-07
 
 ### Fixed

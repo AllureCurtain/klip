@@ -52,9 +52,15 @@ export const useShortcutStore = create<ShortcutState>((set, get) => ({
   isDirty: false,
 
   fetch: async () => {
+    const previous = get();
+    if (previous.isDirty || previous.saving) return;
     set({ loading: true, error: null, loadError: null });
     try {
       const bindings = await shortcutApi.getBindings();
+      if (get().bindings !== previous.bindings || get().saving) {
+        set({ loading: false });
+        return;
+      }
       set({
         bindings,
         committed: bindings,
@@ -64,6 +70,10 @@ export const useShortcutStore = create<ShortcutState>((set, get) => ({
         occupied: [],
       });
     } catch (error) {
+      if (get().bindings !== previous.bindings || get().saving) {
+        set({ loading: false });
+        return;
+      }
       set({ loading: false, loadError: getErrorMessage(error), error: getErrorMessage(error) });
     }
   },
