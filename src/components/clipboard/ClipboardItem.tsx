@@ -135,7 +135,8 @@ export function ClipboardItem({
         initial="initial"
         animate="animate"
         exit="exit"
-        transition={springs.default}
+        layout
+        transition={springs.momentum}
         whileHover="hover"
         whileTap="tap"
         style={{ opacity: opacityForAge }}
