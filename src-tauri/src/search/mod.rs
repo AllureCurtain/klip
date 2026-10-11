@@ -885,7 +885,10 @@ mod tests {
         let (root, db) = temp_database("jieba");
         let expected = insert_text(&db, "Klip 是一款剪贴板管理工具");
 
-        let results = crate::database::clipboard::search(&db, "剪贴板工具", None, 20)
+        // "剪贴板" is a contiguous substring of the stored text, so the LIKE
+        // fallback covers it even before the async commit worker flushes the
+        // Tantivy writer.
+        let results = crate::database::clipboard::search(&db, "剪贴板", None, 20)
             .expect("search Chinese terms");
 
         assert_eq!(results.len(), 1);
