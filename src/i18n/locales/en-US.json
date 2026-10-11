@@ -285,6 +285,8 @@
       "pasteDesc": "What happens right after you paste an item."
     },
     "data": {
+      "sensitiveTitle": "Sensitive content",
+      "sensitiveDesc": "How Klip treats clipboard entries that look like secrets.",
       "tags": "Tags and groups",
       "skipSensitive": "Skip sensitive clipboard content",
       "skipSensitiveDesc": "Do not save history when passwords, keys, or high-entropy tokens are detected",
@@ -295,6 +297,7 @@
       "createTag": "Create tag",
       "tagCreated": "Created tag {{name}}",
       "deleteTag": "Delete {{name}}",
+      "tagsDesc": "Organize history entries with colored tags.",
       "snippets": "Snippets",
       "snippetTitle": "Snippet title",
       "snippetContent": "Snippet content",
@@ -307,6 +310,7 @@
       "snippetUpdated": "Updated snippet {{title}}",
       "copySnippet": "Copy {{title}}",
       "deleteSnippet": "Delete snippet {{title}}",
+      "snippetsDesc": "Reusable text snippets you can copy or paste.",
       "sourceRules": "Source ignore rules",
       "sourceRuleType": "Rule type",
       "sourceRuleProcess": "Process",
@@ -317,6 +321,7 @@
       "sourceRuleCreated": "Created source rule {{pattern}}",
       "toggleSourceRule": "Toggle source rule {{pattern}}",
       "deleteSourceRule": "Delete source rule {{pattern}}",
+      "sourceRulesDesc": "Ignore clipboard captures from matching processes or windows.",
       "readiness": "Readiness",
       "monitoring": "Clipboard monitoring",
       "updatesEnabled": "Enable updates",

@@ -280,6 +280,8 @@
       "pasteDesc": "粘贴条目之后的行为。"
     },
     "data": {
+      "sensitiveTitle": "敏感内容",
+      "sensitiveDesc": "Klip 如何处理疑似密钥或敏感信息的剪贴板条目。",
       "tags": "标签/分组",
       "skipSensitive": "跳过敏感剪贴板内容",
       "skipSensitiveDesc": "检测到密码、密钥或高熵 Token 时不保存历史记录",
@@ -290,6 +292,7 @@
       "createTag": "创建标签",
       "tagCreated": "已创建标签 {{name}}",
       "deleteTag": "删除 {{name}}",
+      "tagsDesc": "用彩色标签整理剪贴板历史条目。",
       "snippets": "片段",
       "snippetTitle": "片段标题",
       "snippetContent": "片段内容",
@@ -302,6 +305,7 @@
       "snippetUpdated": "已更新片段 {{title}}",
       "copySnippet": "复制 {{title}}",
       "deleteSnippet": "删除片段 {{title}}",
+      "snippetsDesc": "可复制或粘贴的常用文本片段。",
       "sourceRules": "来源忽略规则",
       "sourceRuleType": "规则类型",
       "sourceRuleProcess": "进程",
@@ -312,6 +316,7 @@
       "sourceRuleCreated": "已创建来源规则 {{pattern}}",
       "toggleSourceRule": "切换来源规则 {{pattern}}",
       "deleteSourceRule": "删除来源规则 {{pattern}}",
+      "sourceRulesDesc": "忽略来自匹配进程或窗口的剪贴板捕获。",
       "readiness": "就绪状态",
       "monitoring": "剪贴板监听",
       "updatesEnabled": "启用更新",

@@ -6,6 +6,7 @@ import { Button, Input } from '@/components/ui';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import type { SourceRule, SourceRuleInput } from '@/types';
+import { SectionCard } from '../primitives';
 
 interface SourceRulesSectionProps {
   sourceRules: SourceRule[];
@@ -40,8 +41,10 @@ export function SourceRulesSection({
   };
 
   return (
-    <section className="space-y-2">
-      <Label className="text-xs">{t('settings.data.sourceRules')}</Label>
+    <SectionCard
+      title={t('settings.data.sourceRules')}
+      description={t('settings.data.sourceRulesDesc')}
+    >
       <div className="grid grid-cols-[96px_1fr_auto] gap-2">
         <Label htmlFor="source-rule-type" className="sr-only">
           {t('settings.data.sourceRuleType')}
@@ -52,7 +55,7 @@ export function SourceRulesSection({
           onChange={(event) =>
             setSourceRuleType(event.target.value as SourceRuleInput['matchType'])
           }
-          className="h-7 rounded-full border border-input bg-card/60 px-2 text-xs"
+          className="h-7 rounded-md border border-[var(--border)] bg-[var(--surface-raised)] px-2 text-[11px] text-[var(--ink)]"
         >
           <option value="process">{t('settings.data.sourceRuleProcess')}</option>
           <option value="title">{t('settings.data.sourceRuleTitle')}</option>
@@ -73,21 +76,21 @@ export function SourceRulesSection({
           className="h-7"
           onClick={handleCreateSourceRule}
           disabled={sourceRulePattern.trim() === ''}
+          aria-label={t('settings.data.createSourceRule')}
         >
           <Plus className="h-3 w-3" />
-          <span className="sr-only">{t('settings.data.createSourceRule')}</span>
         </Button>
       </div>
-      <div className="space-y-1">
+      <div className="mt-2 space-y-1 border-t border-[var(--border)] pt-2">
         {sourceRules.map((rule) => (
           <div
             key={rule.id}
-            className="flex items-center gap-2 rounded-md border bg-muted/20 px-2 py-1.5"
+            className="flex items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--surface-raised)] px-2 py-1.5"
           >
             <Badge variant="outline" className="text-[10px]">
               {rule.match_type}
             </Badge>
-            <span className="min-w-0 flex-1 truncate font-mono text-[11px]">
+            <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-[var(--ink)]">
               {rule.pattern}
             </span>
             <Switch
@@ -98,15 +101,15 @@ export function SourceRulesSection({
             <Button
               variant="ghost"
               size="icon"
-              className="size-7 text-destructive"
+              className="size-6 text-[var(--danger)]"
               aria-label={t('settings.data.deleteSourceRule', { pattern: rule.pattern })}
               onClick={() => void deleteSourceRule(rule.id)}
             >
-              <Trash2 className="h-3.5 w-3.5" />
+              <Trash2 className="h-3 w-3" />
             </Button>
           </div>
         ))}
       </div>
-    </section>
+    </SectionCard>
   );
 }
