@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { SETTINGS_NAV, type SettingsTab } from './settingsNav';
 
@@ -58,20 +59,32 @@ export function SettingsRail({ activeTab, onSelect, footer }: SettingsRailProps)
               onClick={() => onSelect(item.value)}
               onKeyDown={(event) => handleKeyDown(event, index)}
               className={cn(
-                'flex min-h-[30px] w-full items-center gap-2 rounded-md border border-transparent px-2 py-1.5 text-left text-[11.5px] font-medium transition-colors max-[439px]:justify-center max-[439px]:px-0',
+                'relative flex min-h-[30px] w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[11.5px] font-medium transition-colors max-[439px]:justify-center max-[439px]:px-0',
                 active
-                  ? 'border-[var(--rail-accent)]/35 bg-[var(--rail-accent)]/16 text-[var(--rail-active)]'
-                  : 'text-[var(--rail-ink)] hover:bg-[var(--rail-raised)] hover:text-[var(--rail-active)]'
+                  ? 'text-[var(--rail-active)]'
+                  : 'text-[var(--rail-ink)] hover:text-[var(--rail-active)]'
               )}
             >
-              <Icon
-                className={cn(
-                  'h-3.5 w-3.5 shrink-0',
-                  active ? 'text-[var(--rail-accent)]' : undefined
-                )}
-                aria-hidden="true"
-              />
-              <span className="truncate max-[439px]:hidden">{label}</span>
+              {active && (
+                <motion.span
+                  layoutId="settings-rail-indicator"
+                  className="absolute inset-0 rounded-md border border-[var(--rail-accent)]/35 bg-[var(--rail-accent)]/16"
+                  transition={{ type: 'spring', bounce: 0, duration: 0.3 }}
+                />
+              )}
+              {!active && (
+                <span className="absolute inset-0 rounded-md transition-colors hover:bg-[var(--rail-raised)]" aria-hidden="true" />
+              )}
+              <span className="relative z-10 flex items-center gap-2 max-[439px]:justify-center">
+                <Icon
+                  className={cn(
+                    'h-3.5 w-3.5 shrink-0',
+                    active ? 'text-[var(--rail-accent)]' : undefined
+                  )}
+                  aria-hidden="true"
+                />
+                <span className="truncate max-[439px]:hidden">{label}</span>
+              </span>
             </button>
           );
         })}

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { motion } from 'framer-motion';
 import {
   Search,
   FileText,
@@ -262,7 +263,7 @@ export function Header({
             <button
               key={filter.value ?? 'all'}
               className={cn(
-                'flex items-center gap-1 h-6 px-2.5 rounded-full text-[11px] font-medium transition-all duration-200',
+                'relative flex items-center gap-1 h-6 px-2.5 rounded-full text-[11px] font-medium transition-colors duration-200',
                 contentType === filter.value
                   ? 'bg-primary/15 text-primary shadow-[var(--shadow-ring)]'
                   : 'text-muted-foreground hover:text-foreground hover:bg-[var(--glass-bg)]'
@@ -270,8 +271,17 @@ export function Header({
               aria-pressed={contentType === filter.value}
               onClick={() => onContentTypeChange(filter.value)}
             >
-              {filter.icon}
-              {filter.label}
+              {contentType === filter.value && (
+                <motion.span
+                  layoutId="content-type-pill"
+                  className="absolute inset-0 rounded-full bg-primary/15 shadow-[var(--shadow-ring)]"
+                  transition={{ type: 'spring', bounce: 0, duration: 0.3 }}
+                />
+              )}
+              <span className="relative z-10 flex items-center gap-1">
+                {filter.icon}
+                {filter.label}
+              </span>
             </button>
           ))}
         </div>
