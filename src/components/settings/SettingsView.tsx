@@ -161,14 +161,14 @@ export function SettingsView({ onBack, initialTab = 'general' }: SettingsViewPro
           >
             {config.loadError ? (
               <div className="rounded-lg border border-[var(--danger)]/35 bg-[var(--danger)]/8 px-3 py-2.5">
-                <p className="text-[11.5px] font-medium text-[var(--danger)]">
+                <p className="text-[10.5px] font-medium text-[var(--danger)]">
                   {t('settings.loadFailed')}
                 </p>
                 <p className="mt-0.5 text-[10.5px] text-[var(--text)]">{config.loadError}</p>
                 <Button
                   variant="outline"
                   size="sm"
-                  className="mt-2 h-7 text-[11px]"
+                  className="mt-2 h-7 text-[10.5px]"
                   onClick={() => void fetchConfig()}
                 >
                   {t('settings.retry')}
@@ -272,7 +272,7 @@ export function SettingsView({ onBack, initialTab = 'general' }: SettingsViewPro
               <Button
                 variant="outline"
                 size="sm"
-                className="h-7 text-[11px]"
+                className="h-7 text-[10.5px]"
                 disabled={saving}
                 onClick={handleBack}
               >
@@ -280,7 +280,7 @@ export function SettingsView({ onBack, initialTab = 'general' }: SettingsViewPro
               </Button>
               <Button
                 size="sm"
-                className="h-7 gap-1 text-[11px]"
+                className="h-7 gap-1 text-[10.5px]"
                 disabled={saving || !dirty}
                 onClick={() => void handleSave()}
               >

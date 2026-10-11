@@ -84,7 +84,7 @@ export function AppearancePanel({ config, onThemeFamily, onThemeMode }: Appearan
               >
                 <FamilySwatches family={value} />
                 <span className="min-w-0">
-                  <span className="block truncate text-[11.5px] font-medium text-[var(--ink)]">
+                  <span className="block truncate text-[10.5px] font-medium text-[var(--ink)]">
                     {t(`settings.appearance.families.${value}`)}
                   </span>
                   <span className="block truncate text-[10px] text-[var(--muted)]">

@@ -80,12 +80,12 @@ export function ShortcutRow({
         {slot !== undefined && (
           <span
             aria-hidden="true"
-            className="flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] bg-[var(--surface-muted)] font-mono text-[9px] font-semibold text-[var(--muted)]"
+            className="flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] bg-[var(--surface-muted)] font-mono text-[10px] font-semibold text-[var(--muted)]"
           >
             {slot}
           </span>
         )}
-        <span className="min-w-0 flex-1 truncate text-[11.5px] text-[var(--ink)]">
+        <span className="min-w-0 flex-1 truncate text-[10.5px] text-[var(--ink)]">
           {actionLabel}
         </span>
         <button

@@ -99,7 +99,7 @@ export function SnippetsSection({
           value={searchQuery}
           onChange={(event) => setSearchQuery(event.target.value)}
           placeholder={t('settings.data.searchSnippets')}
-          className="h-7 text-xs"
+          className="h-7 text-[10.5px]"
         />
         <div className="grid gap-2">
           <Label htmlFor="snippet-title" className="sr-only">
@@ -110,7 +110,7 @@ export function SnippetsSection({
             value={snippetTitle}
             onChange={(event) => setSnippetTitle(event.target.value)}
             placeholder={t('settings.data.snippetTitle')}
-            className="h-7 text-xs"
+            className="h-7 text-[10.5px]"
           />
           <Label htmlFor="snippet-content" className="sr-only">
             {t('settings.data.snippetContent')}
@@ -120,12 +120,12 @@ export function SnippetsSection({
             value={snippetContent}
             onChange={(event) => setSnippetContent(event.target.value)}
             placeholder={t('settings.data.snippetContent')}
-            className="h-7 text-xs"
+            className="h-7 text-[10.5px]"
           />
           <div className="flex items-center gap-2">
             <Button
               size="sm"
-              className="h-7 text-[11px]"
+              className="h-7 text-[10.5px]"
               onClick={handleSaveSnippet}
               disabled={snippetTitle.trim() === '' || snippetContent.trim() === ''}
             >
@@ -138,7 +138,7 @@ export function SnippetsSection({
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-7 text-[11px]"
+                className="h-7 text-[10.5px]"
                 onClick={resetSnippetForm}
               >
                 <X className="h-3 w-3" />
@@ -155,7 +155,7 @@ export function SnippetsSection({
             className="flex items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--surface-raised)] px-2 py-1.5"
           >
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[11.5px] font-medium text-[var(--ink)]">{snippet.title}</p>
+              <p className="truncate text-[10.5px] font-medium text-[var(--ink)]">{snippet.title}</p>
               <p className="truncate text-[10px] text-[var(--muted)]">
                 {snippet.content}
               </p>

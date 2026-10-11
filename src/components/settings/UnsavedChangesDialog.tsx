@@ -55,7 +55,7 @@ export function UnsavedChangesDialog({
             <AlertTriangle className="h-3.5 w-3.5" />
           </span>
           <div className="min-w-0">
-            <h2 id="settings-guard-title" className="text-[12.5px] font-semibold">
+            <h2 id="settings-guard-title" className="text-[12px] font-semibold">
               {t('settings.guard.title')}
             </h2>
             <p
@@ -71,15 +71,15 @@ export function UnsavedChangesDialog({
             ref={keepEditingRef}
             variant="ghost"
             size="sm"
-            className="h-7 text-[11px]"
+            className="h-7 text-[10.5px]"
             onClick={onKeepEditing}
           >
             {t('settings.guard.keepEditing')}
           </Button>
-          <Button variant="outline" size="sm" className="h-7 text-[11px]" onClick={onDiscard}>
+          <Button variant="outline" size="sm" className="h-7 text-[10.5px]" onClick={onDiscard}>
             {t('settings.guard.discard')}
           </Button>
-          <Button size="sm" className="h-7 text-[11px]" onClick={onSave}>
+          <Button size="sm" className="h-7 text-[10.5px]" onClick={onSave}>
             {t('settings.guard.save')}
           </Button>
         </div>

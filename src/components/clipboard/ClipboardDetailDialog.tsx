@@ -133,7 +133,7 @@ export function ClipboardDetailDialog({
         <DialogHeader className="shrink-0 border-b border-border/60 px-4 py-3 pr-10">
           <div className="flex min-w-0 items-center justify-between gap-3">
             <div className="min-w-0">
-              <DialogTitle className="truncate text-sm">
+              <DialogTitle className="truncate text-[12px]">
                 {shouldMaskPreview
                   ? t('clipboard.detail.title')
                   : item.custom_title || t('clipboard.detail.title')}
@@ -281,7 +281,7 @@ function AnnotationEditor({
             value={customTitle}
             aria-invalid={titleLength > MAX_CLIPBOARD_TITLE_LENGTH}
             onChange={(event) => onCustomTitleChange(event.target.value)}
-            className="h-8 text-xs"
+            className="h-8 text-[10.5px]"
           />
         </div>
         <div className="grid min-w-0 gap-1 text-[10px] text-muted-foreground">
@@ -294,7 +294,7 @@ function AnnotationEditor({
             value={note}
             aria-invalid={noteLength > MAX_CLIPBOARD_NOTE_LENGTH}
             onChange={(event) => onNoteChange(event.target.value)}
-            className="h-16 min-h-16 w-full resize-none rounded-md border border-input bg-transparent px-3 py-2 text-xs text-foreground outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 sm:h-8 sm:min-h-8 sm:resize-y"
+            className="h-16 min-h-16 w-full resize-none rounded-md border border-input bg-transparent px-3 py-2 text-[10.5px] text-foreground outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 sm:h-8 sm:min-h-8 sm:resize-y"
           />
         </div>
         <div className="flex items-center justify-end gap-1">
@@ -342,7 +342,7 @@ function MaskedDetail() {
   return (
     <div className="flex h-full min-h-44 flex-col items-center justify-center gap-2 px-6 py-10 text-center text-muted-foreground">
       <ShieldAlert className="size-5" aria-hidden="true" />
-      <p className="text-xs font-medium">{t('clipboard.sensitiveHidden')}</p>
+      <p className="text-[10.5px] font-medium">{t('clipboard.sensitiveHidden')}</p>
     </div>
   );
 }
@@ -431,14 +431,14 @@ function TextDetail({ item }: { item: ClipboardItem }) {
         </TabsList>
       </div>
       <TabsContent value="plain" className="min-h-0 overflow-auto p-4">
-        <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-foreground">
+        <pre className="whitespace-pre-wrap break-words font-mono text-[10.5px] leading-relaxed text-foreground">
           {item.content}
         </pre>
       </TabsContent>
       <TabsContent value="rich" className="min-h-0 overflow-auto p-4">
         <div
           data-testid="detail-rich-text"
-          className="break-words text-sm leading-relaxed text-foreground [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_code]:font-mono [&_pre]:overflow-auto [&_pre]:whitespace-pre-wrap [&_pre]:font-mono [&_table]:max-w-full [&_td]:border [&_td]:border-border [&_td]:p-1 [&_th]:border [&_th]:border-border [&_th]:p-1"
+          className="break-words text-[12px] leading-relaxed text-foreground [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_code]:font-mono [&_pre]:overflow-auto [&_pre]:whitespace-pre-wrap [&_pre]:font-mono [&_table]:max-w-full [&_td]:border [&_td]:border-border [&_td]:p-1 [&_th]:border [&_th]:border-border [&_th]:p-1"
           dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
         />
       </TabsContent>
@@ -449,7 +449,7 @@ function TextDetail({ item }: { item: ClipboardItem }) {
 function PlainTextContent({ content }: { content: string }) {
   return (
     <div className="h-full overflow-auto p-4">
-      <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-foreground">
+      <pre className="whitespace-pre-wrap break-words font-mono text-[10.5px] leading-relaxed text-foreground">
         {content}
       </pre>
     </div>
@@ -633,7 +633,7 @@ function ImageDetail({ item }: { item: ClipboardItem }) {
             }}
           />
         ) : (
-          <div className="flex h-full items-center justify-center px-8 text-center text-xs text-muted-foreground">
+          <div className="flex h-full items-center justify-center px-8 text-center text-[10.5px] text-muted-foreground">
             {imageError ? t('clipboard.detail.imageUnavailable') : t('clipboard.detail.loadingImage')}
           </div>
         )}
@@ -645,7 +645,7 @@ function ImageDetail({ item }: { item: ClipboardItem }) {
             <ScanText className="size-3" aria-hidden="true" />
             {t('clipboard.detail.ocrText')}
           </div>
-          <p className="whitespace-pre-wrap break-words text-xs leading-relaxed">
+          <p className="whitespace-pre-wrap break-words text-[10.5px] leading-relaxed">
             {getOcrText(item, t)}
           </p>
         </div>
@@ -734,7 +734,7 @@ function FileDetail({
               <Icon className="mt-0.5 size-3.5 text-muted-foreground" aria-hidden="true" />
               <div className="min-w-0">
                 <div className="flex min-w-0 items-baseline gap-2">
-                  <p className="truncate text-xs font-medium text-foreground">
+                  <p className="truncate text-[10.5px] font-medium text-foreground">
                     {entry.summary?.name || fileNameFromPath(entry.path)}
                   </p>
                   <span className="shrink-0 text-[10px] text-muted-foreground">

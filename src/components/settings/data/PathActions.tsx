@@ -32,7 +32,7 @@ export function PathActions({
     <div className="space-y-1.5">
       <Label
         htmlFor={id}
-        className="text-[11.5px] font-medium leading-tight text-[var(--ink)]"
+        className="text-[10.5px] font-medium leading-tight text-[var(--ink)]"
       >
         {label}
       </Label>
@@ -41,7 +41,7 @@ export function PathActions({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="h-7 font-mono text-[11px]"
+        className="h-7 font-mono text-[10.5px]"
       />
       <div className="flex flex-wrap gap-2">
         {actions.map((action) => (
@@ -49,7 +49,7 @@ export function PathActions({
             key={action.label}
             variant="outline"
             size="sm"
-            className="h-7 text-[11px]"
+            className="h-7 text-[10.5px]"
             onClick={action.onClick}
             disabled={
               (action.disabledWithoutValue !== false && value.trim() === '') ||

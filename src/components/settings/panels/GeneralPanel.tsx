@@ -89,7 +89,7 @@ export function GeneralPanel({
                 max={1000}
                 value={config.max_history_count}
                 onChange={(event) => onMaxHistoryCount(parseInt(event.target.value, 10) || 100)}
-                className="h-7 w-20 text-xs"
+                className="h-7 w-20 text-[10.5px]"
               />
             }
           />
@@ -109,7 +109,7 @@ export function GeneralPanel({
                   onChange={(event) =>
                     onSearchDebounceMs(parseInt(event.target.value, 10) || 150)
                   }
-                  className="h-7 w-20 text-xs"
+                  className="h-7 w-20 text-[10.5px]"
                 />
                 <span className="text-[10px] text-[var(--muted)]">
                   {t('settings.general.milliseconds')}
@@ -148,7 +148,7 @@ export function GeneralPanel({
           <Button
             variant="outline"
             size="sm"
-            className="h-7 shrink-0 gap-1 text-[11px]"
+            className="h-7 shrink-0 gap-1 text-[10.5px]"
             disabled={windowResetState === 'pending'}
             onClick={onResetWindowSize}
           >

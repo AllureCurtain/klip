@@ -55,7 +55,7 @@ export function SourceRulesSection({
           onChange={(event) =>
             setSourceRuleType(event.target.value as SourceRuleInput['matchType'])
           }
-          className="h-7 rounded-md border border-[var(--border)] bg-[var(--surface-raised)] px-2 text-[11px] text-[var(--ink)]"
+          className="h-7 rounded-md border border-[var(--border)] bg-[var(--surface-raised)] px-2 text-[10.5px] text-[var(--ink)]"
         >
           <option value="process">{t('settings.data.sourceRuleProcess')}</option>
           <option value="title">{t('settings.data.sourceRuleTitle')}</option>
@@ -69,7 +69,7 @@ export function SourceRulesSection({
           value={sourceRulePattern}
           onChange={(event) => setSourceRulePattern(event.target.value)}
           placeholder={t('settings.data.sourceRulePattern')}
-          className="h-7 text-xs"
+          className="h-7 text-[10.5px]"
         />
         <Button
           size="sm"
@@ -90,7 +90,7 @@ export function SourceRulesSection({
             <Badge variant="outline" className="text-[10px]">
               {rule.match_type}
             </Badge>
-            <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-[var(--ink)]">
+            <span className="min-w-0 flex-1 truncate font-mono text-[10.5px] text-[var(--ink)]">
               {rule.pattern}
             </span>
             <Switch

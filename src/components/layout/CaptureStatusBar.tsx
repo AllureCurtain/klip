@@ -30,7 +30,7 @@ export function CaptureStatusBar({
   );
 
   return (
-    <div className="flex items-center gap-1.5 border-t border-[var(--glass-border)] px-2.5 py-1 text-[11px] text-muted-foreground">
+    <div className="flex items-center gap-1.5 border-t border-[var(--glass-border)] px-2.5 py-1 text-[10.5px] text-muted-foreground">
       {!monitorEnabled && (
         <div className="inline-flex min-w-0 items-center gap-1.5 rounded-full bg-muted/60 px-2 py-0.5">
           <Pause className="h-3 w-3 shrink-0" />

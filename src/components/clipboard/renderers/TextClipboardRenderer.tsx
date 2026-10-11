@@ -42,7 +42,7 @@ export function TextClipboardRenderer({
 
   if (shouldMaskPreview) {
     return (
-      <span className="block truncate text-xs text-muted-foreground">
+      <span className="block truncate text-[10.5px] text-muted-foreground">
         {t('clipboard.sensitiveHidden')}
       </span>
     );
@@ -55,7 +55,7 @@ export function TextClipboardRenderer({
   if (sanitizedHtml.trim()) {
     return (
       <div
-        className="pointer-events-none max-h-10 overflow-hidden text-xs text-foreground/90 [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:pl-2 [&_code]:font-mono [&_p]:inline [&_pre]:font-mono [&_table]:max-w-full"
+        className="pointer-events-none max-h-10 overflow-hidden text-[10.5px] text-foreground/90 [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:pl-2 [&_code]:font-mono [&_p]:inline [&_pre]:font-mono [&_table]:max-w-full"
         data-testid="rich-text-preview"
         title={fullText}
         dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
@@ -65,7 +65,7 @@ export function TextClipboardRenderer({
 
   return (
     <span
-      className="block truncate font-mono text-xs text-foreground/90 transition-colors duration-150 group-hover:text-foreground group-hover:underline group-hover:decoration-border group-hover:underline-offset-2"
+      className="block truncate font-mono text-[10.5px] text-foreground/90 transition-colors duration-150 group-hover:text-foreground group-hover:underline group-hover:decoration-border group-hover:underline-offset-2"
       title={fullText}
     >
       {displayText}
