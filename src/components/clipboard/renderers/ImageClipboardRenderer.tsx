@@ -28,7 +28,7 @@ export function ImageClipboardRenderer({
 
   if (shouldMaskPreview) {
     return (
-      <span className="block truncate text-xs text-muted-foreground">
+      <span className="block truncate text-[10.5px] text-muted-foreground">
         {t('clipboard.sensitiveHidden')}
       </span>
     );
@@ -46,12 +46,12 @@ export function ImageClipboardRenderer({
         {thumbnailUrl ? (
           <img src={thumbnailUrl} alt="" className="h-8 w-8 rounded border border-border object-cover transition-colors group-hover/img:border-primary/40" />
         ) : (
-          <span className="flex h-8 w-8 items-center justify-center rounded border border-border bg-muted text-[9px] text-muted-foreground">IMG</span>
+          <span className="flex h-8 w-8 items-center justify-center rounded border border-border bg-muted text-[10px] text-muted-foreground">IMG</span>
         )}
       </button>
       <div className="flex min-w-0 flex-col">
         <span
-          className="truncate text-xs text-muted-foreground transition-colors duration-150 group-hover:text-foreground"
+          className="truncate text-[10.5px] text-muted-foreground transition-colors duration-150 group-hover:text-foreground"
           title={previewText}
         >
           {previewText}

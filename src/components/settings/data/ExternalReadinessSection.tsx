@@ -104,7 +104,7 @@ function Field({ id, label, value, onChange, placeholder }: FieldProps) {
     <div className="space-y-1">
       <Label
         htmlFor={id}
-        className="text-[11.5px] font-medium leading-tight text-[var(--ink)]"
+        className="text-[10.5px] font-medium leading-tight text-[var(--ink)]"
       >
         {label}
       </Label>
@@ -113,7 +113,7 @@ function Field({ id, label, value, onChange, placeholder }: FieldProps) {
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="h-7 font-mono text-[11px]"
+        className="h-7 font-mono text-[10.5px]"
       />
     </div>
   );

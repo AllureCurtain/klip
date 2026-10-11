@@ -176,7 +176,7 @@ export function ClipboardItem({
         <div className="min-w-0 flex-1">
           {!shouldMaskPreview && item.custom_title ? (
             <span
-              className="block truncate text-xs font-medium text-foreground"
+              className="block truncate text-[10.5px] font-medium text-foreground"
               data-testid="clipboard-custom-title"
               title={item.custom_title}
             >

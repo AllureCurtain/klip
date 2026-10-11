@@ -257,7 +257,7 @@ export function ClipboardList({ items, selectionMode = false }: ClipboardListPro
           </AnimatePresence>
         </div>
         {loadingMore ? (
-          <div className="h-9 flex items-center justify-center text-[11px] text-muted-foreground">
+          <div className="h-9 flex items-center justify-center text-[10.5px] text-muted-foreground">
             {t('app.loading')}
           </div>
         ) : null}

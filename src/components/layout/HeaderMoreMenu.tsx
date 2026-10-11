@@ -107,7 +107,7 @@ export function HeaderMoreMenu({
           <button
             type="button"
             className={cn(
-              'flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-muted',
+              'flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[10.5px] transition-colors hover:bg-muted',
               selectionMode && 'bg-accent text-accent-foreground'
             )}
             aria-pressed={selectionMode}
@@ -123,7 +123,7 @@ export function HeaderMoreMenu({
           <button
             type="button"
             className={cn(
-              'flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-muted',
+              'flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[10.5px] transition-colors hover:bg-muted',
               showFavorites && 'bg-accent text-accent-foreground'
             )}
             aria-pressed={showFavorites}
@@ -144,7 +144,7 @@ export function HeaderMoreMenu({
             <button
               type="button"
               className={cn(
-                'flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-muted',
+                'flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[10.5px] transition-colors hover:bg-muted',
                 !monitorEnabled && 'bg-accent text-accent-foreground'
               )}
               aria-pressed={!monitorEnabled}
@@ -166,7 +166,7 @@ export function HeaderMoreMenu({
             <button
               type="button"
               className={cn(
-                'flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-muted',
+                'flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[10.5px] transition-colors hover:bg-muted',
                 privacyModeUntil > Date.now() && 'bg-accent text-accent-foreground'
               )}
               onClick={() => runAndClose(() => onPrivacyModeForMinutes(15))}
@@ -181,7 +181,7 @@ export function HeaderMoreMenu({
               <button
                 type="button"
                 className={cn(
-                  'flex w-full items-center rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-muted',
+                  'flex w-full items-center rounded-lg px-2.5 py-1.5 text-left text-[10.5px] transition-colors hover:bg-muted',
                   selectedTagId === null && 'bg-accent text-accent-foreground'
                 )}
                 aria-pressed={selectedTagId === null}
@@ -194,7 +194,7 @@ export function HeaderMoreMenu({
                   key={tag.id}
                   type="button"
                   className={cn(
-                    'flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-muted',
+                    'flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[10.5px] transition-colors hover:bg-muted',
                     selectedTagId === tag.id && 'bg-accent text-accent-foreground'
                   )}
                   aria-pressed={selectedTagId === tag.id}
@@ -215,7 +215,7 @@ export function HeaderMoreMenu({
           <div className="mt-1 border-t border-border/50 pt-1">
             <button
               type="button"
-              className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-muted"
+              className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[10.5px] transition-colors hover:bg-muted"
               onClick={() => runAndClose(onToggleTheme)}
             >
               {resolvedTheme === 'dark' ? (
@@ -227,7 +227,7 @@ export function HeaderMoreMenu({
             </button>
             <button
               type="button"
-              className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-muted"
+              className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[10.5px] transition-colors hover:bg-muted"
               onClick={() => runAndClose(onSettingsOpen)}
             >
               <Settings className="h-3.5 w-3.5" />
@@ -238,7 +238,7 @@ export function HeaderMoreMenu({
           <div className="mt-1 border-t border-border/50 pt-1">
             <button
               type="button"
-              className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs text-destructive transition-colors hover:bg-destructive/10"
+              className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[10.5px] text-destructive transition-colors hover:bg-destructive/10"
               onClick={() => runAndClose(onRequestClearHistory)}
             >
               <Trash2 className="h-3.5 w-3.5" />

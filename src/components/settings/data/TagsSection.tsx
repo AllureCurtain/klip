@@ -42,7 +42,7 @@ export function TagsSection({
           value={tagName}
           onChange={(event) => setTagName(event.target.value)}
           placeholder={t('settings.data.tagName')}
-          className="h-7 text-xs"
+          className="h-7 text-[10.5px]"
           aria-label={t('settings.data.tagName')}
         />
         <Input

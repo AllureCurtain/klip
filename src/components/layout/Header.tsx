@@ -151,7 +151,7 @@ export function Header({
               autoFocus
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
-              className="h-7 pl-8 pr-3 text-xs bg-transparent border-[var(--glass-border)] placeholder:text-muted-foreground"
+              className="h-7 pl-8 pr-3 text-[10.5px] bg-transparent border-[var(--glass-border)] placeholder:text-muted-foreground"
             />
           </div>
           <button
@@ -205,7 +205,7 @@ export function Header({
         {advancedOpen && (
           <div className="mx-2.5 mb-2 rounded-lg border border-[var(--glass-border)] bg-[var(--glass-bg)] backdrop-blur-sm px-2.5 py-2">
             <div className="grid grid-cols-2 gap-2">
-              <label className="flex items-center justify-between gap-2 text-[11px]">
+              <label className="flex items-center justify-between gap-2 text-[10.5px]">
                 <span>{t('header.advanced.sensitiveOnly')}</span>
                 <input
                   type="checkbox"
@@ -220,7 +220,7 @@ export function Header({
                   }
                 />
               </label>
-              <label className="flex items-center justify-between gap-2 text-[11px]">
+              <label className="flex items-center justify-between gap-2 text-[10.5px]">
                 <span>{t('header.advanced.exactMatch')}</span>
                 <input
                   type="checkbox"
@@ -263,7 +263,7 @@ export function Header({
             <button
               key={filter.value ?? 'all'}
               className={cn(
-                'relative flex items-center gap-1 h-6 px-2.5 rounded-full text-[11px] font-medium transition-colors duration-200',
+                'relative flex items-center gap-1 h-6 px-2.5 rounded-full text-[10.5px] font-medium transition-colors duration-200',
                 contentType === filter.value
                   ? 'bg-primary/15 text-primary shadow-[var(--shadow-ring)]'
                   : 'text-muted-foreground hover:text-foreground hover:bg-[var(--glass-bg)]'
@@ -365,14 +365,14 @@ interface DateFieldProps {
 
 function DateField({ id, label, value, endOfDay = false, onChange }: DateFieldProps) {
   return (
-    <label htmlFor={id} className="space-y-1 text-[11px]">
+    <label htmlFor={id} className="space-y-1 text-[10.5px]">
       <span className="block text-muted-foreground">{label}</span>
       <Input
         id={id}
         type="date"
         value={value ? toDateInputValue(value) : ''}
         onChange={(event) => onChange(dateInputToMillis(event.target.value, endOfDay))}
-        className="h-7 px-2 text-[11px]"
+        className="h-7 px-2 text-[10.5px]"
       />
     </label>
   );

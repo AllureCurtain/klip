@@ -58,7 +58,7 @@ export function SettingRow({
       <div className="min-w-0 space-y-0.5">
         <Label
           htmlFor={htmlFor}
-          className="text-[11.5px] font-medium leading-tight text-[var(--ink)]"
+          className="text-[10.5px] font-medium leading-tight text-[var(--ink)]"
         >
           {label}
         </Label>

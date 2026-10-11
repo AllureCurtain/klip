@@ -52,7 +52,7 @@ export function SensitiveCaptureSection({
         <Button
           variant="outline"
           size="sm"
-          className="h-7 gap-1 text-[11px]"
+          className="h-7 gap-1 text-[10.5px]"
           onClick={() =>
             actions.run(
               'scan-sensitive',

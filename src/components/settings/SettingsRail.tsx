@@ -59,7 +59,7 @@ export function SettingsRail({ activeTab, onSelect, footer }: SettingsRailProps)
               onClick={() => onSelect(item.value)}
               onKeyDown={(event) => handleKeyDown(event, index)}
               className={cn(
-                'relative flex min-h-[30px] w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[11.5px] font-medium transition-colors max-[439px]:justify-center max-[439px]:px-0',
+                'relative flex min-h-[30px] w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[10.5px] font-medium transition-colors max-[439px]:justify-center max-[439px]:px-0',
                 active
                   ? 'text-[var(--rail-active)]'
                   : 'text-[var(--rail-ink)] hover:text-[var(--rail-active)]'
@@ -90,7 +90,7 @@ export function SettingsRail({ activeTab, onSelect, footer }: SettingsRailProps)
         })}
       </div>
       {footer && (
-        <div className="mt-auto border-t border-[var(--rail-raised)] pt-2 text-[9.5px] leading-snug text-[var(--rail-ink)] max-[439px]:hidden">
+        <div className="mt-auto border-t border-[var(--rail-raised)] pt-2 text-[10px] leading-snug text-[var(--rail-ink)] max-[439px]:hidden">
           {footer}
         </div>
       )}
