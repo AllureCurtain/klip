@@ -33,6 +33,8 @@ export const clipboardApi = {
     tagId = null,
     limit = 100,
     offset = 0,
+    lastUsedBefore = null,
+    idBefore = null,
   }: ClipboardQueryOptions = {}) =>
     invoke<ClipboardItem[]>('get_clipboard_list_filtered', {
       contentType,
@@ -40,6 +42,8 @@ export const clipboardApi = {
       tagId,
       limit,
       offset,
+      lastUsedBefore,
+      idBefore,
     }),
 
   search: (query: string, contentType?: string, limit = 100) =>
@@ -53,6 +57,8 @@ export const clipboardApi = {
       tagId = null,
       limit = 100,
       offset = 0,
+      lastUsedBefore = null,
+      idBefore = null,
     }: ClipboardQueryOptions = {}
   ) =>
     invoke<ClipboardItem[]>('search_clipboard_filtered', {
@@ -62,6 +68,8 @@ export const clipboardApi = {
       tagId,
       limit,
       offset,
+      lastUsedBefore,
+      idBefore,
     }),
 
   searchAdvanced: ({
@@ -73,6 +81,8 @@ export const clipboardApi = {
     exactMatch = false,
     createdAfter = null,
     createdBefore = null,
+    lastUsedBefore = null,
+    idBefore = null,
     limit = 100,
     offset = 0,
   }: AdvancedSearchQuery) =>
@@ -86,6 +96,8 @@ export const clipboardApi = {
         exactMatch,
         createdAfter,
         createdBefore,
+        lastUsedBefore,
+        idBefore,
         limit,
         offset,
       },

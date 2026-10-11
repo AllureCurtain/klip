@@ -97,6 +97,8 @@ pub fn get_clipboard_list_filtered(
     content_type: Option<String>,
     favorite_only: Option<bool>,
     tag_id: Option<i64>,
+    last_used_before: Option<i64>,
+    id_before: Option<i64>,
 ) -> Result<Vec<ClipboardItem>, AppError> {
     database::productization::get_list_filtered(
         &db,
@@ -105,6 +107,7 @@ pub fn get_clipboard_list_filtered(
         content_type.as_deref(),
         favorite_only.unwrap_or(false),
         tag_id,
+        last_used_before.zip(id_before),
     )
 }
 

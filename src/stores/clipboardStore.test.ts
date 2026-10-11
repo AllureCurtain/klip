@@ -299,14 +299,16 @@ describe('clipboardStore', () => {
 
   describe('upsertItem', () => {
     it('replaces an existing pending OCR item without changing its position', () => {
-      const first = makeItem(1);
+      const first = makeItem(1, { last_used_at: 300 });
       const pending = makeItem(2, {
         content_type: 'image',
+        last_used_at: 200,
         ocr: { status: 'pending', text: '', error: null, updated_at: 1 },
       });
       useClipboardStore.setState({ items: [first, pending] });
       const completed = makeItem(2, {
         content_type: 'image',
+        last_used_at: 200,
         ocr: { status: 'completed', text: '识别文字', error: null, updated_at: 2 },
       });
 
@@ -326,6 +328,41 @@ describe('clipboardStore', () => {
       useClipboardStore.getState().upsertItem(completed);
 
       expect(useClipboardStore.getState().items).toEqual([completed, existing]);
+    });
+
+    it('moves an item whose last_used_at bump changes backend ordering', () => {
+      const items = [
+        makeItem(1, { last_used_at: 300 }),
+        makeItem(2, { last_used_at: 200 }),
+        makeItem(3, { last_used_at: 100 }),
+      ];
+      useClipboardStore.setState({ items });
+
+      useClipboardStore
+        .getState()
+        .upsertItem(makeItem(3, { last_used_at: 400, note: 'bumped' }));
+
+      expect(useClipboardStore.getState().items.map((item) => item.id)).toEqual([
+        3, 1, 2,
+      ]);
+    });
+
+    it('keeps position when an update does not change the sort key', () => {
+      const items = [
+        makeItem(1, { last_used_at: 300 }),
+        makeItem(2, { last_used_at: 200 }),
+        makeItem(3, { last_used_at: 100 }),
+      ];
+      useClipboardStore.setState({ items });
+
+      useClipboardStore
+        .getState()
+        .upsertItem(makeItem(2, { last_used_at: 200, note: 'annotated' }));
+
+      expect(useClipboardStore.getState().items.map((item) => item.id)).toEqual([
+        1, 2, 3,
+      ]);
+      expect(useClipboardStore.getState().items[1].note).toBe('annotated');
     });
   });
 
@@ -397,6 +434,8 @@ describe('clipboardStore', () => {
         exactMatch: true,
         createdAfter: 1_000,
         createdBefore: 2_000,
+        lastUsedBefore: null,
+        idBefore: null,
         limit: 100,
         offset: 0,
       });
@@ -420,6 +459,8 @@ describe('clipboardStore', () => {
         exactMatch: false,
         createdAfter: null,
         createdBefore: null,
+        lastUsedBefore: null,
+        idBefore: null,
         limit: 100,
         offset: 0,
       });
@@ -428,8 +469,10 @@ describe('clipboardStore', () => {
     });
 
     it('keeps advanced search active when loading more results', async () => {
-      const firstPage = Array.from({ length: 100 }, (_value, index) => makeItem(index + 1));
-      const nextPage = [makeItem(101)];
+      const firstPage = Array.from({ length: 100 }, (_value, index) =>
+        makeItem(index + 1, { last_used_at: 10_000 - index })
+      );
+      const nextPage = [makeItem(101, { last_used_at: 1 })];
       vi.mocked(clipboardApi.searchAdvanced)
         .mockResolvedValueOnce(firstPage)
         .mockResolvedValueOnce(nextPage);
@@ -446,11 +489,61 @@ describe('clipboardStore', () => {
         exactMatch: true,
         createdAfter: null,
         createdBefore: null,
+        lastUsedBefore: 10_000 - 99,
+        idBefore: 100,
         limit: 100,
-        offset: 100,
+        offset: 0,
       });
       expect(clipboardApi.searchFiltered).not.toHaveBeenCalled();
       expect(useClipboardStore.getState().items).toHaveLength(101);
+    });
+  });
+
+  describe('loadMore', () => {
+    it('pages strictly after the last loaded item with a keyset cursor', async () => {
+      const firstPage = [
+        makeItem(3, { last_used_at: 300 }),
+        makeItem(2, { last_used_at: 200 }),
+        makeItem(1, { last_used_at: 100 }),
+      ];
+      const nextPage = [makeItem(4, { last_used_at: 50 })];
+      vi.mocked(clipboardApi.getListFiltered)
+        .mockResolvedValueOnce(firstPage)
+        .mockResolvedValueOnce(nextPage);
+
+      await useClipboardStore.getState().fetchItems({ limit: 3 });
+      await useClipboardStore.getState().loadMore();
+
+      expect(clipboardApi.getListFiltered).toHaveBeenNthCalledWith(2, {
+        limit: 3,
+        offset: 0,
+        lastUsedBefore: 100,
+        idBefore: 1,
+      });
+      expect(useClipboardStore.getState().items.map((item) => item.id)).toEqual([
+        3, 2, 1, 4,
+      ]);
+      expect(useClipboardStore.getState().hasMore).toBe(false);
+    });
+
+    it('drops duplicate rows a shifted page may re-return', async () => {
+      const firstPage = [
+        makeItem(3, { last_used_at: 300 }),
+        makeItem(2, { last_used_at: 200 }),
+      ];
+      // The backend bumped item 3's last_used_at between fetches, so a stale
+      // cursor can return item 2 again; it must not be appended twice.
+      const nextPage = [makeItem(2, { last_used_at: 200 }), makeItem(1, { last_used_at: 100 })];
+      vi.mocked(clipboardApi.getListFiltered)
+        .mockResolvedValueOnce(firstPage)
+        .mockResolvedValueOnce(nextPage);
+
+      await useClipboardStore.getState().fetchItems({ limit: 2 });
+      await useClipboardStore.getState().loadMore();
+
+      expect(useClipboardStore.getState().items.map((item) => item.id)).toEqual([
+        3, 2, 1,
+      ]);
     });
   });
 

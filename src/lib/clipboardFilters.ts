@@ -64,6 +64,8 @@ export function toAdvancedSearchQuery(
     exactMatch: filters.exactMatch,
     createdAfter: filters.createdAfter,
     createdBefore: filters.createdBefore,
+    lastUsedBefore: options.lastUsedBefore ?? null,
+    idBefore: options.idBefore ?? null,
     limit: filters.limit,
     offset: filters.offset,
   };
