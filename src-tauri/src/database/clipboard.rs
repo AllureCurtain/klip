@@ -104,10 +104,7 @@ fn db_footprint_bytes(db: &Database) -> u64 {
     for suffix in ["-wal", "-shm"] {
         total += file_len(db_path.with_file_name(format!(
             "{}{}",
-            db_path
-                .file_name()
-                .unwrap_or_default()
-                .to_string_lossy(),
+            db_path.file_name().unwrap_or_default().to_string_lossy(),
             suffix
         )));
     }
@@ -121,7 +118,9 @@ fn db_footprint_bytes(db: &Database) -> u64 {
 }
 
 fn file_len(path: impl AsRef<std::path::Path>) -> u64 {
-    std::fs::metadata(path).map(|metadata| metadata.len()).unwrap_or(0)
+    std::fs::metadata(path)
+        .map(|metadata| metadata.len())
+        .unwrap_or(0)
 }
 
 fn dir_size_bytes(dir: &std::path::Path) -> u64 {

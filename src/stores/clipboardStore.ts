@@ -434,18 +434,6 @@ export const useClipboardStore = create<ClipboardStore>((set) => ({
   },
 }));
 
-/**
- * Mirrors the backend `ORDER BY last_used_at DESC, created_at DESC`; `id`
- * breaks ties so the ordering is deterministic when timestamps match.
- */
-function compareClipboardItemsDesc(a: ClipboardItem, b: ClipboardItem): number {
-  return (
-    b.last_used_at - a.last_used_at ||
-    b.created_at - a.created_at ||
-    b.id - a.id
-  );
-}
-
 function appendUniqueItems(
   existingItems: ClipboardItem[],
   newItems: ClipboardItem[]
