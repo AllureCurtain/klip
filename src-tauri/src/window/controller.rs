@@ -100,10 +100,9 @@ pub fn begin_focus_loss_suppression() {
 }
 
 pub fn end_focus_loss_suppression() {
-    let _ =
-        FOCUS_LOSS_SUPPRESSION_COUNT.fetch_update(Ordering::AcqRel, Ordering::Acquire, |count| {
-            count.checked_sub(1)
-        });
+    let _ = FOCUS_LOSS_SUPPRESSION_COUNT.try_update(Ordering::AcqRel, Ordering::Acquire, |count| {
+        count.checked_sub(1)
+    });
 }
 
 pub fn is_focus_loss_suppressed() -> bool {
