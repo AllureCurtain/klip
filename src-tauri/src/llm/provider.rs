@@ -8,6 +8,9 @@ use futures_util::stream::{self, BoxStream, StreamExt};
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 
+// `#[async_trait]` adds `#[must_use]` to each generated `fn -> BoxFuture`,
+// which conflicts with BoxFuture's own must_use marker.
+#[allow(clippy::double_must_use)]
 #[async_trait]
 pub trait LlmProvider: Send + Sync {
     async fn complete(&self, prompt: &str) -> Result<String, AppError>;
@@ -106,6 +109,7 @@ impl FakeProvider {
     }
 }
 
+#[allow(clippy::double_must_use)]
 #[async_trait]
 impl LlmProvider for FakeProvider {
     async fn complete(&self, prompt: &str) -> Result<String, AppError> {
@@ -201,6 +205,7 @@ struct ChatResponseMessage {
     content: String,
 }
 
+#[allow(clippy::double_must_use)]
 #[async_trait]
 impl LlmProvider for OpenAiProvider {
     async fn complete(&self, prompt: &str) -> Result<String, AppError> {
