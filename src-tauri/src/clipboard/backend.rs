@@ -462,6 +462,12 @@ pub fn write_text_formats(
 /// file writers but are not used: the PNG header is authoritative, and
 /// trusting stored metadata over it caused mismatched dimensions when the
 /// two disagreed.
+///
+/// The private marker is included in the same `set()` call. On Windows it is
+/// dropped by `clipboard-rs` (its image path cannot carry companion formats),
+/// so Windows relies on hash suppression plus the raw-Win32 representations
+/// writer; on macOS and Linux the marker is written and `is_klip_owned` sees
+/// the image as Klip's own.
 pub fn write_image(png: &[u8]) -> Result<(), ClipboardError> {
     // Decode once, outside the retry loop -- a malformed PNG will not become
     // valid on the second attempt.
@@ -470,8 +476,11 @@ pub fn write_image(png: &[u8]) -> Result<(), ClipboardError> {
     with_retry(|ctx| {
         // `RustImageData` is not `Clone`, so decode per attempt.
         let image = RustImageData::from_bytes(png).map_err(|e| e.to_string())?;
-        ctx.set(vec![ClipboardContent::Image(image)])
-            .map_err(|e| e.to_string())
+        ctx.set(vec![
+            ClipboardContent::Image(image),
+            ClipboardContent::Other(KLIP_PRIVATE_MARKER.into(), vec![1]),
+        ])
+        .map_err(|e| e.to_string())
     })
     .map_err(write_err)
 }

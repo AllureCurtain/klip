@@ -207,7 +207,9 @@ pub fn create_source_rule(
     db: State<'_, database::Database>,
     input: SourceRuleInput,
 ) -> Result<SourceRule, AppError> {
-    database::productization::create_source_rule(&db, input)
+    let rule = database::productization::create_source_rule(&db, input)?;
+    crate::clipboard::monitor::invalidate_capture_gate_cache();
+    Ok(rule)
 }
 
 #[tauri::command]
@@ -216,7 +218,9 @@ pub fn update_source_rule(
     id: i64,
     input: SourceRuleInput,
 ) -> Result<SourceRule, AppError> {
-    database::productization::update_source_rule(&db, id, input)
+    let rule = database::productization::update_source_rule(&db, id, input)?;
+    crate::clipboard::monitor::invalidate_capture_gate_cache();
+    Ok(rule)
 }
 
 #[tauri::command]
@@ -225,12 +229,16 @@ pub fn set_source_rule_enabled(
     id: i64,
     enabled: bool,
 ) -> Result<SourceRule, AppError> {
-    database::productization::set_source_rule_enabled(&db, id, enabled)
+    let rule = database::productization::set_source_rule_enabled(&db, id, enabled)?;
+    crate::clipboard::monitor::invalidate_capture_gate_cache();
+    Ok(rule)
 }
 
 #[tauri::command]
 pub fn delete_source_rule(db: State<'_, database::Database>, id: i64) -> Result<(), AppError> {
-    database::productization::delete_source_rule(&db, id)
+    database::productization::delete_source_rule(&db, id)?;
+    crate::clipboard::monitor::invalidate_capture_gate_cache();
+    Ok(())
 }
 
 #[tauri::command]
