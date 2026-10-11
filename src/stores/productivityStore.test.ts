@@ -17,6 +17,7 @@ vi.mock('@/lib/tauri', () => ({
   configApi: {
     getAll: vi.fn(),
     set: vi.fn(),
+    setMany: vi.fn(),
   },
 }));
 
@@ -118,14 +119,28 @@ describe('productivityStore', () => {
   });
 
   it('persists monitor pause and timed privacy mode', async () => {
-    vi.mocked(configApi.set).mockResolvedValue(undefined);
+    vi.mocked(configApi.setMany).mockResolvedValue(undefined);
 
     await useProductivityStore.getState().setMonitorEnabled(false);
     await useProductivityStore.getState().setPrivacyModeForMinutes(15, 1_000);
 
-    expect(configApi.set).toHaveBeenCalledWith('clipboard_monitor_enabled', 'false');
-    expect(configApi.set).toHaveBeenCalledWith('privacy_mode_until', '901000');
+    expect(configApi.setMany).toHaveBeenCalledWith([
+      ['clipboard_monitor_enabled', 'false'],
+    ]);
+    expect(configApi.setMany).toHaveBeenCalledWith([
+      ['privacy_mode_until', '901000'],
+    ]);
     expect(useProductivityStore.getState().monitorEnabled).toBe(false);
     expect(useProductivityStore.getState().privacyModeUntil).toBe(901000);
+  });
+
+  it('writes the off value instead of a timestamp when privacy mode is cleared', async () => {
+    vi.mocked(configApi.setMany).mockResolvedValue(undefined);
+    useProductivityStore.setState({ privacyModeUntil: 999_999 });
+
+    await useProductivityStore.getState().setPrivacyModeForMinutes(0, 1_000);
+
+    expect(configApi.setMany).toHaveBeenCalledWith([['privacy_mode_until', '0']]);
+    expect(useProductivityStore.getState().privacyModeUntil).toBe(0);
   });
 });

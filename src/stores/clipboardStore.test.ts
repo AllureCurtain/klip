@@ -298,17 +298,19 @@ describe('clipboardStore', () => {
   });
 
   describe('upsertItem', () => {
-    it('replaces an existing pending OCR item without changing its position', () => {
-      const first = makeItem(1, { last_used_at: 300 });
+    it('replaces an existing pending OCR item and keeps list order', () => {
+      const first = makeItem(1, { last_used_at: 3_000, created_at: 3_000 });
       const pending = makeItem(2, {
         content_type: 'image',
-        last_used_at: 200,
+        last_used_at: 2_000,
+        created_at: 2_000,
         ocr: { status: 'pending', text: '', error: null, updated_at: 1 },
       });
       useClipboardStore.setState({ items: [first, pending] });
       const completed = makeItem(2, {
         content_type: 'image',
-        last_used_at: 200,
+        last_used_at: 2_000,
+        created_at: 2_000,
         ocr: { status: 'completed', text: '识别文字', error: null, updated_at: 2 },
       });
 
@@ -317,17 +319,54 @@ describe('clipboardStore', () => {
       expect(useClipboardStore.getState().items).toEqual([first, completed]);
     });
 
-    it('prepends an OCR item that newly matches the active search', () => {
-      const existing = makeItem(1);
-      const completed = makeItem(2, {
-        content_type: 'image',
-        ocr: { status: 'completed', text: '识别文字', error: null, updated_at: 2 },
+    it('inserts a new item in last_used_at order instead of blindly prepending', () => {
+      const newest = makeItem(1, { last_used_at: 3_000, created_at: 3_000 });
+      const oldest = makeItem(2, { last_used_at: 1_000, created_at: 1_000 });
+      useClipboardStore.setState({ items: [newest, oldest] });
+      const middle = makeItem(3, { last_used_at: 2_000, created_at: 2_000 });
+
+      useClipboardStore.getState().upsertItem(middle);
+
+      expect(useClipboardStore.getState().items.map((item) => item.id)).toEqual([
+        1, 3, 2,
+      ]);
+    });
+
+    it('moves an updated item to its new position when last_used_at changes', () => {
+      const first = makeItem(1, { last_used_at: 3_000, created_at: 3_000 });
+      const second = makeItem(2, { last_used_at: 2_000, created_at: 2_000 });
+      useClipboardStore.setState({ items: [first, second] });
+      const reordered = makeItem(2, { last_used_at: 4_000, created_at: 2_000 });
+
+      useClipboardStore.getState().upsertItem(reordered);
+
+      expect(useClipboardStore.getState().items.map((item) => item.id)).toEqual([
+        2, 1,
+      ]);
+    });
+
+    it('drops an updated item that no longer matches the active filters', () => {
+      useClipboardStore.setState({
+        items: [makeItem(1, { is_favorited: true })],
+        currentOptions: { favoriteOnly: true },
       });
-      useClipboardStore.setState({ items: [existing] });
+      const unfavorited = makeItem(1, { is_favorited: false });
 
-      useClipboardStore.getState().upsertItem(completed);
+      useClipboardStore.getState().upsertItem(unfavorited);
 
-      expect(useClipboardStore.getState().items).toEqual([completed, existing]);
+      expect(useClipboardStore.getState().items).toEqual([]);
+    });
+
+    it('does not insert a new item that fails the active filters', () => {
+      useClipboardStore.setState({
+        items: [makeItem(1, { content_type: 'text' })],
+        currentOptions: { contentType: 'text' },
+      });
+      const image = makeItem(2, { content_type: 'image' });
+
+      useClipboardStore.getState().upsertItem(image);
+
+      expect(useClipboardStore.getState().items.map((item) => item.id)).toEqual([1]);
     });
 
     it('moves an item whose last_used_at bump changes backend ordering', () => {
