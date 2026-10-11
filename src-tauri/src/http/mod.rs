@@ -375,12 +375,8 @@ async fn openapi_json_handler() -> Json<serde_json::Value> {
 }
 
 async fn get_stats(State(state): State<AppState>) -> ApiResult<StatsResponse> {
-    let mut stats = json_result(database::clipboard::get_stats(&state.db))?;
-    let db_path = state.data_dir.join("klip.db");
-    if let Ok(metadata) = std::fs::metadata(db_path) {
-        stats.0.db_size_bytes = metadata.len();
-    }
-    Ok(stats)
+    // `get_stats` reports the on-disk footprint itself; nothing extra needed here.
+    json_result(database::clipboard::get_stats(&state.db))
 }
 
 async fn fallback_404() -> ApiError {

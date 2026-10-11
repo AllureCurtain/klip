@@ -11,6 +11,7 @@ import type {
 import { getErrorMessage } from '@/types';
 import { clipboardApi } from '@/lib/tauri';
 import {
+  clipboardItemMatchesNonSearchFilters,
   hasAdvancedFilters,
   normalizeClipboardFilters,
   toAdvancedSearchQuery,
@@ -391,15 +392,21 @@ export const useClipboardStore = create<ClipboardStore>((set) => ({
 
   upsertItem: (updatedItem: ClipboardItem) => {
     set((state) => {
-      const existingIndex = state.items.findIndex((item) => item.id === updatedItem.id);
-      if (existingIndex === -1) {
-        return { items: [updatedItem, ...state.items] };
+      // Live updates must honor the active view: an item that no longer matches
+      // the non-search filters drops out, a newly matching item enters, and the
+      // list stays sorted like the backend query (last_used_at, then created_at)
+      // so the quick-paste first-9 snapshot keeps lining up with visible order.
+      if (!clipboardItemMatchesNonSearchFilters(updatedItem, state.currentOptions)) {
+        return {
+          items: state.items.filter((item) => item.id !== updatedItem.id),
+        };
       }
       // The backend orders by `last_used_at DESC, id DESC`; when an update
       // changes the item's position (e.g. a `last_used_at` bump) the row has
       // to move or the next keyset page cursor would skip neighbours. Only
       // reposition when the stored order is actually violated so unrelated
       // field updates never reorder the list.
+      const existingIndex = state.items.findIndex((item) => item.id === updatedItem.id);
       const violatesPrevious =
         existingIndex > 0 &&
         compareClipboardOrder(updatedItem, state.items[existingIndex - 1]) < 0;
@@ -407,8 +414,10 @@ export const useClipboardStore = create<ClipboardStore>((set) => ({
         existingIndex < state.items.length - 1 &&
         compareClipboardOrder(updatedItem, state.items[existingIndex + 1]) > 0;
       const items = [...state.items];
-      if (violatesPrevious || violatesNext) {
-        items.splice(existingIndex, 1);
+      if (existingIndex === -1 || violatesPrevious || violatesNext) {
+        if (existingIndex !== -1) {
+          items.splice(existingIndex, 1);
+        }
         const insertAt = items.findIndex(
           (item) => compareClipboardOrder(updatedItem, item) < 0
         );
@@ -424,6 +433,18 @@ export const useClipboardStore = create<ClipboardStore>((set) => ({
     set({ items, hasMore: false });
   },
 }));
+
+/**
+ * Mirrors the backend `ORDER BY last_used_at DESC, created_at DESC`; `id`
+ * breaks ties so the ordering is deterministic when timestamps match.
+ */
+function compareClipboardItemsDesc(a: ClipboardItem, b: ClipboardItem): number {
+  return (
+    b.last_used_at - a.last_used_at ||
+    b.created_at - a.created_at ||
+    b.id - a.id
+  );
+}
 
 function appendUniqueItems(
   existingItems: ClipboardItem[],

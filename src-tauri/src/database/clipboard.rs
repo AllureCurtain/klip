@@ -91,8 +91,54 @@ pub fn get_stats(db: &Database) -> Result<StatsResponse, AppError> {
         snippet_count,
         source_rule_count,
         total_size_bytes,
-        db_size_bytes: 0,
+        db_size_bytes: db_footprint_bytes(db),
     })
+}
+
+/// On-disk footprint of the database: the main `klip.db` file plus its WAL/SHM
+/// sidecars and the sibling full-text `search-index` directory. In-memory
+/// databases report `0`.
+fn db_footprint_bytes(db: &Database) -> u64 {
+    let Some(db_path) = db.path() else { return 0 };
+    let mut total = file_len(db_path);
+    for suffix in ["-wal", "-shm"] {
+        total += file_len(db_path.with_file_name(format!(
+            "{}{}",
+            db_path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy(),
+            suffix
+        )));
+    }
+    if let Some(index_dir) = db_path
+        .parent()
+        .map(|dir| dir.join(crate::search::INDEX_DIRECTORY_NAME))
+    {
+        total += dir_size_bytes(&index_dir);
+    }
+    total
+}
+
+fn file_len(path: impl AsRef<std::path::Path>) -> u64 {
+    std::fs::metadata(path).map(|metadata| metadata.len()).unwrap_or(0)
+}
+
+fn dir_size_bytes(dir: &std::path::Path) -> u64 {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return 0;
+    };
+    entries
+        .filter_map(Result::ok)
+        .map(|entry| {
+            let path = entry.path();
+            if path.is_dir() {
+                dir_size_bytes(&path)
+            } else {
+                file_len(&path)
+            }
+        })
+        .sum()
 }
 
 #[cfg(test)]
@@ -136,6 +182,40 @@ mod tests {
         ).unwrap();
 
         crate::database::clipboard_query::fetch_item_by_hash_locked(&conn, &hash).unwrap()
+    }
+
+    #[test]
+    fn get_stats_reports_zero_footprint_for_in_memory_db() {
+        let db = test_db();
+
+        let stats = get_stats(&db).unwrap();
+
+        assert_eq!(stats.db_size_bytes, 0);
+    }
+
+    #[test]
+    fn get_stats_reports_on_disk_footprint_for_file_db() {
+        let dir = std::env::temp_dir().join(format!(
+            "klip-stats-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db_path = dir.join("klip.db");
+        let db = Database::new(&db_path).unwrap();
+        insert_text(&db, "hello stats");
+
+        let stats = get_stats(&db).unwrap();
+
+        // At minimum the main database file exists on disk, so the footprint
+        // must be non-zero; it should also be at least the file's own length.
+        let file_len = std::fs::metadata(&db_path).unwrap().len();
+        assert!(stats.db_size_bytes >= file_len && stats.db_size_bytes > 0);
+
+        drop(db);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

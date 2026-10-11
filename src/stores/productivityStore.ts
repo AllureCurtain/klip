@@ -1,8 +1,15 @@
 import { create } from 'zustand';
 import { configApi, productApi } from '@/lib/tauri';
-import type { Snippet, SnippetInput, SourceRule, SourceRuleInput } from '@/types';
+import type {
+  AppConfig,
+  Snippet,
+  SnippetInput,
+  SourceRule,
+  SourceRuleInput,
+} from '@/types';
 import { getErrorMessage } from '@/types';
-import { CONFIG_KEYS } from './configSchema';
+import { CONFIG_KEYS, serializeConfig } from './configSchema';
+import { useConfigStore } from './configStore';
 
 interface ProductivityStore {
   snippets: Snippet[];
@@ -125,7 +132,7 @@ export const useProductivityStore = create<ProductivityStore>((set) => ({
 
   setMonitorEnabled: async (enabled) => {
     try {
-      await configApi.set(CONFIG_KEYS.clipboardMonitorEnabled, enabled.toString());
+      await persistMonitoringConfig({ clipboard_monitor_enabled: enabled });
       set({ monitorEnabled: enabled });
     } catch (error) {
       set({ error: getErrorMessage(error) });
@@ -133,15 +140,39 @@ export const useProductivityStore = create<ProductivityStore>((set) => ({
   },
 
   setPrivacyModeForMinutes: async (minutes, now = Date.now()) => {
-    const until = now + minutes * 60 * 1000;
+    // A non-positive duration means "off": the config contract stores 0 rather
+    // than a timestamp, so clearing must not leave a stale expiry behind.
+    const until = minutes > 0 ? now + minutes * 60 * 1000 : 0;
     try {
-      await configApi.set(CONFIG_KEYS.privacyModeUntil, until.toString());
+      await persistMonitoringConfig({ privacy_mode_until: until });
       set({ privacyModeUntil: until });
     } catch (error) {
       set({ error: getErrorMessage(error) });
     }
   },
 }));
+
+/**
+ * Write monitoring/privacy keys through configStore's normalization instead of
+ * calling `configApi.set` directly, and mirror the result into configStore's
+ * `config` + `committedConfig` so the settings draft does not go stale (these
+ * keys are persisted immediately, so `hasChanges` stays untouched).
+ */
+async function persistMonitoringConfig(
+  patch: Partial<Pick<AppConfig, 'clipboard_monitor_enabled' | 'privacy_mode_until'>>
+): Promise<void> {
+  const { config, committedConfig } = useConfigStore.getState();
+  const nextConfig = { ...config, ...patch };
+  const serialized = new Map(serializeConfig(nextConfig));
+  const entries = (Object.keys(patch) as Array<keyof typeof patch>).map(
+    (key) => [key, serialized.get(key) ?? ''] as [string, string]
+  );
+  await configApi.setMany(entries);
+  useConfigStore.setState({
+    config: nextConfig,
+    committedConfig: { ...committedConfig, ...patch },
+  });
+}
 
 function parseNumber(value: string | null | undefined, fallback: number): number {
   if (value == null) return fallback;

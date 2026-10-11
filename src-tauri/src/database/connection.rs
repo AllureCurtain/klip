@@ -9,6 +9,9 @@ use tauri::Manager;
 pub struct Database {
     conn: Mutex<Connection>,
     search_index: Option<Arc<crate::search::SearchIndex>>,
+    /// On-disk location of the `klip.db` file; `None` for in-memory/test
+    /// databases that have no filesystem footprint.
+    path: Option<PathBuf>,
 }
 
 impl Database {
@@ -53,6 +56,7 @@ impl Database {
         let mut db = Self {
             conn: Mutex::new(conn),
             search_index: None,
+            path: Some(path.to_path_buf()),
         };
         db.init_schema()?;
 
@@ -76,7 +80,14 @@ impl Database {
         Self {
             conn: Mutex::new(conn),
             search_index: None,
+            path: None,
         }
+    }
+
+    /// Filesystem path of the database file, when this connection is backed by
+    /// one. In-memory databases (tests) report `None`.
+    pub fn path(&self) -> Option<&Path> {
+        self.path.as_deref()
     }
 
     pub fn init_schema(&self) -> Result<(), AppError> {
