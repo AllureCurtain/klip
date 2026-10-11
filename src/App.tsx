@@ -290,11 +290,20 @@ function App() {
       />
       <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {loading && (
-          <div
-            role="status"
-            className="flex shrink-0 flex-col items-start border-b border-border/50 px-3 py-2 text-muted-foreground"
-          >
-            <p className="text-xs font-medium">{t('app.loading')}</p>
+          <div role="status" aria-label={t('app.loading')} className="flex shrink-0 flex-col gap-1.5 border-b border-border/50 px-2.5 py-2">
+            {[0, 1, 2].map((index) => (
+              <div
+                key={index}
+                className="flex h-14 items-center gap-2 rounded-xl bg-[var(--surface-muted)] animate-pulse"
+                style={{ animationDelay: `${index * 150}ms`, animationDuration: '1.2s' }}
+              >
+                <div className="ml-2.5 size-7 rounded-lg bg-[var(--border)]" />
+                <div className="flex-1 space-y-1.5">
+                  <div className="h-3 w-3/4 rounded bg-[var(--border)]" />
+                  <div className="h-2 w-1/3 rounded bg-[var(--border)]" />
+                </div>
+              </div>
+            ))}
           </div>
         )}
         {!loading && error && (

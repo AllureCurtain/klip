@@ -188,14 +188,16 @@ describe('App status states', () => {
     settingsViewState.suspend = false;
   });
 
-  it('renders loading as a compact operational note', () => {
+  it('renders loading as skeleton rows matching item shape', () => {
     storeState.loading = true;
 
     render(<App />);
 
     const note = screen.getByRole('status');
-    expect(note.textContent).toContain('加载中...');
-    expect(note.className).toContain('items-start');
+    expect(note.getAttribute('aria-label')).toBeTruthy();
+    const skeletonRows = note.querySelectorAll('.animate-pulse');
+    expect(skeletonRows.length).toBe(3);
+    expect(note.className).toContain('flex-col');
     expect(note.className).not.toContain('justify-center');
     expect(note.className).not.toContain('h-full');
   });
