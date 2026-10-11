@@ -2,7 +2,7 @@
 
 本文件是产品化阶段（主题与窗口、独立快捷键、图片保真存储、设置页收口）发布候选的
 升级与回滚材料，对应 [NEXT_PHASE_IMPLEMENTATION.md](NEXT_PHASE_IMPLEMENTATION.md)
-第 18、19 节要求。表结构细节见 [DATABASE.md](DATABASE.md)，IPC 契约见 [API.md](API.md)。
+第 18、19 节要求。表结构细节见 [DATABASE.md](DATABASE.md)，IPC 契约见 [API-zh.md](API-zh.md)。
 
 本文件描述的是 schema `db_version = 8`，不是某个应用版本号。发布前请同时按
 [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) 执行版本、构建与实机验收。
@@ -56,7 +56,7 @@
 ### 2.4 手动备份与恢复
 
 设置中的数据管理面板提供备份与恢复；恢复前同样会自动备份当前数据库。命令层为
-`backup_database` / `restore_database`（见 [API.md](API.md)）。
+`backup_database` / `restore_database`（见 [API-zh.md](API-zh.md)）。
 
 ## 3. v7 到 v8 迁移日志
 

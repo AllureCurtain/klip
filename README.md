@@ -237,7 +237,7 @@ $env:KLIP_HTTP_PORT = '27718'
 pnpm tauri:dev
 ```
 
-安装依赖时会配置仓库的 pre-push hook；推送前自动执行 `pnpm verify`。更完整的环境、调试和 E2E 说明见 [开发指南](docs/DEVELOPMENT.md)。
+安装依赖时会配置仓库的 pre-push hook；推送前自动执行 `pnpm verify`。更完整的环境、调试和 E2E 说明见 [开发指南](docs/DEVELOPMENT-zh.md)。
 
 Windows 上可选用 `sccache` 加速重建依赖。它不是项目依赖，不需要修改仓库内 Cargo 配置：
 
@@ -351,10 +351,10 @@ klip/
 | [文档索引](docs/INDEX.md) | 不确定从哪里开始时 |
 | [交付状态](docs/DELIVERY_STATUS.md) | 查看已合并工作、验证证据与保留边界 |
 | [产品需求](docs/PRD.md) | 核对 MVP 范围和验收口径 |
-| [架构设计](docs/ARCHITECTURE.md) | 理解前端、Rust、数据库和 Tauri 模块 |
+| [架构设计](docs/ARCHITECTURE-zh.md) | 理解前端、Rust、数据库和 Tauri 模块 |
 | [数据库设计](docs/DATABASE.md) | 查看表结构、迁移和恢复策略 |
-| [API 文档](docs/API.md) | 查看 Tauri IPC 命令、事件与类型 |
-| [开发指南](docs/DEVELOPMENT.md) | 搭建环境、调试和运行检查 |
+| [API 文档](docs/API-zh.md) | 查看 Tauri IPC 命令、事件与类型 |
+| [开发指南](docs/DEVELOPMENT-zh.md) | 搭建环境、调试和运行检查 |
 | [发布检查清单](docs/RELEASE_CHECKLIST.md) | 准备新的 Windows Release 时 |
 | [路线图](docs/ROADMAP.md) | 判断下一项需求是否应进入当前阶段 |
 | [版本记录](CHANGELOG.md) | 查看各版本变化 |

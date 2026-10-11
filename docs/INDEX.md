@@ -1,62 +1,92 @@
-# Klip 文档索引
+# Klip documentation index
 
-本文档是仓库内当前有效文档的入口。Klip 是 Windows-first 的本地剪贴板管理器；
-产品边界、实现状态和发布准备分别由对应文档维护，避免在阶段计划和交接记录之间重复同步。
+Entry point for all project docs. Klip is a Windows-first local clipboard
+manager (Tauri 2 + React + Rust, SQLite + Tantivy).
 
-## 当前状态
+**Language note**: the standard file set below is in English (project
+convention since 2026-10-11). Legacy Chinese docs remain authoritative for the
+details they cover until migrated; they are listed under "Chinese docs" and
+kept reachable.
 
-| 项目 | 状态 |
-|------|------|
-| 当前公开版本 | `v0.1.2` |
-| 当前发布候选 | `v0.2.0` |
-| 已验证功能基线 | `v0.2.0` 发布候选 |
-| 当前交付平台 | Windows 10+ |
-| 当前产品形态 | 本地单机剪贴板管理器 |
-| 数据存储 | 本机 SQLite 数据库 |
-| 未处理 PR / 实现任务 | 无 |
-| 当前发布系列 | `0.2.x` |
+## Current status
 
-Foundation、核心剪贴板工作流和 Desktop E2E 稳定性改进均已合并。完成范围、验证证据
-和明确保留的边界统一记录在 [DELIVERY_STATUS.md](DELIVERY_STATUS.md)。
+| Item | Value |
+| --- | --- |
+| Public release | `v0.1.2` |
+| Release candidate | `v0.2.0` |
+| Release series | `0.2.x` (Windows packages `0.3.1` in progress) |
+| Delivery platform | Windows 10+ (Linux X11 validated; macOS compile-verified only) |
+| Form | local single-machine clipboard manager |
+| Storage | local SQLite database |
+| Progress | `TODO.md` (mirrors GitHub issues) |
 
-## 推荐阅读顺序
+## Standard file set (English, canonical)
 
-| 顺序 | 文档 | 用途 |
-|------|------|------|
-| 1 | [README.md](../README.md) | 了解产品、安装方式、核心工作流和当前限制 |
-| 2 | [DELIVERY_STATUS.md](DELIVERY_STATUS.md) | 查看当前交付结论、已合并 PR 和验证证据 |
-| 3 | [PRD.md](PRD.md) | 确认 MVP 功能范围和验收口径 |
-| 4 | [ARCHITECTURE.md](ARCHITECTURE.md) | 理解前端、后端、Tauri 和数据库模块 |
-| 5 | [DATABASE.md](DATABASE.md) | 查看表结构、schema 迁移和数据恢复策略 |
-| 6 | [API.md](API.md) | 查看 Tauri IPC 命令、事件和类型 |
-| 7 | [DEVELOPMENT.md](DEVELOPMENT.md) | 搭建开发环境并运行验证脚本 |
-| 8 | [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) | 在确定版本后启动新的 Windows 发布验收 |
-| 9 | [ROADMAP.md](ROADMAP.md) | 查看当前边界和后续方向 |
+Read these first:
 
-## 专题文档
+| Doc | Purpose |
+| --- | --- |
+| [../AGENTS.md](../AGENTS.md) | Project rules for AI agents: stack, commands, hard rules |
+| [../README.md](../README.md) | What Klip is and how to run it (user-facing, Chinese) |
+| [../TODO.md](../TODO.md) | Current progress: in progress / next / blocked / done |
+| [../DESIGN.md](../DESIGN.md) | Visual rules: token usage, states, accessibility |
+| [product.md](product.md) | Product behavior: roles, flows, privacy, feature boundaries |
+| [architecture.md](architecture.md) | Module boundaries and data flow (overview) |
+| [api.md](api.md) | API conventions for Tauri IPC + local HTTP API |
+| [decisions.md](decisions.md) | Technical decisions and rejected alternatives (incl. single-source map) |
+| [development.md](development.md) | Setup, full command list, test strategy, release |
+| [user-guide.md](user-guide.md) | Feature usage for end users |
+| [../src/AGENTS.md](../src/AGENTS.md) | Frontend-only conventions |
+| [../src-tauri/AGENTS.md](../src-tauri/AGENTS.md) | Backend-only conventions |
 
-| 文档 | 用途 |
-|------|------|
-| [HTTP_ROUTE_AUDIT.md](HTTP_ROUTE_AUDIT.md) | 本地 HTTP API 的路由、OpenAPI、看板和测试覆盖矩阵 |
-| [MULTI_FORMAT_DESIGN.md](MULTI_FORMAT_DESIGN.md) | 文本、HTML、RTF、图片和文件剪贴板格式的设计依据 |
-| [UPGRADE_V8.md](UPGRADE_V8.md) | 数据库 v8 升级说明、备份与回滚路径、新旧配置键、图片容量策略和已知限制 |
-| [RELEASE_VALIDATION_v0.1.2.md](RELEASE_VALIDATION_v0.1.2.md) | 已发布 `v0.1.2` 的历史验收记录，不代表当前代码可直接发布 |
+## Recommended reading order
 
-阶段性实施计划、逐提交进度、handoff 和 worktree 操作记录已从当前文档集移除。
-它们描述的是已经完成的工作，继续保留会与现状冲突；需要审计时请查看 Git 历史和
-PR #4、#5、#6。
+1. [README.md](../README.md) — product, install, core workflows
+2. [product.md](product.md) — feature scope and privacy model
+3. [architecture.md](architecture.md) → [ARCHITECTURE-zh.md](ARCHITECTURE-zh.md) — module detail
+4. [DATABASE.md](DATABASE.md) — schema, migrations, recovery
+5. [api.md](api.md) → [API-zh.md](API-zh.md) — IPC command/event reference
+6. [development.md](development.md) → [DEVELOPMENT-zh.md](DEVELOPMENT-zh.md) — env, debug, E2E
+7. [DELIVERY_STATUS.md](DELIVERY_STATUS.md) — delivery evidence and merged PRs
+8. [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) — release acceptance
+9. [ROADMAP.md](ROADMAP.md) — boundaries and follow-ups
 
-## 当前工作原则
+## Chinese docs (authoritative until migrated)
 
-- 优先处理真实 Windows 使用反馈和核心路径缺陷，不继续扩大 MVP 功能面。
-- 复制、搜索、粘贴、快捷键、托盘、隐私状态、数据恢复和设置保存必须有回归保护。
-- macOS/Linux 真实桌面验收、签名、托管更新、云同步、插件、账号和数据库加密迁移
-  不属于当前已交付能力。
-- 下一次发布必须从新的版本决策和 [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) 开始，
-  不复用已清理的旧构建产物。
+| Doc | Content | Migration target |
+| --- | --- | --- |
+| [PRD.md](PRD.md) | MVP scope and acceptance criteria | `product.md`, `user-guide.md` |
+| [ARCHITECTURE-zh.md](ARCHITECTURE-zh.md) | Full module/flow detail | `architecture.md` |
+| [API-zh.md](API-zh.md) | Per-command IPC fields, events, types | `api.md` conventions + code truth |
+| [DEVELOPMENT-zh.md](DEVELOPMENT-zh.md) | Env, debug, E2E, release detail | `development.md` |
+| [DATABASE.md](DATABASE.md) | Table schema and migration detail | `architecture.md` + `migrations.rs` |
+| [DELIVERY_STATUS.md](DELIVERY_STATUS.md) | Merged scope + validation evidence | changelog/`TODO.md` |
+| [ROADMAP.md](ROADMAP.md) | Boundaries and directions | `product.md` / decisions |
+| [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) | Release acceptance steps | `development.md` release section |
+| [NEXT_PHASE_IMPLEMENTATION.md](NEXT_PHASE_IMPLEMENTATION.md) | Phase plan | `TODO.md` when scheduled |
+| [UPGRADE_V8.md](UPGRADE_V8.md) | DB v8 upgrade, config keys, image budget | `architecture.md` note + decisions |
+| [WINDOWS_ZIP.md](WINDOWS_ZIP.md) | Windows zip packaging notes | `development.md` release |
 
-## 项目信息
+## Topic docs
 
-- 许可证：[MIT](../LICENSE)
-- 贡献指南：[CONTRIBUTING.md](../CONTRIBUTING.md)
-- 最后更新：2026-08-10
+| Doc | Content |
+| --- | --- |
+| [HTTP_ROUTE_AUDIT.md](HTTP_ROUTE_AUDIT.md) | Local HTTP API routes, OpenAPI, dashboard, test matrix |
+| [MULTI_FORMAT_DESIGN.md](MULTI_FORMAT_DESIGN.md) | Rationale for text/HTML/RTF/image/file clipboard formats |
+| [RELEASE_VALIDATION_v0.1.2.md](RELEASE_VALIDATION_v0.1.2.md) | Historical `v0.1.2` acceptance record |
+| [design/](design/) | HTML design prototypes |
+
+## Working principles
+
+- Real Windows usage feedback and core-path defects first; no MVP scope creep.
+- Copy, search, paste, hotkeys, tray, privacy state, data recovery and settings
+  persistence require regression coverage.
+- macOS/Linux desktop acceptance, signing, auto-update, cloud sync, plugins,
+  accounts and DB encryption are not delivered capabilities.
+- Every release starts fresh from a version decision + `RELEASE_CHECKLIST.md`;
+  old build artifacts are not release evidence.
+
+## Project info
+
+- License: [MIT](../LICENSE) · Contributing: [CONTRIBUTING.md](../CONTRIBUTING.md)
+- Last updated: 2026-10-11 (doc standard applied)

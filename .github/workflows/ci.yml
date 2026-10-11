@@ -82,7 +82,7 @@ jobs:
           cache: pnpm
       # Tauri 2 Linux build dependencies: webkit2gtk-4.1 is the webview
       # backend, appindicator3 powers the tray, libxdo backs xdotool paste
-      # simulation. See docs/DEVELOPMENT.md (Linux 系统依赖).
+      # simulation. See docs/DEVELOPMENT-zh.md (Linux 系统依赖).
       - run: |
           sudo apt-get update
           sudo apt-get install -y \

@@ -170,6 +170,6 @@ wrapper 和对应测试。所有保存条目的系统剪贴板写入必须复用
 
 - [交付状态](DELIVERY_STATUS.md)
 - [架构设计](ARCHITECTURE.md)
-- [API 文档](API.md)
+- [API 文档](API-zh.md)
 - [数据库设计](DATABASE.md)
 - [发布检查清单](RELEASE_CHECKLIST.md)

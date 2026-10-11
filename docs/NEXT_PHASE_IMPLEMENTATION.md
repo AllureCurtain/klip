@@ -6,7 +6,7 @@
 | 当前基线 | `v0.2.0` |
 | 目标范围 | Windows-first 桌面产品化升级 |
 | 最后更新 | 2026-08-18 |
-| 相关文档 | [PRD](PRD.md)、[架构](ARCHITECTURE.md)、[API](API.md)、[数据库](DATABASE.md)、[发布检查](RELEASE_CHECKLIST.md) |
+| 相关文档 | [PRD](PRD.md)、[架构](ARCHITECTURE.md)、[API](API-zh.md)、[数据库](DATABASE.md)、[发布检查](RELEASE_CHECKLIST.md) |
 | 设计原型 | [桌面设置原型](design/settings-desktop-prototype.html)、[配色探索](design/settings-palette-exploration.html) |
 
 ## 1. 文档目标
