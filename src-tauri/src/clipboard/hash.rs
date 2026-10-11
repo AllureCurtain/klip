@@ -126,10 +126,7 @@ mod tests {
 
     #[test]
     fn text_and_file_content_hash_their_stored_bytes() {
-        assert_eq!(
-            hash_stored_content("text", "hello"),
-            hash_bytes(b"hello")
-        );
+        assert_eq!(hash_stored_content("text", "hello"), hash_bytes(b"hello"));
         assert_eq!(
             hash_stored_content("file", r#"["/a/b.txt"]"#),
             hash_bytes(br#"["/a/b.txt"]"#)

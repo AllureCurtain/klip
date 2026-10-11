@@ -540,30 +540,18 @@ fn capture_gate_decision_cached(
     process_name: Option<&str>,
     window_title: Option<&str>,
 ) -> Result<CaptureGateDecision, AppError> {
-    let cached = gate_inputs_slot()
-        .lock()
-        .ok()
-        .and_then(|guard| {
-            guard.as_ref().and_then(|inputs| {
-                (inputs.fetched_at.elapsed() < GATE_CACHE_TTL).then(|| {
-                    (
-                        inputs.enabled,
-                        inputs.privacy_until,
-                        inputs.rules.clone(),
-                    )
-                })
-            })
-        });
+    let cached = gate_inputs_slot().lock().ok().and_then(|guard| {
+        guard.as_ref().and_then(|inputs| {
+            (inputs.fetched_at.elapsed() < GATE_CACHE_TTL)
+                .then(|| (inputs.enabled, inputs.privacy_until, inputs.rules.clone()))
+        })
+    });
 
     let (enabled, privacy_until, rules) = match cached {
         Some(inputs) => inputs,
         None => {
             let inputs = fetch_gate_inputs(db)?;
-            let snapshot = (
-                inputs.enabled,
-                inputs.privacy_until,
-                inputs.rules.clone(),
-            );
+            let snapshot = (inputs.enabled, inputs.privacy_until, inputs.rules.clone());
             if let Ok(mut guard) = gate_inputs_slot().lock() {
                 *guard = Some(inputs);
             }

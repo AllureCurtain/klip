@@ -2202,6 +2202,7 @@ mod tests {
 
     struct FailAfterFirstProvider;
 
+    #[allow(clippy::double_must_use)]
     #[async_trait::async_trait]
     impl LlmProvider for FailAfterFirstProvider {
         async fn complete(&self, _prompt: &str) -> Result<String, AppError> {
@@ -2223,6 +2224,7 @@ mod tests {
 
     struct PendingProvider;
 
+    #[allow(clippy::double_must_use)]
     #[async_trait::async_trait]
     impl LlmProvider for PendingProvider {
         async fn complete(&self, _prompt: &str) -> Result<String, AppError> {
