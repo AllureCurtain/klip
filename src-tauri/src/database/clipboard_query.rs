@@ -336,9 +336,15 @@ fn resolve_full_text_search(db: &Database, spec: &ClipboardQuerySpec) -> Clipboa
     };
 
     match crate::search::search_ids(db, query) {
-        Ok(item_ids) => {
+        Ok(item_ids) if !item_ids.is_empty() => {
             resolved.text_query = None;
             resolved.text_match_ids = Some(item_ids);
+        }
+        Ok(_) => {
+            // The Tantivy query is token-exact AND-matched: substring fragments,
+            // jieba boundary mismatches and multi-token phrases legitimately
+            // produce zero hits. An empty token result therefore cannot prove
+            // absence — keep text_query so the SQLite LIKE fallback still runs.
         }
         Err(error) => tracing::warn!(
             "Full-text search failed for query {:?}: {}; falling back to SQLite LIKE",
@@ -659,5 +665,41 @@ mod tests {
         let results = fetch_items(&db, &spec).unwrap();
 
         assert!(results.is_empty());
+    }
+
+    #[test]
+    fn empty_token_match_keeps_like_text_query() {
+        // When the full-text index yields zero ids the LIKE fallback must run;
+        // `resolve_full_text_search` must not swap text_query for an empty
+        // id filter, which would always return zero rows.
+        let db = test_db();
+        let conn = db.get_connection().unwrap();
+        insert_item(
+            &conn,
+            "text",
+            Some("clipboard-manager-alpha"),
+            "clipboard-manager-alpha",
+            "fragment-hash",
+            1_000,
+            1_000,
+        );
+        drop(conn);
+
+        let mut spec = ClipboardQuerySpec::new(10, 0);
+        spec.text_query = Some("board-man".to_string());
+        let resolved = resolve_full_text_search(&db, &spec);
+
+        // Without a Tantivy index the call fails; either way the resolved spec
+        // must never carry an empty text_match_ids list alongside a cleared
+        // text_query.
+        if let Some(ids) = resolved.text_match_ids.as_ref() {
+            assert!(!ids.is_empty(), "empty match ids must keep text_query");
+        } else {
+            assert_eq!(resolved.text_query.as_deref(), Some("board-man"));
+        }
+
+        let results = fetch_items(&db, &spec).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].hash, "fragment-hash");
     }
 }

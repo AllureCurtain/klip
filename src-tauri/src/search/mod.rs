@@ -397,7 +397,15 @@ impl SearchIndex {
 
     fn search_ids(&self, query: &str) -> Result<Vec<i64>, SearchError> {
         self.core.ensure_healthy()?;
-        self.core.commit_pending()?;
+        // Reload the reader instead of forcing a synchronous writer commit:
+        // the commit worker owns durability (batch size / COMMIT_INTERVAL), and
+        // committing here serialized every search against monitor writes on the
+        // writer mutex, stalling both paths. A reload is cheap and picks up any
+        // commits that landed since the last refresh.
+        if let Err(error) = self.core.reader.reload() {
+            self.core.mark_unhealthy();
+            return Err(error.into());
+        }
 
         let terms = self.core.tokenize_query(query)?;
         let clauses = terms
@@ -882,6 +890,43 @@ mod tests {
 
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].id, expected.id);
+        drop(db);
+        std::fs::remove_dir_all(root).expect("remove search test directory");
+    }
+
+    #[test]
+    fn chinese_substring_across_jieba_boundaries_falls_back_to_like() {
+        let (root, db) = temp_database("cjk-substring");
+        let expected = insert_text(&db, "剪贴板历史记录同步到云端");
+
+        // "贴板历" straddles jieba token boundaries ("剪贴板" + "历史记录"), so a
+        // token-level AND query yields zero hits; the LIKE fallback must still
+        // return the row instead of an empty result set.
+        let results = crate::database::clipboard::search(&db, "贴板历", None, 20)
+            .expect("substring search falls back to LIKE");
+
+        assert_eq!(
+            results.iter().map(|item| item.id).collect::<Vec<_>>(),
+            vec![expected.id]
+        );
+        drop(db);
+        std::fs::remove_dir_all(root).expect("remove search test directory");
+    }
+
+    #[test]
+    fn token_fragment_falls_back_to_like_instead_of_empty_result() {
+        let (root, db) = temp_database("token-fragment");
+        let expected = insert_text(&db, "clipboard-manager-alpha");
+
+        // "board-man" is a substring of the stored text but not an indexed
+        // token, so Tantivy returns zero hits; LIKE must cover the miss.
+        let results = crate::database::clipboard::search(&db, "board-man", None, 20)
+            .expect("fragment search falls back to LIKE");
+
+        assert_eq!(
+            results.iter().map(|item| item.id).collect::<Vec<_>>(),
+            vec![expected.id]
+        );
         drop(db);
         std::fs::remove_dir_all(root).expect("remove search test directory");
     }
