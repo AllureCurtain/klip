@@ -470,6 +470,7 @@ pub fn get_list_filtered(
     clipboard_query::fetch_items_with_tags(db, &spec)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn search_filtered(
     db: &Database,
     query: &str,

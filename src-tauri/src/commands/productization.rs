@@ -89,6 +89,9 @@ pub fn get_image_thumbnail(
     database::productization::get_image_thumbnail(&db, item_id)
 }
 
+// The IPC signature is the command contract; keyset-pagination params push it
+// past clippy's 7-arg limit.
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub fn get_clipboard_list_filtered(
     db: State<'_, database::Database>,

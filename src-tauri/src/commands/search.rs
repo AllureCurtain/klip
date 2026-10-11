@@ -12,6 +12,9 @@ pub fn search_clipboard(
     database::clipboard::search(&db, &query, content_type.as_deref(), limit.unwrap_or(100))
 }
 
+// The IPC signature is the command contract; keyset-pagination params push it
+// past clippy's 7-arg limit.
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub fn search_clipboard_filtered(
     db: State<'_, database::Database>,
