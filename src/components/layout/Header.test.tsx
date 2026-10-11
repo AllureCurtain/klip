@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { ComponentProps, ComponentType } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Header } from './Header';
@@ -564,9 +564,8 @@ describe('Header', () => {
     ).toBe(false);
   });
 
-  it('shows batch actions only after selection mode is enabled', () => {
+  it('shows batch actions only after selection mode is enabled', async () => {
     storeMocks.selectedIds = [42];
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
 
     const { rerender } = render(
       <HeaderWithSelection
@@ -614,7 +613,12 @@ describe('Header', () => {
     expect(storeMocks.assignTagToSelected).toHaveBeenCalledWith(1);
 
     fireEvent.click(screen.getByRole('button', { name: '删除已选' }));
-    expect(confirmSpy).toHaveBeenCalledWith('确定删除已选择的 1 项吗？');
+    expect(screen.getByText('确定删除已选择的 1 项吗？')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: '删除' }));
+    await act(async () => {
+      await Promise.resolve();
+    });
     expect(storeMocks.deleteSelected).toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: '清除选择' }));
@@ -623,7 +627,6 @@ describe('Header', () => {
 
   it('does not delete selected items when batch deletion is cancelled', () => {
     storeMocks.selectedIds = [42, 43];
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
 
     render(
       <HeaderWithSelection
@@ -644,7 +647,8 @@ describe('Header', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '删除已选' }));
 
-    expect(window.confirm).toHaveBeenCalledWith('确定删除已选择的 2 项吗？');
+    expect(screen.getByText('确定删除已选择的 2 项吗？')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '取消' }));
     expect(storeMocks.deleteSelected).not.toHaveBeenCalled();
   });
 });

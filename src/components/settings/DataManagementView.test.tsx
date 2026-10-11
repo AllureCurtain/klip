@@ -78,6 +78,9 @@ vi.mock('react-i18next', () => ({
         'settings.data.portabilityDesc': 'Advanced file operations are kept out of the everyday clipboard flow.',
         'settings.data.openAdvanced': 'Open',
         'common.close': 'Close',
+        'common.cancel': 'Cancel',
+        'common.confirm': 'Confirm',
+        'common.delete': 'Delete',
         'settings.data.json': 'JSON import/export path',
         'settings.data.csv': 'CSV import/export path',
         'settings.data.backup': 'Database backup path',
@@ -223,7 +226,6 @@ describe('DataManagementView', () => {
         writeText: vi.fn().mockResolvedValue(undefined),
       },
     });
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
   });
 
   afterEach(() => {
@@ -304,7 +306,13 @@ describe('DataManagementView', () => {
       await Promise.resolve();
     });
 
-    expect(window.confirm).toHaveBeenCalled();
+    // ConfirmDialog appears — confirm the restore
+    fireEvent.click(screen.getAllByRole('button', { name: 'Restore' }).at(-1)!);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
     expect(storeMocks.restoreDatabase).toHaveBeenCalledWith('C:\\tmp\\chosen.db');
     expect(storeMocks.fetchItems).toHaveBeenCalled();
     expect(storeMocks.fetchTags).toHaveBeenCalled();
@@ -377,7 +385,6 @@ describe('DataManagementView', () => {
   });
 
   it('does not restore a selected backup when confirmation is cancelled', async () => {
-    vi.mocked(window.confirm).mockReturnValue(false);
     render(<DataManagementView />);
     openPortability();
 
@@ -392,7 +399,11 @@ describe('DataManagementView', () => {
       await Promise.resolve();
     });
 
-    expect(window.confirm).toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await act(async () => {
+      await Promise.resolve();
+    });
+
     expect(storeMocks.restoreDatabase).not.toHaveBeenCalled();
     expect(storeMocks.fetchItems).not.toHaveBeenCalled();
     expect(storeMocks.fetchTags).not.toHaveBeenCalled();
