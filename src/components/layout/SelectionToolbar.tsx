@@ -1,6 +1,8 @@
 import { useTranslation } from 'react-i18next';
+import { motion } from 'framer-motion';
 import { Star, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui';
+import { springs } from '@/lib/motion';
 import type { Tag } from '@/types';
 
 interface SelectionToolbarProps {
@@ -24,7 +26,13 @@ export function SelectionToolbar({
   const hasSelection = selectedCount > 0;
 
   return (
-    <div className="flex items-center gap-1 px-2 pb-1 pt-0.5 text-muted-foreground">
+    <motion.div
+      className="flex items-center gap-1 overflow-hidden px-2 pb-1 pt-0.5 text-muted-foreground"
+      initial={{ height: 0, opacity: 0 }}
+      animate={{ height: 'auto', opacity: 1 }}
+      exit={{ height: 0, opacity: 0 }}
+      transition={springs.snappy}
+    >
       <span className="mr-auto text-[10px] text-muted-foreground">
         {hasSelection
           ? t('header.selectedCount', { count: selectedCount })
@@ -82,6 +90,6 @@ export function SelectionToolbar({
       >
         <X className="h-3 w-3" />
       </Button>
-    </div>
+    </motion.div>
   );
 }
