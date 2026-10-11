@@ -281,6 +281,12 @@ pub struct AdvancedSearchQuery {
     pub exact_match: bool,
     pub created_after: Option<i64>,
     pub created_before: Option<i64>,
+    /// Keyset cursor into the `last_used_at DESC, id DESC` ordering; when set,
+    /// results are the page strictly after this item and `offset` is ignored.
+    #[serde(default)]
+    pub last_used_before: Option<i64>,
+    #[serde(default)]
+    pub id_before: Option<i64>,
     pub limit: i64,
     pub offset: i64,
 }

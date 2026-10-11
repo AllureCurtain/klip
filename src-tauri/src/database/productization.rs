@@ -460,14 +460,17 @@ pub fn get_list_filtered(
     content_type: Option<&str>,
     favorite_only: bool,
     tag_id: Option<i64>,
+    page_before: Option<(i64, i64)>,
 ) -> Result<Vec<ClipboardItem>, AppError> {
     let mut spec = ClipboardQuerySpec::new(limit, offset);
     spec.content_type = content_type.map(|value| value.to_string());
     spec.favorite_only = favorite_only;
     spec.tag_id = tag_id;
+    spec.page_before = page_before;
     clipboard_query::fetch_items_with_tags(db, &spec)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn search_filtered(
     db: &Database,
     query: &str,
@@ -476,12 +479,14 @@ pub fn search_filtered(
     tag_id: Option<i64>,
     limit: i64,
     offset: i64,
+    page_before: Option<(i64, i64)>,
 ) -> Result<Vec<ClipboardItem>, AppError> {
     let mut spec = ClipboardQuerySpec::new(limit, offset);
     spec.text_query = Some(query.to_string());
     spec.content_type = content_type.map(|value| value.to_string());
     spec.favorite_only = favorite_only;
     spec.tag_id = tag_id;
+    spec.page_before = page_before;
     clipboard_query::fetch_items_with_tags(db, &spec)
 }
 
@@ -501,6 +506,10 @@ pub fn search_advanced(
     spec.tag_id = query.tag_id;
     spec.created_after = query.created_after;
     spec.created_before = query.created_before;
+    spec.page_before = match (query.last_used_before, query.id_before) {
+        (Some(last_used_at), Some(id)) => Some((last_used_at, id)),
+        _ => None,
+    };
     clipboard_query::fetch_items_with_tags(db, &spec)
 }
 
@@ -988,6 +997,8 @@ mod tests {
                 exact_match: true,
                 created_after: Some(2_000),
                 created_before: Some(4_000),
+                last_used_before: None,
+                id_before: None,
                 limit: 20,
                 offset: 0,
             },

@@ -154,6 +154,12 @@ export interface ClipboardQueryOptions {
   exactMatch?: boolean;
   createdAfter?: number | null;
   createdBefore?: number | null;
+  /** Keyset cursor into the `last_used_at DESC, id DESC` ordering. When both are
+   * set, results are the page strictly after that item and `offset` is ignored.
+   * Unlike offset paging this cannot skip or repeat items when `last_used_at`
+   * changes between page fetches. */
+  lastUsedBefore?: number | null;
+  idBefore?: number | null;
   limit?: number;
   offset?: number;
 }
@@ -167,6 +173,8 @@ export interface AdvancedSearchQuery {
   exactMatch?: boolean;
   createdAfter?: number | null;
   createdBefore?: number | null;
+  lastUsedBefore?: number | null;
+  idBefore?: number | null;
   limit?: number;
   offset?: number;
 }

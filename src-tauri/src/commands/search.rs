@@ -12,6 +12,9 @@ pub fn search_clipboard(
     database::clipboard::search(&db, &query, content_type.as_deref(), limit.unwrap_or(100))
 }
 
+// The IPC signature is the command contract; keyset-pagination params push it
+// past clippy's 7-arg limit.
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub fn search_clipboard_filtered(
     db: State<'_, database::Database>,
@@ -21,6 +24,8 @@ pub fn search_clipboard_filtered(
     tag_id: Option<i64>,
     limit: Option<i64>,
     offset: Option<i64>,
+    last_used_before: Option<i64>,
+    id_before: Option<i64>,
 ) -> Result<Vec<ClipboardItem>, AppError> {
     database::productization::search_filtered(
         &db,
@@ -30,6 +35,7 @@ pub fn search_clipboard_filtered(
         tag_id,
         limit.unwrap_or(100),
         offset.unwrap_or(0),
+        last_used_before.zip(id_before),
     )
 }
 

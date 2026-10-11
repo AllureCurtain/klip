@@ -116,10 +116,20 @@ export const useClipboardStore = create<ClipboardStore>((set) => ({
   loadMore: async () => {
     const { currentQuery, currentOptions, hasMore, loading, loadingMore, items } =
       useClipboardStore.getState();
-    if (!hasMore || loading || loadingMore) return;
+    if (!hasMore || loading || loadingMore || items.length === 0) return;
 
+    // Keyset cursor: page strictly after the last loaded item in the
+    // `last_used_at DESC, id DESC` ordering. Offset paging could skip or
+    // repeat rows because `last_used_at` changes when items are copied/pasted.
+    const cursor = items[items.length - 1];
     const limit = normalizeClipboardFilters(currentOptions).limit;
-    const options = { ...currentOptions, limit, offset: items.length };
+    const options: ClipboardQueryOptions = {
+      ...currentOptions,
+      limit,
+      offset: 0,
+      lastUsedBefore: cursor.last_used_at,
+      idBefore: cursor.id,
+    };
     set({ loadingMore: true, error: null });
     try {
       const nextItems = hasAdvancedFilters(options)
@@ -385,8 +395,27 @@ export const useClipboardStore = create<ClipboardStore>((set) => ({
       if (existingIndex === -1) {
         return { items: [updatedItem, ...state.items] };
       }
+      // The backend orders by `last_used_at DESC, id DESC`; when an update
+      // changes the item's position (e.g. a `last_used_at` bump) the row has
+      // to move or the next keyset page cursor would skip neighbours. Only
+      // reposition when the stored order is actually violated so unrelated
+      // field updates never reorder the list.
+      const violatesPrevious =
+        existingIndex > 0 &&
+        compareClipboardOrder(updatedItem, state.items[existingIndex - 1]) < 0;
+      const violatesNext =
+        existingIndex < state.items.length - 1 &&
+        compareClipboardOrder(updatedItem, state.items[existingIndex + 1]) > 0;
       const items = [...state.items];
-      items[existingIndex] = updatedItem;
+      if (violatesPrevious || violatesNext) {
+        items.splice(existingIndex, 1);
+        const insertAt = items.findIndex(
+          (item) => compareClipboardOrder(updatedItem, item) < 0
+        );
+        items.splice(insertAt === -1 ? items.length : insertAt, 0, updatedItem);
+      } else {
+        items[existingIndex] = updatedItem;
+      }
       return { items };
     });
   },
@@ -405,6 +434,14 @@ function appendUniqueItems(
     ...existingItems,
     ...newItems.filter((item) => !existingIds.has(item.id)),
   ];
+}
+
+/** Mirrors the backend `ORDER BY last_used_at DESC, id DESC`. */
+function compareClipboardOrder(a: ClipboardItem, b: ClipboardItem): number {
+  if (a.last_used_at !== b.last_used_at) {
+    return b.last_used_at - a.last_used_at;
+  }
+  return b.id - a.id;
 }
 
 async function runSummary<T>(

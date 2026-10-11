@@ -68,6 +68,8 @@ describe('clipboardFilters', () => {
       exactMatch: true,
       createdAfter: 1_000,
       createdBefore: 2_000,
+      lastUsedBefore: null,
+      idBefore: null,
       limit: 20,
       offset: 10,
     });

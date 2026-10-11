@@ -548,6 +548,7 @@ async fn list_clipboard(
             query.content_type.as_deref(),
             query.favorite_only.unwrap_or(false),
             query.tag_id,
+            None,
         )
         .map(|items| items.into_iter().map(ClipboardItemDto::from).collect()),
     )
@@ -566,6 +567,7 @@ async fn search_clipboard(
             query.tag_id,
             query.limit.unwrap_or(100),
             query.offset.unwrap_or(0),
+            None,
         )
         .map(|items| items.into_iter().map(ClipboardItemDto::from).collect()),
     )

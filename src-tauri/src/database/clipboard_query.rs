@@ -5,7 +5,9 @@ use rusqlite::{params_from_iter, OptionalExtension};
 
 const CLIPBOARD_ITEM_COLUMNS: &str =
     "id, content_type, content, preview, hash, size, metadata, source_application, source_window_title, custom_title, note, is_favorited, created_at, last_used_at, is_sensitive, sensitivity_reason";
-const CLIPBOARD_ITEM_ORDER_BY: &str = " ORDER BY last_used_at DESC, created_at DESC";
+// `id` is the final tiebreaker so the order is a stable total order; offset and
+// keyset pages cannot straddle rows that share the same `last_used_at`.
+const CLIPBOARD_ITEM_ORDER_BY: &str = " ORDER BY last_used_at DESC, id DESC";
 
 #[derive(Debug, Clone)]
 pub struct ClipboardQuerySpec {
@@ -18,6 +20,10 @@ pub struct ClipboardQuerySpec {
     pub exact_match: bool,
     pub created_after: Option<i64>,
     pub created_before: Option<i64>,
+    /// Keyset cursor: return rows strictly after `(last_used_at, id)` in the
+    /// `last_used_at DESC, id DESC` ordering. Unlike OFFSET this stays correct
+    /// when `last_used_at` is bumped between page fetches.
+    pub page_before: Option<(i64, i64)>,
     pub limit: i64,
     pub offset: i64,
 }
@@ -34,6 +40,7 @@ impl ClipboardQuerySpec {
             exact_match: false,
             created_after: None,
             created_before: None,
+            page_before: None,
             limit,
             offset,
         }
@@ -312,6 +319,14 @@ fn build_clipboard_query(spec: &ClipboardQuerySpec) -> BuiltClipboardQuery {
         clauses.push(format!("created_at <= {placeholder}"));
     }
 
+    if let Some((last_used_before, id_before)) = spec.page_before {
+        let last_used_placeholder = push_param(&mut params, Value::Integer(last_used_before));
+        let id_placeholder = push_param(&mut params, Value::Integer(id_before));
+        clauses.push(format!(
+            "(last_used_at < {last_used_placeholder} OR (last_used_at = {last_used_placeholder} AND id < {id_placeholder}))"
+        ));
+    }
+
     if !clauses.is_empty() {
         sql.push_str(" WHERE ");
         sql.push_str(&clauses.join(" AND "));
@@ -477,6 +492,7 @@ mod tests {
             exact_match: true,
             created_after: Some(100),
             created_before: Some(200),
+            page_before: None,
             limit: 25,
             offset: 10,
         };
@@ -484,7 +500,7 @@ mod tests {
         let query = build_clipboard_query(&spec);
         assert_eq!(
             query.sql,
-            "SELECT id, content_type, content, preview, hash, size, metadata, source_application, source_window_title, custom_title, note, is_favorited, created_at, last_used_at, is_sensitive, sensitivity_reason FROM clipboard_items WHERE (custom_title = ?1 OR note = ?1 OR preview = ?1 OR (content_type != 'image' AND content = ?1) OR id IN (SELECT item_id FROM clipboard_ocr WHERE status = 'completed' AND text = ?1)) AND content_type = ?2 AND is_favorited = 1 AND is_sensitive = ?3 AND id IN (SELECT item_id FROM clipboard_item_tags WHERE tag_id = ?4) AND created_at >= ?5 AND created_at <= ?6 ORDER BY last_used_at DESC, created_at DESC LIMIT ?7 OFFSET ?8"
+            "SELECT id, content_type, content, preview, hash, size, metadata, source_application, source_window_title, custom_title, note, is_favorited, created_at, last_used_at, is_sensitive, sensitivity_reason FROM clipboard_items WHERE (custom_title = ?1 OR note = ?1 OR preview = ?1 OR (content_type != 'image' AND content = ?1) OR id IN (SELECT item_id FROM clipboard_ocr WHERE status = 'completed' AND text = ?1)) AND content_type = ?2 AND is_favorited = 1 AND is_sensitive = ?3 AND id IN (SELECT item_id FROM clipboard_item_tags WHERE tag_id = ?4) AND created_at >= ?5 AND created_at <= ?6 ORDER BY last_used_at DESC, id DESC LIMIT ?7 OFFSET ?8"
         );
         assert_eq!(
             query.params,
@@ -558,6 +574,7 @@ mod tests {
             exact_match: true,
             created_after: Some(1_000),
             created_before: Some(3_000),
+            page_before: None,
             limit: 1,
             offset: 0,
         };
