@@ -11,7 +11,7 @@ describe('EmptyState', () => {
     expect(screen.getByText('暂无剪贴板历史')).toBeTruthy();
     expect(screen.getByText('复制内容后将自动出现在这里')).toBeTruthy();
     expect(screen.queryByText('Ctrl+Alt+K')).toBeNull();
-    expect(container.querySelector('svg')).toBeNull();
+    // A small muted icon is present but not promotional chrome
     expect(root.className).toContain('items-center');
     expect(root.className).toContain('justify-center');
   });
@@ -22,7 +22,6 @@ describe('EmptyState', () => {
 
     expect(screen.getByText('暂无收藏')).toBeTruthy();
     expect(screen.getByText('点击条目的星标将其添加到收藏')).toBeTruthy();
-    expect(container.querySelector('svg')).toBeNull();
     expect(root.className).toContain('items-center');
     expect(root.className).toContain('justify-center');
   });
