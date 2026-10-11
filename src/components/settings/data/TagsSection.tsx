@@ -3,8 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { Plus, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button, Input } from '@/components/ui';
-import { Label } from '@/components/ui/label';
 import type { Tag } from '@/types';
+import { SectionCard } from '../primitives';
 import { DEFAULT_TAG_COLOR } from './settingsDataActions';
 
 interface TagsSectionProps {
@@ -33,14 +33,17 @@ export function TagsSection({
   };
 
   return (
-    <div className="space-y-2">
-      <Label className="text-xs">{t('settings.data.tags')}</Label>
+    <SectionCard
+      title={t('settings.data.tags')}
+      description={t('settings.data.tagsDesc')}
+    >
       <div className="flex gap-2">
         <Input
           value={tagName}
           onChange={(event) => setTagName(event.target.value)}
           placeholder={t('settings.data.tagName')}
           className="h-7 text-xs"
+          aria-label={t('settings.data.tagName')}
         />
         <Input
           type="color"
@@ -59,7 +62,7 @@ export function TagsSection({
           <Plus className="h-3 w-3" />
         </Button>
       </div>
-      <div className="flex flex-wrap gap-1">
+      <div className="mt-2 flex flex-wrap gap-1">
         {tags.map((tag) => (
           <Badge key={tag.id} variant="outline" className="gap-1">
             {tag.color && (
@@ -71,7 +74,7 @@ export function TagsSection({
             {tag.name}
             <button
               type="button"
-              className="ml-1 text-muted-foreground hover:text-destructive"
+              className="ml-1 text-[var(--muted)] transition-colors hover:text-[var(--danger)]"
               onClick={() => deleteTag(tag.id)}
               aria-label={t('settings.data.deleteTag', { name: tag.name })}
             >
@@ -80,6 +83,6 @@ export function TagsSection({
           </Badge>
         ))}
       </div>
-    </div>
+    </SectionCard>
   );
 }

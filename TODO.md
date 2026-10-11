@@ -11,9 +11,6 @@ Status mirror of GitHub issues. Update with the PR that changes task state.
 - [ ] #15 Clipboard history cannot scroll to older items
   - Done when: scrolling down loads older items beyond the first page; no
     duplicates or gaps; works with active filters.
-- [ ] #16 Settings page feels visually disjointed
-  - Done when: settings rail and main chrome share tokens/spacing per DESIGN.md;
-    passes contrast ≥4.5:1.
 - [ ] #17 Clipboard-write self-suppression has multiple holes
   - Done when: pasting/copying from Klip does not re-insert the item as new
     history (text, image, and file paths); hotkey rollback does not leave stale
@@ -38,6 +35,9 @@ Status mirror of GitHub issues. Update with the PR that changes task state.
 
 ## Recently completed
 
+- [x] #16 Settings page feels visually disjointed — Data tab unified onto the
+  SectionCard/SettingToggle primitives and shared tokens per DESIGN.md; contrast
+  ≥4.5:1 verified (`fix/settings-visual-consistency`)
 - [x] Documentation standard applied: `AGENTS.md`, `TODO.md`, `DESIGN.md`,
   `docs/{product,api,decisions,development,user-guide}.md`, `src/AGENTS.md`,
   `src-tauri/AGENTS.md`, `.github` templates (2026-10-11)

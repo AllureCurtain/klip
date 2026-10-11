@@ -29,8 +29,11 @@ export function PathActions({
   busyAction,
 }: PathActionsProps) {
   return (
-    <div className="space-y-2">
-      <Label htmlFor={id} className="text-xs">
+    <div className="space-y-1.5">
+      <Label
+        htmlFor={id}
+        className="text-[11.5px] font-medium leading-tight text-[var(--ink)]"
+      >
         {label}
       </Label>
       <Input
@@ -46,7 +49,7 @@ export function PathActions({
             key={action.label}
             variant="outline"
             size="sm"
-            className="h-7 text-xs"
+            className="h-7 text-[11px]"
             onClick={action.onClick}
             disabled={
               (action.disabledWithoutValue !== false && value.trim() === '') ||

@@ -73,29 +73,32 @@ export function PortabilitySection({ actions }: PortabilitySectionProps) {
   };
 
   return (
-    <section className="rounded-md border bg-muted/20">
+    <section className="rounded-lg border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-card-token)]">
       <button
         type="button"
-        className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left"
+        className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left"
         aria-expanded={portabilityOpen}
         aria-controls="data-portability-panel"
         onClick={() => setPortabilityOpen((open) => !open)}
       >
         <span className="min-w-0">
-          <span className="block text-xs font-medium">
+          <span className="block text-[12px] font-semibold leading-tight text-[var(--ink)]">
             {t('settings.data.portability')}
           </span>
-          <span className="block text-[10px] text-muted-foreground">
+          <span className="mt-0.5 block text-[10.5px] leading-snug text-[var(--muted)]">
             {t('settings.data.portabilityDesc')}
           </span>
         </span>
-        <span className="text-[10px] text-muted-foreground">
+        <span className="shrink-0 text-[10.5px] font-medium text-[var(--muted)]">
           {portabilityOpen ? t('common.close') : t('settings.data.openAdvanced')}
         </span>
       </button>
 
       {portabilityOpen && (
-        <div id="data-portability-panel" className="space-y-4 border-t px-3 py-3">
+        <div
+          id="data-portability-panel"
+          className="space-y-3 border-t border-[var(--border)] px-3 py-2.5"
+        >
           <PathActions
             id="data-json-path"
             label={t('settings.data.json')}

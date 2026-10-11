@@ -1,5 +1,4 @@
 import { useEffect } from 'react';
-import { Separator } from '@/components/ui/separator';
 import { useClipboardStore, useProductivityStore } from '@/stores';
 import { SensitiveCaptureSection } from './SensitiveCaptureSection';
 import { TagsSection } from './TagsSection';
@@ -34,13 +33,11 @@ export function DataManagementView() {
   }, [fetchProductivity]);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-2.5">
       <SensitiveCaptureSection
         rescanSensitive={rescanSensitive}
         actions={actions}
       />
-
-      <Separator />
 
       <TagsSection
         tags={tags}
@@ -48,8 +45,6 @@ export function DataManagementView() {
         deleteTag={deleteTag}
         setStatus={actions.setStatus}
       />
-
-      <Separator />
 
       <SnippetsSection
         snippets={snippets}
@@ -59,8 +54,6 @@ export function DataManagementView() {
         setStatus={actions.setStatus}
       />
 
-      <Separator />
-
       <SourceRulesSection
         sourceRules={sourceRules}
         createSourceRule={createSourceRule}
@@ -69,16 +62,12 @@ export function DataManagementView() {
         setStatus={actions.setStatus}
       />
 
-      <Separator />
-
       <ExternalReadinessSection />
-
-      <Separator />
 
       <PortabilitySection actions={actions} />
 
       {actions.status && (
-        <p className="text-[10px] text-muted-foreground">{actions.status}</p>
+        <p className="px-1 text-[10.5px] text-[var(--muted)]">{actions.status}</p>
       )}
     </div>
   );
