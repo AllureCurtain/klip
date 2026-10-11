@@ -4,7 +4,7 @@
 > 最后更新：2026-08-10
 
 本文档记录 Klip 为什么以及如何同时处理文本、富文本、图片和文件。数据库表结构以
-[DATABASE.md](DATABASE.md) 为准，运行时模块划分以 [ARCHITECTURE.md](ARCHITECTURE.md)
+[DATABASE.md](DATABASE.md) 为准，运行时模块划分以 [ARCHITECTURE-zh.md](ARCHITECTURE-zh.md)
 为准。
 
 ## 1. 设计目标

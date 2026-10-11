@@ -4,7 +4,7 @@
 > 当前产品基线：`v0.2.0` / `ab89ef7a645f9f8af9a0a113bfad4e2cf6093441`
 
 本文档是当前代码交付状态的唯一摘要入口。详细产品行为、接口和数据结构分别以
-`README.md`、`PRD.md`、`ARCHITECTURE.md`、`API.md` 和 `DATABASE.md` 为准。
+`README.md`、`PRD.md`、`ARCHITECTURE-zh.md`、`API-zh.md` 和 `DATABASE.md` 为准。
 
 ## 当前结论
 
