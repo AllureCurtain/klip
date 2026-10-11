@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
   Search,
   FileText,
@@ -21,6 +21,7 @@ import {
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useThemeStore, useClipboardStore, useProductivityStore } from '@/stores';
 import { cn } from '@/lib/utils';
+import { springs } from '@/lib/motion';
 import { HeaderMoreMenu } from './HeaderMoreMenu';
 import { SelectionToolbar } from './SelectionToolbar';
 import { CaptureStatusBar } from './CaptureStatusBar';
@@ -202,8 +203,17 @@ export function Header({
           />
         </div>
 
+        <AnimatePresence>
         {advancedOpen && (
-          <div className="mx-2.5 mb-2 rounded-lg border border-[var(--glass-border)] bg-[var(--glass-bg)] backdrop-blur-sm px-2.5 py-2">
+          <motion.div
+            key="advanced-panel"
+            className="mx-2.5 mb-2 overflow-hidden rounded-lg border border-[var(--glass-border)] bg-[var(--glass-bg)] backdrop-blur-sm"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={springs.snappy}
+          >
+            <div className="px-2.5 py-2">
             <div className="grid grid-cols-2 gap-2">
               <label className="flex items-center justify-between gap-2 text-[10.5px]">
                 <span>{t('header.advanced.sensitiveOnly')}</span>
@@ -255,8 +265,10 @@ export function Header({
                 }
               />
             </div>
-          </div>
+            </div>
+          </motion.div>
         )}
+        </AnimatePresence>
 
         <div className="flex items-center gap-1 px-2.5 pb-1.5">
           {contentFilters.map((filter) => (
@@ -293,6 +305,7 @@ export function Header({
           onEndPrivacyMode={() => setPrivacyModeForMinutes(0)}
         />
 
+        <AnimatePresence>
         {selectionMode && (
           <SelectionToolbar
             selectedCount={selectedCount}
@@ -303,6 +316,7 @@ export function Header({
             onClearSelection={clearSelection}
           />
         )}
+        </AnimatePresence>
       </header>
 
       <Dialog open={clearDialogOpen} onOpenChange={setClearDialogOpen}>

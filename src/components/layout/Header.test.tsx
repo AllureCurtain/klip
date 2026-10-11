@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ComponentProps, ComponentType } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Header } from './Header';
@@ -453,7 +453,7 @@ describe('Header', () => {
     );
   });
 
-  it('closes the more menu from escape and outside clicks', () => {
+  it('closes the more menu from escape and outside clicks', async () => {
     render(
       <HeaderWithSelection
         searchQuery=""
@@ -475,16 +475,20 @@ describe('Header', () => {
     expect(screen.getByRole('button', { name: '选择模式' })).toBeTruthy();
 
     fireEvent.keyDown(document, { key: 'Escape' });
-    expect(screen.queryByRole('button', { name: '选择模式' })).toBeNull();
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: '选择模式' })).toBeNull()
+    );
 
     fireEvent.click(screen.getByRole('button', { name: '更多操作' }));
     expect(screen.getByRole('button', { name: '选择模式' })).toBeTruthy();
 
     fireEvent.mouseDown(document.body);
-    expect(screen.queryByRole('button', { name: '选择模式' })).toBeNull();
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: '选择模式' })).toBeNull()
+    );
   });
 
-  it('closes the more menu after choosing menu actions', () => {
+  it('closes the more menu after choosing menu actions', async () => {
     const onShowFavoritesChange = vi.fn();
     const onSelectedTagChange = vi.fn();
     const onSelectionModeChange = vi.fn();
@@ -509,21 +513,29 @@ describe('Header', () => {
     fireEvent.click(screen.getByRole('button', { name: '更多操作' }));
     fireEvent.click(screen.getByRole('button', { name: '仅显示收藏' }));
     expect(onShowFavoritesChange).toHaveBeenCalledWith(true);
-    expect(screen.queryByRole('button', { name: '选择模式' })).toBeNull();
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: '选择模式' })).toBeNull()
+    );
 
     fireEvent.click(screen.getByRole('button', { name: '更多操作' }));
     fireEvent.click(screen.getByRole('button', { name: 'Work' }));
     expect(onSelectedTagChange).toHaveBeenCalledWith(1);
-    expect(screen.queryByRole('button', { name: '选择模式' })).toBeNull();
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: '选择模式' })).toBeNull()
+    );
 
     fireEvent.click(screen.getByRole('button', { name: '更多操作' }));
     fireEvent.click(screen.getByRole('button', { name: '选择模式' }));
     expect(onSelectionModeChange).toHaveBeenCalledWith(true);
-    expect(screen.queryByRole('button', { name: '选择模式' })).toBeNull();
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: '选择模式' })).toBeNull()
+    );
 
     fireEvent.click(screen.getByRole('button', { name: '更多操作' }));
     fireEvent.click(screen.getByRole('button', { name: '清空历史' }));
-    expect(screen.queryByRole('button', { name: '选择模式' })).toBeNull();
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: '选择模式' })).toBeNull()
+    );
     expect(screen.getByText('清空剪贴板历史')).toBeTruthy();
   });
 

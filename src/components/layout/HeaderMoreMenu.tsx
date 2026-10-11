@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
   ListChecks,
   MoreHorizontal,
@@ -14,6 +15,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui';
 import { cn } from '@/lib/utils';
+import { springs } from '@/lib/motion';
 import type { Tag } from '@/types';
 
 interface HeaderMoreMenuProps {
@@ -98,11 +100,17 @@ export function HeaderMoreMenu({
         <MoreHorizontal className="h-3.5 w-3.5" />
       </Button>
 
+      <AnimatePresence>
       {open && (
-        <div
-          className="absolute right-0 top-8 z-40 w-56 rounded-2xl border border-border/50 bg-popover/95 p-1.5 text-popover-foreground shadow-[var(--shadow-pop)] backdrop-blur-md"
+        <motion.div
+          key="header-more-menu"
+          className="absolute right-0 top-8 z-40 w-56 origin-top-right rounded-2xl border border-border/50 bg-popover/95 p-1.5 text-popover-foreground shadow-[var(--shadow-pop)] backdrop-blur-md"
           role="region"
           aria-label={t('header.moreActions')}
+          initial={{ opacity: 0, scale: 0.92, y: -4 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: -4 }}
+          transition={springs.snappy}
         >
           <button
             type="button"
@@ -245,8 +253,9 @@ export function HeaderMoreMenu({
               <span>{t('header.clearHistory')}</span>
             </button>
           </div>
-        </div>
+        </motion.div>
       )}
+      </AnimatePresence>
     </div>
   );
 }
