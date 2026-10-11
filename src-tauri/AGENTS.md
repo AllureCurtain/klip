@@ -47,6 +47,11 @@ backend-specific rules live here.
 - `windows` crate types behind `#[cfg(windows)]` only.
 - `panic = "abort"` + `lto` in release — no unwinding assumptions, expect long
   release builds.
+- **Worktree target sharing**: when working in a `git worktree` under
+  `.worktrees/`, create `.cargo/config.toml` at the worktree root with
+  `[build] target-dir = "../../src-tauri/target"` so all worktrees share the
+  main checkout's build cache instead of each rebuilding ~2 GB of deps.
+  `.cargo/` is gitignored — the file is local-only and never committed.
 
 ## Testing
 
