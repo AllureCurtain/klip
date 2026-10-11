@@ -5,7 +5,9 @@
     "cancel": "Cancel",
     "close": "Close",
     "save": "Save",
-    "back": "Back"
+    "back": "Back",
+    "confirm": "Confirm",
+    "delete": "Delete"
   },
   "app": {
     "dismiss": "Dismiss",

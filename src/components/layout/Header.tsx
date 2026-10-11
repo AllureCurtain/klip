@@ -17,6 +17,7 @@ import {
   DialogFooter,
   DialogDescription,
 } from '@/components/ui/dialog';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useThemeStore, useClipboardStore, useProductivityStore } from '@/stores';
 import { cn } from '@/lib/utils';
 import { HeaderMoreMenu } from './HeaderMoreMenu';
@@ -89,6 +90,7 @@ export function Header({
     setPrivacyModeForMinutes,
   } = useProductivityStore();
   const [clearDialogOpen, setClearDialogOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
 
@@ -128,9 +130,7 @@ export function Header({
   const selectedCount = selectedIds.length;
   const handleDeleteSelected = () => {
     if (selectedCount === 0) return;
-    if (window.confirm(t('header.deleteSelectedConfirm', { count: selectedCount }))) {
-      void deleteSelected();
-    }
+    setDeleteConfirmOpen(true);
   };
 
   return (
@@ -321,6 +321,17 @@ export function Header({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={deleteConfirmOpen}
+        onOpenChange={setDeleteConfirmOpen}
+        title={t('header.deleteSelectedConfirm', { count: selectedCount })}
+        confirmLabel={t('common.delete')}
+        destructive
+        onConfirm={async () => {
+          await deleteSelected();
+        }}
+      />
     </>
   );
 }

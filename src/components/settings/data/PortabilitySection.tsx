@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { DatabaseBackup, Download, Upload } from 'lucide-react';
 import { useClipboardStore } from '@/stores';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { PathActions } from './PathActions';
 import type { useSettingsDataActions } from './settingsDataActions';
 import {
@@ -22,6 +23,7 @@ interface PortabilitySectionProps {
 export function PortabilitySection({ actions }: PortabilitySectionProps) {
   const { t } = useTranslation();
   const [portabilityOpen, setPortabilityOpen] = useState(false);
+  const [restoreConfirmOpen, setRestoreConfirmOpen] = useState(false);
   const [jsonPath, setJsonPath] = useState('');
   const [csvPath, setCsvPath] = useState('');
   const [backupPath, setBackupPath] = useState('');
@@ -37,7 +39,6 @@ export function PortabilitySection({ actions }: PortabilitySectionProps) {
   } = useClipboardStore();
 
   const handleRestoreDatabase = async () => {
-    if (!window.confirm(t('settings.data.restoreConfirm'))) return;
     const summary = await actions.run('restore-db', () => restoreDatabase(backupPath), '');
     if (summary) {
       await Promise.all([fetchItems(), fetchTags()]);
@@ -207,13 +208,22 @@ export function PortabilitySection({ actions }: PortabilitySectionProps) {
               {
                 label: t('settings.data.restore'),
                 icon: <Upload className="h-3 w-3" />,
-                onClick: handleRestoreDatabase,
+                onClick: () => setRestoreConfirmOpen(true),
               },
             ]}
             busyAction={actions.busyAction}
           />
         </div>
       )}
+
+      <ConfirmDialog
+        open={restoreConfirmOpen}
+        onOpenChange={setRestoreConfirmOpen}
+        title={t('settings.data.restoreConfirm')}
+        confirmLabel={t('settings.data.restore')}
+        destructive
+        onConfirm={handleRestoreDatabase}
+      />
     </section>
   );
 }
