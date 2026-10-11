@@ -152,6 +152,9 @@ pub fn set_config(
     };
 
     database::config::set(&db, &key, &value)?;
+    if is_capture_gate_config_key(&key) {
+        crate::clipboard::monitor::invalidate_capture_gate_cache();
+    }
 
     match descriptor.effect {
         RuntimeEffect::WindowSize => apply_window_size_from_config(&app, &db)?,
@@ -204,6 +207,12 @@ pub fn set_config_many(
         .collect::<Vec<_>>();
 
     database::config::set_many(&db, &persisted_entries)?;
+    if persisted_entries
+        .iter()
+        .any(|(key, _)| is_capture_gate_config_key(key))
+    {
+        crate::clipboard::monitor::invalidate_capture_gate_cache();
+    }
 
     if has_window_size_effect {
         apply_window_size_from_config(&app, &db)?;
@@ -264,6 +273,16 @@ fn previous_hotkey_values(
         .collect()
 }
 
+/// Config keys the clipboard capture gate consults on every event. Writes to
+/// them must drop the monitor's cached gate inputs so the new value applies
+/// on the next event rather than after the cache TTL.
+fn is_capture_gate_config_key(key: &str) -> bool {
+    matches!(
+        key,
+        registry::KEY_CLIPBOARD_MONITOR_ENABLED | registry::KEY_PRIVACY_MODE_UNTIL
+    )
+}
+
 fn apply_window_size_from_config(
     app: &tauri::AppHandle,
     db: &database::Database,
@@ -280,11 +299,12 @@ fn rollback_hotkey_config(
     let rollback_value = previous_value.unwrap_or_else(|| descriptor.default_value.to_string());
     let _ = database::config::set(db, descriptor.key, &rollback_value);
 
-    let toggle = database::config::get(db, registry::KEY_HOTKEY_TOGGLE_WINDOW)?
-        .unwrap_or_else(|| registry::DEFAULT_TOGGLE_HOTKEY.to_string());
-    let quick_paste_prefix = database::config::get(db, registry::KEY_HOTKEY_QUICK_PASTE_PREFIX)?
-        .unwrap_or_else(|| registry::DEFAULT_QUICK_PASTE_PREFIX.to_string());
-    let _ = crate::hotkey::manager::reload_hotkeys_from_values(app, &toggle, &quick_paste_prefix);
+    // Re-apply the persisted shortcut_bindings through the same mechanism the
+    // rest of the app uses. Routing rollback through `apply_bindings` keeps
+    // OWNED_SHORTCUTS consistent with what is actually registered; the legacy
+    // `unregister_all` + re-register-from-config-values path left the map
+    // stale and registered shortcuts it did not own.
+    let _ = crate::hotkey::manager::reload_hotkeys(app);
     Ok(())
 }
 
@@ -298,11 +318,7 @@ fn rollback_hotkey_values(
         let _ = database::config::set(db, descriptor.key, &rollback_value);
     }
 
-    let toggle = database::config::get(db, registry::KEY_HOTKEY_TOGGLE_WINDOW)?
-        .unwrap_or_else(|| registry::DEFAULT_TOGGLE_HOTKEY.to_string());
-    let quick_paste_prefix = database::config::get(db, registry::KEY_HOTKEY_QUICK_PASTE_PREFIX)?
-        .unwrap_or_else(|| registry::DEFAULT_QUICK_PASTE_PREFIX.to_string());
-    let _ = crate::hotkey::manager::reload_hotkeys_from_values(app, &toggle, &quick_paste_prefix);
+    let _ = crate::hotkey::manager::reload_hotkeys(app);
     Ok(())
 }
 

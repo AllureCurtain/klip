@@ -27,8 +27,9 @@
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, SyncSender, TryRecvError, TrySendError};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
+use std::time::Instant;
 use tauri::{AppHandle, Emitter, Manager};
 
 use clipboard_rs::{ClipboardHandler, ClipboardWatcher, ClipboardWatcherContext};
@@ -47,7 +48,36 @@ use crate::{AppError, Database};
 /// `LAST_HASH` cannot do that job: it holds the last thing captured, so
 /// pasting an older item produces a hash that does not match it and would be
 /// captured again.
-static LAST_HASH: std::sync::OnceLock<std::sync::Mutex<String>> = std::sync::OnceLock::new();
+static LAST_HASH: OnceLock<Mutex<String>> = OnceLock::new();
+
+/// How long the capture-gate inputs may be reused before they are re-read
+/// from the database. Clipboard changes arrive in bursts; three reads per
+/// event on the hot path is wasted work when nothing has changed.
+const GATE_CACHE_TTL: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// The three database values the capture gate consults on every event,
+/// bundled so a burst of notifications costs one read instead of three.
+struct GateInputs {
+    enabled: bool,
+    privacy_until: i64,
+    rules: Vec<crate::database::types::SourceRule>,
+    fetched_at: Instant,
+}
+
+static GATE_INPUTS: OnceLock<Mutex<Option<GateInputs>>> = OnceLock::new();
+
+fn gate_inputs_slot() -> &'static Mutex<Option<GateInputs>> {
+    GATE_INPUTS.get_or_init(|| Mutex::new(None))
+}
+
+/// Forget cached capture-gate inputs. Called by the config and source-rule
+/// mutation commands so changes take effect on the next event rather than up
+/// to [`GATE_CACHE_TTL`] later, and by tests that need a clean slate.
+pub fn invalidate_capture_gate_cache() {
+    if let Ok(mut guard) = gate_inputs_slot().lock() {
+        *guard = None;
+    }
+}
 
 /// How long to wait for a burst of change notifications to go quiet before
 /// reading the clipboard.
@@ -129,7 +159,7 @@ impl ClipboardMonitor {
     }
 
     pub fn start(self) -> Result<(), String> {
-        LAST_HASH.get_or_init(|| std::sync::Mutex::new(String::new()));
+        LAST_HASH.get_or_init(|| Mutex::new(String::new()));
 
         // Build the watcher before spawning anything, so a platform that
         // cannot support one falls back without leaving a worker behind.
@@ -289,18 +319,69 @@ fn handle_clipboard_change(app_handle: &AppHandle) {
         None => return,
     };
 
+    // Record what the clipboard now holds before any of the skip paths below
+    // return. Suppression is one-shot: when a suppressed own-write produced a
+    // second notification, the arm is already consumed, so only this hash
+    // check stops the same content from being saved as new history.
+    if remember_clipboard_hash(&extracted.hash) {
+        return;
+    }
+
     if suppress::should_suppress(&extracted.hash) {
         tracing::info!("Self-copy suppressed (hash matches Klip's own write)");
         return;
     }
 
-    if let Some(item) = process_extracted_content(extracted) {
-        save_clipboard_item(
-            app_handle,
-            &item,
-            source.application(),
-            source.window_title(),
-        );
+    let item = new_clipboard_item(extracted);
+    if save_clipboard_item(
+        app_handle,
+        &item,
+        source.application(),
+        source.window_title(),
+    )
+    .is_err()
+    {
+        // The insert failed, so LAST_HASH must not keep this hash: the next
+        // time the same content lands on the clipboard it should be treated
+        // as new, not deduplicated against a save that never happened.
+        forget_clipboard_hash(&item.hash);
+        tracing::debug!("Rolled back remembered clipboard hash after failed save");
+    }
+}
+
+/// Store `hash` as the clipboard's current content. Returns true when it is
+/// already the recorded hash, i.e. this notification reported unchanged
+/// content and nothing further should happen.
+///
+/// This runs for every extracted change -- including ones suppression later
+/// drops -- because its job is tracking what the clipboard holds, not what
+/// was saved.
+fn remember_clipboard_hash(hash: &str) -> bool {
+    let Some(last_hash) = LAST_HASH.get() else {
+        return false;
+    };
+    let mut last = match last_hash.lock() {
+        Ok(last) => last,
+        Err(_) => return false,
+    };
+    if *last == hash {
+        return true;
+    }
+    *last = hash.to_string();
+    false
+}
+
+/// Clear the remembered clipboard hash when it still equals `hash`. Called
+/// when persisting the extracted content failed so a later copy of the same
+/// payload is not silently deduplicated.
+fn forget_clipboard_hash(hash: &str) {
+    let Some(last_hash) = LAST_HASH.get() else {
+        return;
+    };
+    if let Ok(mut last) = last_hash.lock() {
+        if *last == hash {
+            last.clear();
+        }
     }
 }
 
@@ -332,16 +413,8 @@ fn extract_clipboard_content_with_retry() -> Option<ExtractedContent> {
     None
 }
 
-fn process_extracted_content(extracted: ExtractedContent) -> Option<NewClipboardItem> {
-    if let Some(last_hash) = LAST_HASH.get() {
-        let mut last = last_hash.lock().ok()?;
-        if *last == extracted.hash {
-            return None;
-        }
-        *last = extracted.hash.clone();
-    }
-
-    Some(NewClipboardItem {
+fn new_clipboard_item(extracted: ExtractedContent) -> NewClipboardItem {
+    NewClipboardItem {
         content_type: extracted.content_type,
         data: extracted.data,
         preview: Some(extracted.preview),
@@ -350,7 +423,7 @@ fn process_extracted_content(extracted: ExtractedContent) -> Option<NewClipboard
         metadata: extracted.metadata,
         formats: extracted.formats,
         image_sources: extracted.image_sources,
-    })
+    }
 }
 
 fn save_clipboard_item(
@@ -358,7 +431,7 @@ fn save_clipboard_item(
     item: &NewClipboardItem,
     process_name: Option<&str>,
     window_title: Option<&str>,
-) {
+) -> Result<(), AppError> {
     tracing::info!("Saving clipboard item to database...");
     let db = app_handle.state::<database::Database>();
 
@@ -410,6 +483,7 @@ fn save_clipboard_item(
                     }
                 }
             }
+            Ok(())
         }
         Err(e) => {
             tracing::error!("Failed to save clipboard item: {}", e);
@@ -427,6 +501,7 @@ fn save_clipboard_item(
                     serde_json::json!({ "code": code, "message": message, "itemIds": [] }),
                 );
             }
+            Err(e)
         }
     }
 }
@@ -449,24 +524,110 @@ pub fn capture_gate_decision(
     process_name: Option<&str>,
     window_title: Option<&str>,
 ) -> Result<CaptureGateDecision, AppError> {
-    let enabled = database::config::get(db, registry::KEY_CLIPBOARD_MONITOR_ENABLED)?
-        .unwrap_or_else(|| "true".to_string());
-    if enabled != "true" {
-        return Ok(CaptureGateDecision::SkipMonitoringDisabled);
-    }
+    let inputs = fetch_gate_inputs(db)?;
+    Ok(decide_gate(&inputs, process_name, window_title))
+}
 
+/// The gate as the monitor hot path sees it: identical decision to
+/// [`capture_gate_decision`], but the three inputs it reads (monitor-enabled,
+/// privacy deadline, source rules) are served from a [`GATE_CACHE_TTL`] cache
+/// so a burst of clipboard notifications costs one database read instead of
+/// three per event. Writes invalidate the cache via
+/// [`invalidate_capture_gate_cache`]; the TTL bounds staleness for writes
+/// that bypass those code paths.
+fn capture_gate_decision_cached(
+    db: &Database,
+    process_name: Option<&str>,
+    window_title: Option<&str>,
+) -> Result<CaptureGateDecision, AppError> {
+    let cached = gate_inputs_slot()
+        .lock()
+        .ok()
+        .and_then(|guard| {
+            guard.as_ref().and_then(|inputs| {
+                (inputs.fetched_at.elapsed() < GATE_CACHE_TTL).then(|| {
+                    (
+                        inputs.enabled,
+                        inputs.privacy_until,
+                        inputs.rules.clone(),
+                    )
+                })
+            })
+        });
+
+    let (enabled, privacy_until, rules) = match cached {
+        Some(inputs) => inputs,
+        None => {
+            let inputs = fetch_gate_inputs(db)?;
+            let snapshot = (
+                inputs.enabled,
+                inputs.privacy_until,
+                inputs.rules.clone(),
+            );
+            if let Ok(mut guard) = gate_inputs_slot().lock() {
+                *guard = Some(inputs);
+            }
+            snapshot
+        }
+    };
+
+    let inputs = GateInputs {
+        enabled,
+        privacy_until,
+        rules,
+        fetched_at: Instant::now(),
+    };
+    Ok(decide_gate(&inputs, process_name, window_title))
+}
+
+fn fetch_gate_inputs(db: &Database) -> Result<GateInputs, AppError> {
+    let enabled = database::config::get(db, registry::KEY_CLIPBOARD_MONITOR_ENABLED)?
+        .unwrap_or_else(|| "true".to_string())
+        == "true";
     let privacy_until = database::config::get(db, registry::KEY_PRIVACY_MODE_UNTIL)?
         .and_then(|value| value.parse::<i64>().ok())
         .unwrap_or(0);
-    if privacy_until > now_millis() {
-        return Ok(CaptureGateDecision::SkipPrivacyMode);
+    let rules = database::productization::list_source_rules(db)?;
+    Ok(GateInputs {
+        enabled,
+        privacy_until,
+        rules,
+        fetched_at: Instant::now(),
+    })
+}
+
+fn decide_gate(
+    inputs: &GateInputs,
+    process_name: Option<&str>,
+    window_title: Option<&str>,
+) -> CaptureGateDecision {
+    if !inputs.enabled {
+        return CaptureGateDecision::SkipMonitoringDisabled;
     }
 
-    if database::productization::source_should_be_ignored(db, process_name, window_title)? {
-        return Ok(CaptureGateDecision::SkipSourceRule);
+    if inputs.privacy_until > now_millis() {
+        return CaptureGateDecision::SkipPrivacyMode;
     }
 
-    Ok(CaptureGateDecision::Capture)
+    let process = process_name.unwrap_or_default().to_ascii_lowercase();
+    let title = window_title.unwrap_or_default().to_ascii_lowercase();
+    let ignored = inputs.rules.iter().any(|rule| {
+        if !rule.enabled {
+            return false;
+        }
+        let pattern = rule.pattern.to_ascii_lowercase();
+        match rule.match_type.as_str() {
+            "process" => process.contains(&pattern),
+            "title" => title.contains(&pattern),
+            "any" => process.contains(&pattern) || title.contains(&pattern),
+            _ => false,
+        }
+    });
+    if ignored {
+        return CaptureGateDecision::SkipSourceRule;
+    }
+
+    CaptureGateDecision::Capture
 }
 
 fn should_skip_capture(
@@ -475,7 +636,7 @@ fn should_skip_capture(
     window_title: Option<&str>,
 ) -> Option<CaptureGateDecision> {
     let db = app_handle.state::<database::Database>();
-    match capture_gate_decision(&db, process_name, window_title) {
+    match capture_gate_decision_cached(&db, process_name, window_title) {
         Ok(CaptureGateDecision::Capture) => None,
         Ok(decision) => Some(decision),
         Err(error) => {
@@ -509,6 +670,8 @@ mod tests {
     use rusqlite::Connection;
     use sha2::{Digest, Sha256};
 
+    use std::sync::Mutex;
+
     use super::{drain_pending_events, ClipboardEventQueue, EnqueueResult};
 
     fn test_db() -> Database {
@@ -518,6 +681,16 @@ mod tests {
         let db = Database::from_conn(conn);
         db.init_schema().unwrap();
         db
+    }
+
+    /// The gate cache is process-global, so tests that observe it must not run
+    /// concurrently with each other.
+    static GATE_SERIAL: Mutex<()> = Mutex::new(());
+
+    fn gate_guard() -> std::sync::MutexGuard<'static, ()> {
+        let g = GATE_SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+        super::invalidate_capture_gate_cache();
+        g
     }
 
     fn text_item(content: &str) -> NewClipboardItem {
@@ -595,6 +768,27 @@ mod tests {
         let decision = super::capture_gate_decision(&db, None, None).unwrap();
 
         assert_eq!(decision, super::CaptureGateDecision::Capture);
+    }
+
+    #[test]
+    fn cached_gate_serves_inputs_until_invalidation() {
+        let _serial = gate_guard();
+        let db = test_db();
+
+        // First call populates the cache (monitoring enabled → Capture).
+        let decision = super::capture_gate_decision_cached(&db, None, None).unwrap();
+        assert_eq!(decision, super::CaptureGateDecision::Capture);
+
+        // Write directly to the db -- bypassing the invalidating commands --
+        // so the cached answer stays authoritative within the TTL.
+        database::config::set(&db, registry::KEY_CLIPBOARD_MONITOR_ENABLED, "false").unwrap();
+        let decision = super::capture_gate_decision_cached(&db, None, None).unwrap();
+        assert_eq!(decision, super::CaptureGateDecision::Capture);
+
+        // After invalidation the fresh value is read.
+        super::invalidate_capture_gate_cache();
+        let decision = super::capture_gate_decision_cached(&db, None, None).unwrap();
+        assert_eq!(decision, super::CaptureGateDecision::SkipMonitoringDisabled);
     }
 
     #[test]

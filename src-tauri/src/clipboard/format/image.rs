@@ -1,7 +1,7 @@
 use super::{ClipboardFormatStrategy, ContentType, ExtractedContent, FormatError};
 use crate::clipboard::backend;
+use crate::clipboard::hash;
 use crate::database::types::NewImageRepresentation;
-use sha2::{Digest, Sha256};
 
 const MAX_IMAGE_PIXELS: u64 = 40_000_000;
 const MAX_RGBA_BYTES: usize = 160 * 1024 * 1024;
@@ -25,7 +25,7 @@ impl ClipboardFormatStrategy for ImageStrategy {
         }
 
         let png_data = encode_png(&image.rgba, image.width as usize, image.height as usize)?;
-        let hash = hash_pixels(&image.rgba, image.width, image.height);
+        let hash = hash::hash_image_pixels(&image.rgba, image.width, image.height);
         let size = png_data.len() as i64;
         let preview = format!("图片 {}x{}", image.width, image.height);
         let source_formats = image
@@ -66,14 +66,6 @@ impl ClipboardFormatStrategy for ImageStrategy {
     }
 }
 
-fn hash_pixels(rgba: &[u8], width: u32, height: u32) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(width.to_le_bytes());
-    hasher.update(height.to_le_bytes());
-    hasher.update(rgba);
-    format!("{:x}", hasher.finalize())
-}
-
 fn encode_png(rgba: &[u8], width: usize, height: usize) -> Result<Vec<u8>, FormatError> {
     let img = image::RgbaImage::from_raw(width as u32, height as u32, rgba.to_vec())
         .ok_or_else(|| FormatError::EncodingFailed("failed to create RGBA image".into()))?;
@@ -98,9 +90,9 @@ mod tests {
 
     #[test]
     fn pixel_hash_includes_dimensions_and_alpha() {
-        let baseline = hash_pixels(&[1, 2, 3, 4], 1, 1);
-        assert_ne!(baseline, hash_pixels(&[1, 2, 3, 5], 1, 1));
-        assert_ne!(baseline, hash_pixels(&[1, 2, 3, 4], 2, 1));
+        let baseline = hash::hash_image_pixels(&[1, 2, 3, 4], 1, 1);
+        assert_ne!(baseline, hash::hash_image_pixels(&[1, 2, 3, 5], 1, 1));
+        assert_ne!(baseline, hash::hash_image_pixels(&[1, 2, 3, 4], 2, 1));
     }
 
     #[test]

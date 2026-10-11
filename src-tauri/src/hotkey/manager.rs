@@ -556,58 +556,12 @@ fn is_reserved_parts(modifiers: Modifiers, key: &str) -> bool {
         || (modifiers == (Modifiers::CONTROL | Modifiers::SHIFT) && key == "esc")
 }
 
-pub(crate) fn reload_hotkeys_from_values(
-    app_handle: &AppHandle,
-    toggle_raw: &str,
-    quick_paste_prefix_raw: &str,
-) -> Result<(), AppError> {
-    validate_hotkey_config(toggle_raw, quick_paste_prefix_raw)?;
-
-    app_handle
-        .global_shortcut()
-        .unregister_all()
-        .map_err(|e| AppError::Hotkey(format!("Failed to unregister hotkeys: {}", e)))?;
-
-    register_hotkeys_from_values(app_handle, toggle_raw, quick_paste_prefix_raw)
-}
-
 pub fn validate_config_value(key: &str, value: &str) -> Result<(), AppError> {
     match key {
         registry::KEY_HOTKEY_TOGGLE_WINDOW => parse_toggle_shortcut(value).map(|_| ()),
         registry::KEY_HOTKEY_QUICK_PASTE_PREFIX => parse_quick_paste_prefix(value).map(|_| ()),
         _ => Ok(()),
     }
-}
-
-pub(crate) fn validate_hotkey_config(
-    toggle_raw: &str,
-    quick_paste_prefix_raw: &str,
-) -> Result<(), AppError> {
-    parse_hotkey_config(toggle_raw, quick_paste_prefix_raw).map(|_| ())
-}
-
-fn register_hotkeys_from_values(
-    app_handle: &AppHandle,
-    toggle_raw: &str,
-    quick_paste_prefix_raw: &str,
-) -> Result<(), AppError> {
-    validate_hotkey_config(toggle_raw, quick_paste_prefix_raw)?;
-    let toggle_shortcut = parse_toggle_shortcut(toggle_raw)?;
-    let quick_paste_modifiers = parse_quick_paste_prefix(quick_paste_prefix_raw)?;
-
-    register_toggle_hotkey(app_handle, toggle_shortcut)?;
-    tracing::info!("Toggle shortcut registered: {}", toggle_raw);
-
-    register_quick_paste_hotkeys(app_handle, quick_paste_modifiers)
-}
-
-fn parse_hotkey_config(
-    toggle_raw: &str,
-    quick_paste_prefix_raw: &str,
-) -> Result<(Shortcut, Modifiers), AppError> {
-    let toggle_shortcut = parse_toggle_shortcut(toggle_raw)?;
-    let quick_paste_modifiers = parse_quick_paste_prefix(quick_paste_prefix_raw)?;
-    Ok((toggle_shortcut, quick_paste_modifiers))
 }
 
 fn parse_toggle_shortcut(raw: &str) -> Result<Shortcut, AppError> {
@@ -676,83 +630,5 @@ fn parse_letter_code(letter: char) -> Result<Code, AppError> {
             "Unsupported hotkey_toggle_window letter `{}`. Expected A-Z.",
             letter
         ))),
-    }
-}
-
-fn register_toggle_hotkey(app_handle: &AppHandle, shortcut: Shortcut) -> Result<(), AppError> {
-    let app_handle_clone = app_handle.clone();
-    app_handle
-        .global_shortcut()
-        .on_shortcut(shortcut, move |_app, _shortcut, event| {
-            tracing::info!("Toggle shortcut event: {:?}", event.state);
-            if event.state == ShortcutState::Pressed {
-                if let Err(error) = crate::window::controller::toggle_main_window(&app_handle_clone)
-                {
-                    tracing::error!("Toggle shortcut failed: {}", error);
-                }
-            }
-        })
-        .map_err(|e| AppError::Hotkey(format!("Failed to register toggle shortcut: {}", e)))
-}
-
-fn register_quick_paste_hotkeys(
-    app_handle: &AppHandle,
-    modifiers: Modifiers,
-) -> Result<(), AppError> {
-    for index in 1_i64..=9_i64 {
-        let shortcut = Shortcut::new(Some(modifiers), quick_paste_digit_code(index));
-        let app_handle_clone = app_handle.clone();
-
-        let result =
-            app_handle
-                .global_shortcut()
-                .on_shortcut(shortcut, move |_app, _shortcut, event| {
-                    if event.state == ShortcutState::Pressed {
-                        quick_paste(&app_handle_clone, index);
-                    }
-                });
-
-        match result {
-            Ok(()) => tracing::info!(
-                "Quick paste shortcut {}+{} registered",
-                registry::DEFAULT_QUICK_PASTE_PREFIX,
-                index
-            ),
-            Err(e) => tracing::warn!(
-                "Skipping quick paste {}+{}: {}",
-                registry::DEFAULT_QUICK_PASTE_PREFIX,
-                index,
-                e
-            ),
-        }
-    }
-
-    Ok(())
-}
-
-fn quick_paste_digit_code(index: i64) -> Code {
-    match index {
-        1 => Code::Digit1,
-        2 => Code::Digit2,
-        3 => Code::Digit3,
-        4 => Code::Digit4,
-        5 => Code::Digit5,
-        6 => Code::Digit6,
-        7 => Code::Digit7,
-        8 => Code::Digit8,
-        9 => Code::Digit9,
-        _ => unreachable!(),
-    }
-}
-
-fn quick_paste(app_handle: &AppHandle, index: i64) {
-    tracing::info!("Quick paste index {}", index);
-    let db = app_handle.state::<crate::database::Database>();
-    let visible_items = app_handle.state::<crate::hotkey::VisibleClipboardItems>();
-
-    match crate::clipboard::paste::quick_paste(app_handle, &db, &visible_items, index) {
-        Ok(true) => tracing::info!("Quick paste: pasted item at position {}", index),
-        Ok(false) => tracing::warn!("Quick paste: no item at position {}", index),
-        Err(error) => tracing::error!("Quick paste failed: {}", error),
     }
 }

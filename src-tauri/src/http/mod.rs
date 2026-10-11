@@ -1011,9 +1011,19 @@ fn apply_config_value(state: &AppState, key: &str, value: &str) -> Result<(), Ap
     let descriptor = registry::require_descriptor(key)?;
     let normalized = descriptor.normalize(value)?;
     database::config::set(&state.db, key, &normalized)?;
+    if is_capture_gate_config_key(key) {
+        crate::clipboard::monitor::invalidate_capture_gate_cache();
+    }
     apply_runtime_effect(state, descriptor.effect)?;
     emit_config_changed(state, key, &normalized);
     Ok(())
+}
+
+fn is_capture_gate_config_key(key: &str) -> bool {
+    matches!(
+        key,
+        registry::KEY_CLIPBOARD_MONITOR_ENABLED | registry::KEY_PRIVACY_MODE_UNTIL
+    )
 }
 
 fn apply_config_values(state: &AppState, entries: Vec<(String, String)>) -> Result<(), AppError> {
@@ -1031,6 +1041,13 @@ fn apply_config_values(state: &AppState, entries: Vec<(String, String)>) -> Resu
         .collect::<Vec<_>>();
 
     database::config::set_many(&state.db, &persisted)?;
+
+    if persisted
+        .iter()
+        .any(|(key, _)| is_capture_gate_config_key(key))
+    {
+        crate::clipboard::monitor::invalidate_capture_gate_cache();
+    }
 
     if normalized
         .iter()
